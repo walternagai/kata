@@ -127,12 +127,12 @@ class TestConfirm:
     """Testa _confirm com mock de input."""
 
     @patch("kata.cli.sys.stdin")
-    def test_confirm_non_tty_returns_default_true(self, mock_stdin, monkeypatch) -> None:
+    def test_confirm_non_tty_returns_default_true(self, mock_stdin) -> None:
         mock_stdin.isatty.return_value = False
         assert cli._confirm("Continuar?", default=True) is True
 
     @patch("kata.cli.sys.stdin")
-    def test_confirm_non_tty_returns_default_false(self, mock_stdin, monkeypatch) -> None:
+    def test_confirm_non_tty_returns_default_false(self, mock_stdin) -> None:
         mock_stdin.isatty.return_value = False
         assert cli._confirm("Continuar?", default=False) is False
 
@@ -440,20 +440,30 @@ class TestMainInit:
             cli.main()
         mock_init.assert_called_once_with("new-task")
 
-    @patch("kata.cli._kata_dir")
-    def test_main_init_creates_directory_and_file(
-        self, mock_kata_dir, tmp_path, monkeypatch
-    ) -> None:
-        kata_dir = tmp_path / ".kata"
-        mock_kata_dir.return_value = kata_dir
+    def test_main_init_creates_directory_and_file(self, tmp_path, monkeypatch) -> None:
+        """Testa que --init cria .kata/ e o arquivo da tarefa no CWD real."""
         monkeypatch.chdir(tmp_path)
-        # Precisamos criar o diretório manualmente (main faz mkdir)
         with patch("sys.argv", ["kata", "--init", "init-task"]):
             cli.main()
-        # Arquivo deve ter sido criado
+        # Arquivo deve ter sido criado no CWD real (sem mock de _kata_dir)
         ext = cli._ext()
-        task_file = kata_dir / f"init-task{ext}"
+        task_file = tmp_path / ".kata" / f"init-task{ext}"
         assert task_file.exists()
+
+
+class TestMainVersion:
+    """Testa a flag --version."""
+
+    def test_version_prints_and_exits(self, capsys) -> None:
+        from kata import __version__
+
+        with patch("sys.argv", ["kata", "--version"]):
+            try:
+                cli.main()
+            except SystemExit as e:
+                assert e.code == 0
+        captured = capsys.readouterr()
+        assert __version__ in captured.out
 
 
 class TestMainCheckOnly:
@@ -609,6 +619,22 @@ class TestRunHelper:
         )
         result = cli._run(["echo", "test"])
         assert result.returncode == 0
+
+    @patch("kata.cli.subprocess.run")
+    def test_run_overrides_defaults_without_collision(self, mock_run) -> None:
+        """Passar capture_output/cwd/text via kwargs sobrescreve defaults sem TypeError."""
+        from pathlib import Path
+
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr=""
+        )
+        custom_cwd = Path("/tmp/custom")
+        cli._run(["echo", "test"], capture_output=False, text=False, cwd=custom_cwd)
+        call_kwargs = mock_run.call_args[1]
+        # Defaults sobrescritos pelos valores do caller
+        assert call_kwargs.get("capture_output") is False
+        assert call_kwargs.get("text") is False
+        assert call_kwargs.get("cwd") == custom_cwd
 
 
 class TestStepSurgicalNoFiles:

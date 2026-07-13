@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from kata import __version__
 from kata.verify import VerifyResult, run_all
 
 try:
@@ -105,7 +106,14 @@ def _pick_task() -> str:
 
 
 def _run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=_cwd(), **kwargs)
+    """Executa comando capturando saída, com defaults sobrescreíveis pelo caller.
+
+    Defaults (capture_output, text, cwd) podem ser sobrescritos via kwargs
+    sem causar colisão de argumentos.
+    """
+    defaults: dict[str, Any] = {"capture_output": True, "text": True, "cwd": _cwd()}
+    defaults.update(kwargs)
+    return subprocess.run(cmd, **defaults)
 
 
 def _confirm(prompt: str, default: bool = True) -> bool:
@@ -124,7 +132,7 @@ def _confirm(prompt: str, default: bool = True) -> bool:
 def _print_header(text: str) -> None:
     width = 60
     print()
-    print("┌─" + "─" * (width - 2) + "┐")
+    print("┌" + "─" * (width - 2) + "┐")
     for line in text.split("\n"):
         print(f"│ {line:<{width - 3}}│")
     print("└" + "─" * (width - 2) + "┘")
@@ -135,7 +143,11 @@ def _print_header(text: str) -> None:
 
 
 def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
-    """Fase 1: THINK — declarar assumptions antes de codar."""
+    """Fase 1: THINK — declarar assumptions antes de codar.
+
+    O parâmetro `task` é mantido por simetria com as demais fases e para
+    identificação no YAML, mas não é usado na lógica desta fase.
+    """
     _print_header("1. THINK — Antes de codificar, declare suas assumptions")
     think = data.get("think", {})
     if think.get("answered"):
@@ -171,7 +183,11 @@ def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
-    """Fase 2: SIMPLIFY — o código é mínimo?"""
+    """Fase 2: SIMPLIFY — o código é mínimo?
+
+    O parâmetro `task` é mantido por simetria com as demais fases e para
+    identificação no YAML, mas não é usado na lógica desta fase.
+    """
     _print_header("2. SIMPLIFY — O código é mínimo?")
 
     if not sys.stdin.isatty():
@@ -212,7 +228,11 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
-    """Fase 3: SURGICAL — cada linha toca só o necessário."""
+    """Fase 3: SURGICAL — cada linha toca só o necessário.
+
+    O parâmetro `task` é mantido por simetria com as demais fases e para
+    identificação no YAML, mas não é usado na lógica desta fase.
+    """
     _print_header("3. SURGICAL — Cada linha toca só o necessário")
 
     if not sys.stdin.isatty():
@@ -371,6 +391,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Kata (型) — Karpathy Development Cycle",
     )
+    parser.add_argument("--version", action="version", version=f"kata {__version__}")
     parser.add_argument("--init", metavar="TASK", help="Cria checklist para nova tarefa")
     parser.add_argument(
         "--check-only",
@@ -409,7 +430,7 @@ def main() -> None:
         "--gate",
         type=float,
         default=70.0,
-        help="Gate mínimo de coverage em%% (default: 70)",
+        help="Gate mínimo de coverage, em %% (default: %(default)s)",
     )
     args = parser.parse_args()
 

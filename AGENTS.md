@@ -47,7 +47,7 @@ skill/agent.
 ## Cobertura de testes
 
 - `pyproject.toml` omite só `__main__.py` — **`cli.py` é medido**.
-- Gate: `fail_under = 70`. Cobertura atual: 99%+.
+- Gate: `fail_under = 70`. Cobertura atual: alta (ver `make test` para número exato).
 - Testes mockam `kata.verify._run` (wrapper de subprocess) — nunca chamam
   ruff/pytest reais nos testes.
 

@@ -120,7 +120,7 @@ kata/
 │   ├── __init__.py             ← Versão do pacote
 │   └── __main__.py             ← Entry point para `python -m kata`
 ├── scripts/install.sh          ← Instalação via symlinks
-└── tests/                      ← 78 testes, 99% coverage
+└── tests/                      ← Testes pytest (ver `make test` para cobertura)
 ```
 
 ## Licença

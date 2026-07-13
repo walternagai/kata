@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,7 +43,7 @@ def run_ruff(
     """
     if paths is None:
         paths = ["src/", "tests/"]
-    cmd = ["python3", "-m", "ruff", "check", *paths]
+    cmd = [sys.executable, "-m", "ruff", "check", *paths]
     result = _run(cmd, cwd=cwd)
     return VerifyResult(
         ok=result.returncode == 0,
@@ -70,7 +71,7 @@ def run_pytest(
     """
     if testpaths is None:
         testpaths = ["tests/"]
-    cmd = ["python3", "-m", "pytest", *testpaths, "--tb=short", "-q"]
+    cmd = [sys.executable, "-m", "pytest", *testpaths, "--tb=short", "-q"]
     if ignore:
         for path in ignore:
             cmd.extend(["--ignore", path])
@@ -107,7 +108,7 @@ def run_coverage(
     if testpaths is None:
         testpaths = ["tests/"]
     cmd = [
-        "python3",
+        sys.executable,
         "-m",
         "pytest",
         *testpaths,

@@ -1,0 +1,154 @@
+---
+name: kata-verify
+description: Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 4 — executar ruff, pytest e coverage, interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, gate, CI, verificação de qualidade.
+---
+
+# Skill: kata-verify
+
+Fase 4 do Karpathy Development Cycle — **GOAL-DRIVEN**.
+
+## Objetivo
+
+Verificar a qualidade do código com critérios objetivos:
+1. **Ruff** — lint limpo
+2. **pytest** — todos os testes passam
+3. **Coverage** — ≥ gate (default 70%)
+4. **Critério de sucesso** — a tarefa resolve o problema declarado na fase THINK
+
+## Comandos
+
+### Ruff
+
+```bash
+python3 -m ruff check src/ tests/
+```
+
+Para projetos com estrutura diferente (ex: mushin):
+```bash
+python3 -m ruff check mushin/ services/ tests/
+```
+
+**Interpretando resultado:**
+- `returncode == 0` → ✅ limpo
+- `returncode != 0` → ❌ falhou — mostrar primeiras 10 linhas do output
+
+**Problemas comuns:**
+- `F401` — import não utilizado → remover ou adicionar `# noqa: F401`
+- `E501` — linha longa → quebrar ou aumentar `line-length` no ruff config
+- `I001` — import desordenado → `ruff format` ou `ruff check --fix`
+
+### Pytest
+
+```bash
+python3 -m pytest tests/ --tb=short -q
+```
+
+Para projetos com testes que precisam de ignore (ex: mushin com faiss):
+```bash
+python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=short -q
+```
+
+**Interpretando resultado:**
+- `returncode == 0` → ✅ passou
+- `returncode != 0` → ❌ falhou — mostrar últimas 10 linhas do output
+
+**Problemas comuns:**
+- `ModuleNotFoundError: faiss` → usar `--ignore` ou `pip install faiss-cpu`
+- `ImportError` circular → checar ordem de imports
+- `AssertionError` em teste → investigar se a mudança quebrou comportamento
+
+### Coverage
+
+```bash
+python3 -m pytest tests/ --cov=src --cov-report=term-missing -q
+```
+
+Para mushin:
+```bash
+python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py \
+  --cov=mushin --cov-report=term-missing -q
+```
+
+**Extraindo percentual:**
+```
+TOTAL                 850      42     95%
+```
+
+Procurar por regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`
+
+**Interpretando resultado:**
+- `returncode == 0 AND cov_pct >= gate` → ✅ passou
+- `returncode != 0 OR cov_pct < gate` → ❌ falhou
+
+**Gate padrão: 70%**
+
+Se coverage < gate:
+1. Identificar linhas não cobertas (coluna `Missing` no output)
+2. Adicionar testes para essas linhas
+3. Ou marcar com `# pragma: no cover` se for código não-testável
+
+### Critério de sucesso
+
+Pergunte ao usuário:
+> "O critério de sucesso da tarefa está satisfeito?"
+
+O critério volta à fase THINK — o problema declarado foi resolvido?
+
+**Exemplo:**
+- THINK: "AUTH_MODE=api_key + API_KEY vazio bypassa auth silenciosamente"
+- Sucesso: "warn no startup + /health retorna degraded quando misconfig"
+
+Se o critério não está satisfeito, o ciclo é **rejeitado**.
+
+## Resumo final
+
+Após as 4 verificações, reportar:
+
+```
+✅ ruff limpo
+✅ pytest 850 passaram
+✅ coverage 87.0% (gate: 70%)
+✅ critério de sucesso satisfeito
+
+┌──────────────────────────────────────────────────────────┐
+│  ✅  KATA CYCLE — APROVADO                                │
+└──────────────────────────────────────────────────────────┘
+```
+
+Ou:
+
+```
+❌ ruff: 3 erros (F401 x2, E501 x1)
+✅ pytest: 850 passaram
+❌ coverage: 65.0% (gate: 70%)
+✅ critério de sucesso satisfeito
+
+┌──────────────────────────────────────────────────────────┐
+│  ❌  KATA CYCLE — REJEITADO                               │
+│     Corrija os problemas e rode novamente.                │
+└──────────────────────────────────────────────────────────┘
+```
+
+## Output no YAML
+
+```yaml
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 87.0
+  coverage_pass: true
+  success_criteria_met: true
+```
+
+## Modo --check-only (CI)
+
+Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
+só as 3 verificações objetivas (ruff + pytest + coverage). O critério de
+sucesso é assumido satisfeito. Útil para CI/CD pipelines.
+
+## Princípios
+
+- **Gate é inegociável**: coverage < 70% = rejeitado, sem exceção
+- **Falso verde é pior que vermelho**: se os testes passam mas não testam nada, é pior que falhar
+- **Critério de sucesso é subjetivo mas obrigatório**: o humano precisa confirmar que resolveu
+- **Exit code**: 0 = aprovado, 1 = rejeitado — para integração com CI

@@ -46,7 +46,6 @@ source = ["kata"]
 omit = [
     "tests/*",
     "*/__main__.py",
-    "*/cli.py",
 ]
 
 [tool.coverage.report]

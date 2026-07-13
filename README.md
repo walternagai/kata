@@ -115,10 +115,12 @@ kata/
 │   ├── agent/kata.md           ← Agente @kata
 │   └── skills/kata-*/SKILL.md  ← 4 skills (uma por fase)
 ├── src/kata/
-│   ├── cli.py                  ← CLI headless
-│   └── verify.py               ← Lógica de verificação
+│   ├── cli.py                  ← CLI headless (orquestra as 4 fases)
+│   ├── verify.py               ← Lógica de verificação (ruff/pytest/coverage)
+│   ├── __init__.py             ← Versão do pacote
+│   └── __main__.py             ← Entry point para `python -m kata`
 ├── scripts/install.sh          ← Instalação via symlinks
-└── tests/                      ← 25 testes, 91% coverage
+└── tests/                      ← 78 testes, 99% coverage
 ```
 
 ## Licença

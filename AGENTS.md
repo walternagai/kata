@@ -1,128 +1,69 @@
 # Kata (型) — Agent Instructions
 
-> Python 3.11 | CLI + OpenCode Agent | Karpathy Development Cycle
+> Python 3.11+ | CLI + OpenCode Agent | Karpathy Development Cycle
 
-## Sobre
+## O que é este repo
 
-Kata (型, "forma/padrão") é um agente OpenCode e CLI Python que implementa o
-**Karpathy Development Cycle** — um ciclo de 4 passos para garantir qualidade
-antes de commitar código:
-
-```
-THINK → SIMPLIFY → SURGICAL → VERIFY
-```
-
-Inspirado na filosofia de Andrej Karpathy: pensar antes de codar, manter o
-código mínimo, fazer mudanças cirúrgicas e verificar com critérios objetivos.
+Kata é a ferramenta que implementa o ciclo THINK → SIMPLIFY → SURGICAL → VERIFY.
+Este repositório contém o **código da ferramenta** (CLI + agente OpenCode), não
+um projeto onde o kata é aplicado.
 
 ## Arquitetura
 
 ```
-kata/
-├── opencode/
-│   ├── agent/kata.md           ← Agente @kata (OpenCode)
-│   └── skills/kata-*/SKILL.md  ← 4 skills (uma por fase)
-├── src/kata/
-│   ├── cli.py                  ← CLI headless (kata --init / --check-only)
-│   └── verify.py              ← Lógica de verificação (ruff + pytest + coverage)
-└── scripts/install.sh         ← Instala agente + skills via symlinks
+src/kata/       código Python (cli.py, verify.py, __init__.py, __main__.py)
+tests/          testes pytest (test_cli.py, test_verify.py)
+opencode/       definição do agente e skills para o OpenCode
+  agent/kata.md          prompt do agente @kata
+  skills/kata-*/SKILL.md 4 skills (uma por fase do ciclo)
+scripts/install.sh       instala via symlinks em ~/.config/opencode/
 ```
 
-### O que o agente faz
+- `verify.py` é a lógica de verificação (ruff/pytest/coverage) modularizada para
+  testes independentes. O CLI (`cli.py`) orquestra as 4 fases e chama `verify.py`.
+- Entry point do CLI: `kata.cli:main` (declarado em `pyproject.toml`).
 
-| Fase | Ação |
-|------|------|
-| THINK | Declara problema, assumptions, alternativas e unknowns antes de codar |
-| SIMPLIFY | Verifica se o código é mínimo — sem abstrações especulativas |
-| SURGICAL | Valida arquivo-por-arquivo que cada mudança rastreia ao pedido |
-| VERIFY | Roda ruff + pytest + coverage (gate ≥ 70%) e checa critério de sucesso |
-
-### Diretório de trabalho
-
-O kata usa `.kata/` na raiz do projeto onde está sendo executado. Cada tarefa
-é um arquivo `.kata/<task>.yaml` com o schema:
-
-```yaml
-task: nome-da-tarefa
-status: draft | think-complete | approved | rejected
-think:
-  problem: ""
-  assumptions: []
-  alternatives: []
-  unknowns: ""
-  answered: false
-simplify:
-  minimum_code: true
-  no_single_use_abstractions: true
-  no_speculative_config: true
-surgical:
-  files: []
-  removed_imports_clean: true
-verify:
-  ruff_clean: true
-  tests_pass: true
-  coverage_pct: 0.0
-  coverage_pass: false
-  success_criteria_met: false
-```
-
-## Comandos
+## Desenvolvimento
 
 ```bash
-# CLI Python (headless / CI)
-kata --init <task>               # Cria .kata/<task>.yaml com template
-kata                             # Ciclo interativo completo
-kata --check-only                # Só VERIFY (lint + test + coverage)
-kata --task <name>               # Retoma tarefa específica
-
-# Instalação do agente OpenCode
-make install                     # Symlinks em ~/.config/opencode/
-make uninstall                   # Remove symlinks
-
-# Desenvolvimento
-make test                        # pytest + coverage
-make lint                         # ruff check
-make format                       # ruff format
+make test      # pytest + coverage (gate 70%)
+make lint      # ruff check src/ tests/
+make format    # ruff format src/ tests/
+make install   # symlinks do agente + skills em ~/.config/opencode/
+make uninstall # remove os symlinks
 ```
 
-### Uso no OpenCode
+Rodar um único teste: `python3 -m pytest tests/test_verify.py::TestRunRuff -v`
 
-Após `make install` e reiniciar o OpenCode:
+Ordem recomendada: `make lint && make test`.
 
-- `@kata` — inicia ciclo interativo completo
-- `@kata --init nome-da-tarefa` — cria tarefa e executa THINK
-- `@kata --check-only` — só verificação (CI/snapshot)
-- `@kata --task nome` — retoma tarefa existente
+## Instalação do agente — symlinks, não cópias
 
-## Convenções
+`scripts/install.sh` cria **symlinks** de `opencode/` para `~/.config/opencode/`.
+Isso significa que editar arquivos em `opencode/` reflete imediatamente no
+OpenCode sem reinstalar. Use `make reinstall` só se criar **novos** arquivos de
+skill/agent.
 
-- **Linguagem**: docstrings e comentários em Português (BR). Código em inglês.
-- `from __future__ import annotations` no topo dos módulos.
+## Cobertura de testes
+
+- `pyproject.toml` omite só `__main__.py` — **`cli.py` é medido**.
+- Gate: `fail_under = 70`. Cobertura atual: 99%+.
+- Testes mockam `kata.verify._run` (wrapper de subprocess) — nunca chamam
+  ruff/pytest reais nos testes.
+
+## Convenções de código
+
+- `from __future__ import annotations` no topo de todo módulo.
+- Docstrings e comentários em **Português (BR)**. Código (identificadores) em inglês.
 - Type hints em todas as funções.
-- Imports: stdlib → third-party → local (alfabético em cada grupo).
+- Imports: stdlib → third-party → local (alfabético por grupo).
 - `snake_case` funções/variáveis, `PascalCase` classes.
-- Logging: `logging` ou `rich.console.Console` — nunca `print()` (exceto CLI output direto).
+- Sem `print()` em código de biblioteca — só em CLI output direto. Logging via
+  `logging` ou `rich.console.Console`.
+- Ruff: `line-length=100`, `target-version=py311`, regras `E/F/W/I/UP/B`.
 
-## Compatibilidade
+## Compatibilidade com mushin
 
-O schema `.kata/<task>.yaml` é compatível com o `.karpathy/` do mushin. Para
-migrar tarefas existentes:
-
-```bash
-ln -s .karpathy .kata   # symlink preserva acesso ao legado
-```
-
-O script `scripts/karpathy_cycle.py` do mushin não é removido — convive com o
-kata como fallback headless.
-
-## Instalação
-
-```bash
-# 1. Instalar o pacote Python (opcional, só se quiser o CLI)
-pip install -e .
-
-# 2. Instalar o agente OpenCode
-make install
-
-# 3. Reiniciar o OpenCode
-```
+O schema `.kata/<task>.yaml` é compatível com `.karpathy/` do mushin. Para
+migrar: `ln -s .karpathy .kata`. O `scripts/karpathy_cycle.py` do mushin não é
+removido — convive com o kata como fallback headless.

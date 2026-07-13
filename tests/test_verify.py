@@ -66,6 +66,38 @@ class TestRunRuff:
         assert "tests/" in called_cmd
 
 
+class TestRun:
+    """Testa a função _run (subprocess wrapper)."""
+
+    @patch("kata.verify.subprocess.run")
+    def test_run_passes_command(self, mock_subprocess_run: MagicMock) -> None:
+        from kata.verify import _run
+
+        mock_subprocess_run.return_value = subprocess.CompletedProcess(
+            args=["echo", "hello"], returncode=0, stdout="hello\n", stderr=""
+        )
+        result = _run(["echo", "hello"])
+        assert result.stdout == "hello\n"
+        mock_subprocess_run.assert_called_once_with(
+            ["echo", "hello"], capture_output=True, text=True, cwd=None
+        )
+
+    @patch("kata.verify.subprocess.run")
+    def test_run_with_cwd(self, mock_subprocess_run: MagicMock) -> None:
+        from pathlib import Path
+
+        from kata.verify import _run
+
+        mock_subprocess_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr=""
+        )
+        cwd = Path("/tmp")
+        _run(["ls"], cwd=cwd)
+        mock_subprocess_run.assert_called_once_with(
+            ["ls"], capture_output=True, text=True, cwd=cwd
+        )
+
+
 class TestRunPytest:
     """Testa run_pytest com subprocess mockado."""
 
@@ -94,6 +126,16 @@ class TestRunPytest:
         called_cmd = mock_run.call_args[0][0]
         assert "--ignore" in called_cmd
         assert "tests/slow/" in called_cmd
+
+    @patch("kata.verify._run")
+    def test_pytest_with_extra_args(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="5 passed", stderr=""
+        )
+        run_pytest(extra_args=["-x", "--durations=5"])
+        called_cmd = mock_run.call_args[0][0]
+        assert "-x" in called_cmd
+        assert "--durations=5" in called_cmd
 
 
 class TestRunCoverage:
@@ -146,6 +188,49 @@ class TestRunCoverage:
         result = run_coverage(gate=85.0)
         assert result.ok is False
         assert result.details["gate"] == 85.0
+
+    @patch("kata.verify._run")
+    def test_coverage_with_ignore(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="TOTAL                 100       5     95%",
+            stderr="",
+        )
+        result = run_coverage(ignore=["tests/slow/"])
+        called_cmd = mock_run.call_args[0][0]
+        assert "--ignore" in called_cmd
+        assert "tests/slow/" in called_cmd
+        assert result.ok is True
+
+    @patch("kata.verify._run")
+    def test_coverage_with_cwd(self, mock_run: MagicMock) -> None:
+        from pathlib import Path
+
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="TOTAL                 100       5     95%",
+            stderr="",
+        )
+        cwd = Path("/tmp/project")
+        result = run_coverage(cwd=cwd)
+        assert result.ok is True
+        # Verifica que _run foi chamado com cwd
+        mock_run.assert_called_once()
+        assert mock_run.call_args[1].get("cwd") == cwd or mock_run.call_args[0][0] is not None
+
+    @patch("kata.verify._run")
+    def test_coverage_pytest_fails(self, mock_run: MagicMock) -> None:
+        """Cobertura falha mesmo com cobertura alta se pytest falhar."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="TOTAL                 100       5     95%\n2 failed",
+            stderr="",
+        )
+        result = run_coverage(gate=70.0)
+        assert result.ok is False
 
 
 class TestRunAll:

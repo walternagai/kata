@@ -120,7 +120,7 @@ Após as 4 verificações, reporte ao usuário no formato:
 ✅ critério de sucesso satisfeito
 
 ┌──────────────────────────────────────────────────────────┐
-│  ✅  KATA CYCLE — APROVADO                                │
+│  ✅  KATA CYCLE — APROVADO                               │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -134,7 +134,7 @@ Ou:
 
 ┌──────────────────────────────────────────────────────────┐
 │  ❌  KATA CYCLE — REJEITADO                               │
-│     Corrija os problemas e rode novamente.                │
+│     Corrija os problemas e rode novamente.               │
 └──────────────────────────────────────────────────────────┘
 ```
 

@@ -40,7 +40,7 @@ THINK → SIMPLIFY → SURGICAL → VERIFY
 Mapeamento de ferramentas OpenCode para cada tarefa do kata:
 
 | Tarefa | Ferramenta | Uso |
-|--------|-----------|-----|
+|--------|------------|-----|
 | Carregar instruções da fase | `skill` | `name: kata-think`, `kata-simplify`, `kata-surgical`, `kata-verify` |
 | Perguntar ao usuário | `question` | Uma pergunta por chamada; não agrupe várias |
 | Executar comandos | `bash` | `git diff`, `ruff`, `pytest`, `kata --check-only` etc. |
@@ -179,7 +179,7 @@ Se nenhum `--task` for fornecido:
 ✅ critério de sucesso satisfeito
 
 ┌──────────────────────────────────────────────────────────┐
-│  ✅  KATA CYCLE — APROVADO                                │
+│  ✅  KATA CYCLE — APROVADO                               │
 └──────────────────────────────────────────────────────────┘
 ```
 

@@ -15,9 +15,15 @@ Antes de escrever qualquer linha de código, declarar explicitamente:
 3. As alternativas que foram consideradas (e por que foram descartadas)
 4. O que NÃO se sabe (unknowns que precisam de investigação ou pergunta)
 
-## Roteiro de Perguntas
+## Ferramentas
 
-Faça estas perguntas ao usuário, **uma a uma**, e registre as respostas:
+Para esta fase, use:
+
+- **`question`**: faça as 4 perguntas ao usuário, **uma a uma**. Não jogue todas de uma vez.
+- **`read` / `grep`**: investigue unknowns sobre código existente (ex: "Como X funciona hoje?").
+- **`write` / `edit`**: registre as respostas em `.kata/<task>.yaml` e atualize `status: think-complete`.
+
+## Roteiro de Perguntas
 
 ### 1. Problema
 > "Qual o problema exato que estou resolvendo?"
@@ -69,11 +75,23 @@ ou testar antes de prosseguir.
 Se um unknown bloqueia a implementação, **PARE e pergunte** antes de prosseguir.
 Se é investigável, resolva-o e registre a resposta.
 
+## Quando o usuário não sabe
+
+Se o usuário responder "não sei" ou "você decide", proponha uma resposta baseada
+no contexto do diff/repositório e peça confirmação:
+
+> "Com base no diff, o problema parece ser X. Concorda? Se sim, vou registrar
+> como: 'X'."
+
+Não aceite respostas vagas. Exija especificidade: "Deve funcionar" não é uma
+assumption válida.
+
 ## Output no YAML
 
-Após coletar as respostas, escreva no `.kata/<task>.yaml`:
+Após coletar as respostas, escreva/atualize `.kata/<task>.yaml`:
 
 ```yaml
+status: think-complete
 think:
   problem: "O Mushin v2.2 acumula três problemas P0 que impedem confiança em produção..."
   assumptions:
@@ -88,8 +106,6 @@ think:
     2. Migration SQLite? → seguir pattern ADD_*_COLUMN existente
   answered: true
 ```
-
-Atualize `status` para `think-complete` após esta fase.
 
 ## Princípios
 

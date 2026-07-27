@@ -14,6 +14,16 @@ Nenhuma mudança deve ser "de passagem" ou "enquanto estou aqui".
 
 > O código cirúrgico toca só o necessário — como um bisturi, não um machado.
 
+## Ferramentas
+
+Para esta fase, use:
+
+- **`bash`**: `git diff --name-only` (ou `--cached` se vazio) para listar arquivos.
+- **`read`**: inspecione o diff de cada arquivo suspeito (`git diff <arquivo>`).
+- **`grep`**: busque callers quando uma assinatura mudar.
+- **`question`**: confirme com o usuário se cada arquivo é necessário.
+- **`write` / `edit`**: registre o resultado em `.kata/<task>.yaml`.
+
 ## Procedimento
 
 ### 1. Listar arquivos alterados
@@ -38,7 +48,8 @@ tests/unit/test_orchestrator.py
 
 ### 2. Validar cada arquivo
 
-Para **cada arquivo** da lista, pergunte:
+Para **cada arquivo** da lista, **inspecione o diff real** (não apenas o nome) e
+pergunte ao usuário:
 
 > "`<arquivo>` — necessário para esta tarefa?"
 
@@ -55,7 +66,16 @@ Registre `true` ou `false` no YAML.
 - Remoção de comentários/imports não relacionados
 - Adição de type hints em funções não tocadas
 
-### 3. Verificar imports órfãos
+### 3. Verificar efeitos colaterais
+
+Para cada arquivo, verifique:
+- **Mudança de assinatura**: se uma função mudou assinatura, todos os callers foram atualizados?
+  - Use `grep` para encontrar chamadas à função alterada.
+- **Mudança de schema**: se um modelo mudou, as migrations estão incluídas no diff?
+- **Mudança de comportamento**: se a lógica mudou, os testes foram atualizados?
+- **Imports novos**: cada import novo é realmente necessário para a mudança?
+
+### 4. Verificar imports órfãos
 
 Pergunte:
 > "Imports removidos são só os que sua mudança tornou inúteis?"
@@ -63,19 +83,11 @@ Pergunte:
 **Detecção automática** (opcional):
 ```bash
 # Encontra imports não utilizados com ruff
-ruff check --select F401 mushin/ services/ tests/
+ruff check --select F401 <caminhos-do-projeto>
 ```
 
 Se houver imports F401 que **não** são resultado da sua mudança, são efeito
 colateral desnecessário — questione.
-
-### 4. Verificar efeitos colaterais
-
-Para cada arquivo, mentalmente verifique:
-- **Mudança de assinatura**: se uma função mudou assinatura, todos os callers foram atualizados?
-- **Mudança de schema**: se um modelo mudou, as migrations estão incluídas no diff?
-- **Mudança de comportamento**: se a lógica mudou, os testes foram atualizados?
-- **Imports novos**: cada import novo é realmente necessário para a mudança?
 
 ## Output no YAML
 

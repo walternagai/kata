@@ -15,6 +15,14 @@ Verificar a qualidade do código com critérios objetivos:
 3. **Coverage** — ≥ gate (default 70%)
 4. **Critério de sucesso** — a tarefa resolve o problema declarado na fase THINK
 
+## Ferramentas
+
+Para esta fase, use:
+
+- **`bash`**: execute `ruff`, `pytest` e `coverage` (ou `python3 -m kata --check-only` para modo padronizado).
+- **`question`**: pergunte ao usuário se o critério de sucesso foi satisfeito.
+- **`write` / `edit`**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
+
 ## Comandos
 
 ### Ruff
@@ -74,7 +82,8 @@ python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py \
 TOTAL                 850      42     95%
 ```
 
-Procurar por regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`
+Extraia do output com regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`. Não infira o valor
+visualmente; se o regex não encontrar, trate como falha.
 
 **Interpretando resultado:**
 - `returncode == 0 AND cov_pct >= gate` → ✅ passou
@@ -89,7 +98,7 @@ Se coverage < gate:
 
 ### Critério de sucesso
 
-Pergunte ao usuário:
+Pergunte ao usuário com `question`:
 > "O critério de sucesso da tarefa está satisfeito?"
 
 O critério volta à fase THINK — o problema declarado foi resolvido?
@@ -102,7 +111,7 @@ Se o critério não está satisfeito, o ciclo é **rejeitado**.
 
 ## Resumo final
 
-Após as 4 verificações, reportar:
+Após as 4 verificações, reporte ao usuário no formato:
 
 ```
 ✅ ruff limpo
@@ -132,6 +141,7 @@ Ou:
 ## Output no YAML
 
 ```yaml
+status: approved
 verify:
   ruff_clean: true
   tests_pass: true
@@ -145,6 +155,11 @@ verify:
 Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
 só as 3 verificações objetivas (ruff + pytest + coverage). O critério de
 sucesso é assumido satisfeito. Útil para CI/CD pipelines.
+
+Para executar via CLI:
+```bash
+python3 -m kata --check-only
+```
 
 ## Princípios
 

@@ -15,6 +15,15 @@ declarado na fase THINK. Detectar:
 - Configurabilidade/flexibilidade não solicitada
 - Complexidade desnecessária
 
+## Ferramentas
+
+Para esta fase, use:
+
+- **`bash`**: `git diff --stat` (ou `git diff --cached --stat` se vazio) para medir volume.
+- **`question`**: checklist de minimalismo — pergunte ao usuário, não valide sozinho.
+- **`read`**: inspecione partes do diff que parecerem suspeitas.
+- **`write` / `edit`**: registre as respostas em `.kata/<task>.yaml`.
+
 ## Procedimento
 
 ### 1. Visualizar o diff
@@ -33,15 +42,16 @@ Mostre o output ao usuário para ter noção do volume de mudanças.
 
 ### 2. Checklist de Minimalismo
 
-Para cada item, faça a pergunta ao usuário (ou valide você mesmo analisando o diff):
+Para cada item, use `question` e pergunte ao usuário:
 
-| Pergunta | Resposta desejada |
-|----------|------------------|
-| O código mínimo resolve o problema? | Sim |
-| Alguma abstração é para uso único? | Não |
-| Existe configurabilidade/flexibilidade não solicitada? | Não |
+| Pergunta | Resposta desejada | Ação se for "Sim" |
+|----------|-------------------|-------------------|
+| O código mínimo resolve o problema? | Sim | Sugira remoções concretas |
+| Alguma abstração é para uso único? | Não | Converta em função/classe concreta |
+| Existe configurabilidade/flexibilidade não solicitada? | Não | Remova parâmetros opcionais |
 
-Se qualquer resposta for "Sim" na coluna indesejada, sinalize e sugira simplificação.
+Se a resposta for "Sim" na coluna indesejada, **pare e proponha uma simplificação
+concreta** antes de prosseguir. Não registre "Sim" sem ação.
 
 ### 3. Anti-patterns para detectar
 

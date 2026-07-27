@@ -35,6 +35,23 @@ THINK → SIMPLIFY → SURGICAL → VERIFY
 | SURGICAL | Validar arquivo-por-arquivo que cada mudança rastreia ao pedido |
 | VERIFY | Rodar ruff + pytest + coverage (gate ≥ 70%) e checar critério de sucesso |
 
+## Ferramentas
+
+Mapeamento de ferramentas OpenCode para cada tarefa do kata:
+
+| Tarefa | Ferramenta | Uso |
+|--------|-----------|-----|
+| Carregar instruções da fase | `skill` | `name: kata-think`, `kata-simplify`, `kata-surgical`, `kata-verify` |
+| Perguntar ao usuário | `question` | Uma pergunta por chamada; não agrupe várias |
+| Executar comandos | `bash` | `git diff`, `ruff`, `pytest`, `kata --check-only` etc. |
+| Ler arquivos | `read` | Inspecionar diff/código de arquivos específicos |
+| Buscar no código | `grep` | Encontrar callers, imports, patterns |
+| Editar arquivos | `edit` | Aplicar correções pontuais |
+| Criar/escrever YAML | `write` | Criar/atualizar `.kata/<task>.yaml` |
+
+**Regra**: em cada fase, carregue primeiro a skill correspondente com `skill` e
+siga suas instruções. O agente prompt é a orquestração; as skills contêm o detalhe.
+
 ## Diretório de Trabalho
 
 Use `.kata/` na raiz do projeto atual. Cada tarefa é um arquivo
@@ -66,14 +83,18 @@ verify:
 
 ## Parsing de Argumentos
 
-A primeira mensagem do usuário após `@kata` pode conter flags. Parseie assim:
+Analise a primeira mensagem do usuário após `@kata` e extraia as flags. Não
+execute comandos antes de identificar o modo. Mapeamento:
 
-| Input | Ação |
-|-------|------|
-| `@kata --init <task>` | Cria `.kata/<task>.yaml` com template, executa THINK, salva e encerra |
-| `@kata --check-only` | Pula THINK/SIMPLIFY/SURGICAL, executa só VERIFY |
-| `@kata --task <name>` | Retoma tarefa existente específica |
-| `@kata` (sem args) | Detecta task (branch git ou menu interativo), ciclo completo |
+| Input | Modo | Ação |
+|-------|------|------|
+| `@kata --init <task>` | `--init` | Use `write` para criar `.kata/<task>.yaml` com template, depois execute a fase THINK e salve |
+| `@kata --check-only` | `--check-only` | Pule THINK/SIMPLIFY/SURGICAL; execute VERIFY via `bash` (`python3 -m kata --check-only`) e reporte |
+| `@kata --task <name>` | `--task` | Carregue `.kata/<name>.yaml` com `read` e continue o ciclo a partir do status atual |
+| `@kata` (sem args) | padrão | Detecte task via branch git (`bash`) ou menu interativo (`question`), ciclo completo |
+
+Para `--init`, você pode também usar `bash` para rodar `python3 -m kata --init <task>`,
+mas depois deve carregar o YAML e prosseguir com THINK interativamente.
 
 ## Detecção de Task
 
@@ -88,9 +109,8 @@ Se nenhum `--task` for fornecido:
 
 ### Fase 1: THINK
 
-Carregue a skill **kata-think** para detalhes. Em resumo:
-
-1. Use a ferramenta `question` para perguntar:
+1. Carregue a skill `kata-think` com a ferramenta `skill` (`name: kata-think`).
+2. Use a ferramenta `question` para perguntar:
    - "Qual o problema exato que estou resolvendo?"
    - "Quais assumptions estou fazendo? (separadas por ;)"
    - "Quais alternativas considerei? (separadas por ;)"
@@ -102,9 +122,8 @@ Carregue a skill **kata-think** para detalhes. Em resumo:
 
 ### Fase 2: SIMPLIFY
 
-Carregue a skill **kata-simplify** para detalhes. Em resumo:
-
-1. Execute `git diff --stat` (ou `git diff --cached --stat` se vazio)
+1. Carregue a skill `kata-simplify` com a ferramenta `skill` (`name: kata-simplify`).
+2. Execute `git diff --stat` (ou `git diff --cached --stat` se vazio)
 2. Mostre o diff ao usuário
 3. Use a ferramenta `question` para perguntar:
    - "O código mínimo resolve o problema?"
@@ -116,9 +135,8 @@ Carregue a skill **kata-simplify** para detalhes. Em resumo:
 
 ### Fase 3: SURGICAL
 
-Carregue a skill **kata-surgical** para detalhes. Em resumo:
-
-1. Execute `git diff --name-only` (ou `git diff --cached --name-only`)
+1. Carregue a skill `kata-surgical` com a ferramenta `skill` (`name: kata-surgical`).
+2. Execute `git diff --name-only` (ou `git diff --cached --name-only`)
 2. Para cada arquivo, pergunte: "`<arquivo>` — necessário para esta tarefa?"
 3. Verifique imports órfãos: `ruff check --select F401 <paths>`
 4. Pergunte: "Imports removidos são só os que sua mudança tornou inúteis?"
@@ -126,9 +144,8 @@ Carregue a skill **kata-surgical** para detalhes. Em resumo:
 
 ### Fase 4: VERIFY
 
-Carregue a skill **kata-verify** para detalhes. Em resumo:
-
-1. **Ruff**: `python3 -m ruff check <paths>`
+1. Carregue a skill `kata-verify` com a ferramenta `skill` (`name: kata-verify`).
+2. **Ruff**: `python3 -m ruff check <paths>`
    - Paths padrão: `src/ tests/`. Adapte ao projeto (ex: `mushin/ services/ tests/`)
    - OK se returncode == 0
    - Se falhou, mostre as primeiras 10 linhas do output

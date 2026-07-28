@@ -27,7 +27,7 @@ src/kata/       código Python (cli.py, fit.py, verify.py, judge.py, __init__.py
 tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_judge.py)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
-  skills/kata-*/SKILL.md 9 skills (8 fases + JUDGE)
+  skills/kata-*/SKILL.md 10 skills (8 fases + JUDGE + QUESTION)
 scripts/install.sh       instala via symlinks em ~/.config/opencode/
 ```
 

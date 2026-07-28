@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala o agente @kata e as 9 skills no OpenCode via symlinks.
+# Instala o agente @kata e as 10 skills no OpenCode via symlinks.
 #
 # Uso:
 #   bash scripts/install.sh             # instalar
@@ -18,6 +18,7 @@ CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 AGENT_FILE="kata.md"
 SKILLS=(
     kata-fit
+    kata-question
     kata-think
     kata-simplify
     kata-intent

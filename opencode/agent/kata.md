@@ -60,8 +60,8 @@ Mapeamento de ferramentas OpenCode para cada tarefa do kata:
 
 | Tarefa | Ferramenta | Uso |
 |--------|------------|-----|
-| Carregar instruções da fase | `skill` | `name: kata-fit`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
-| Perguntar ao usuário | `question` | Uma pergunta por chamada; não agrupe várias |
+| Carregar instruções da fase | `skill` | `name: kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
+| Perguntar ao usuário | `question` + `kata-question` | Uma pergunta por chamada; consulte a skill para rota `question` e regras |
 | Executar comandos | `bash` | `git diff`, `ruff`, `pytest`, `kata --check-only` etc. |
 | Ler arquivos | `read` | Inspecionar diff/código de arquivos específicos |
 | Buscar no código | `grep` | Encontrar callers, imports, patterns |
@@ -165,8 +165,9 @@ Se nenhum `--task` for fornecido:
 3. Classifique a tarefa com o usuário:
    - A tarefa é **trivial** (1 arquivo, <10 linhas, sem busca)? Se sim, vá direto a VERIFY.
    - Qual a **rota** da tarefa: code-loop, plan-first, question, research, inference?
-4. Se for `plan-first`: execute só THINK, entregue um plano, PARE.
-5. Registre a classificação em `.kata/<task>.yaml` sob a chave `fit`.
+4. Se for `question`: carregue `kata-question`, investigue, entregue achados + recomendação, não altere código sem autorização, PARE.
+5. Se for `plan-first`: execute só THINK, entregue um plano, PARE.
+6. Registre a classificação em `.kata/<task>.yaml` sob a chave `fit`.
 
 ### Fase 1: THINK
 

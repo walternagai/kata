@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kata"
 version = "0.1.0"
-description = "Kata (型) — Karpathy Development Cycle: CLI + OpenCode agent"
+description = "Kata (型) — Karpathy Development Cycle: CLI + OpenCode agent + Claude Code skills"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

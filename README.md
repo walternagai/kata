@@ -1,9 +1,10 @@
 # Kata (型)
 
-> Python 3.11+ | CLI + OpenCode Agent | Karpathy Development Cycle + Fable Method
+> Python 3.11+ | CLI + OpenCode Agent + Claude Code Skills | Karpathy Development Cycle + Fable Method
 
-Kata (型, "forma/padrão") é um agente OpenCode e CLI Python que implementa o
-ciclo FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT,
+Kata (型, "forma/padrão") é um agente OpenCode, um conjunto de skills para
+Claude Code e um CLI Python que implementam o ciclo
+FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT,
 com JUDGE adversarial opcional, inspirado em:
 
 1. **Karpathy Development Cycle** (Andrej Karpathy): pensar antes de codar,
@@ -51,6 +52,35 @@ Set-ExecutionPolicy -Scope Process Bypass
 O instalador usa `OPENCODE_CONFIG_DIR` quando definido; caso contrário, usa
 `~/.config/opencode`, o caminho global do OpenCode em todas as plataformas.
 
+### Skills Claude Code
+
+```bash
+git clone <repo> ~/dev/ninja-apps/kata
+cd ~/dev/ninja-apps/kata
+make install-claude-code
+```
+
+Depois de instalado, use a skill `kata` no Claude Code (ex: `/kata`, ou
+descreva a tarefa e deixe o Claude Code acioná-la pela descrição).
+
+No Windows PowerShell:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install-claude-code.ps1
+# Para evitar links simbólicos/junctions, use cópias:
+# .\scripts\install-claude-code.ps1 -Copy
+# Desinstalar: .\scripts\install-claude-code.ps1 -Uninstall
+```
+
+O instalador usa `CLAUDE_CONFIG_DIR` quando definido; caso contrário, usa
+`~/.claude`, o caminho global do Claude Code em todas as plataformas.
+
+Diferente do agente `@kata` do OpenCode, a versão Claude Code é só skills
+(sem subagente): o ciclo do kata é muito interativo — pergunta a cada
+fase — e isso se encaixa melhor rodando na conversa principal do que em um
+subagente isolado que só reporta um resumo ao final.
+
 ### CLI Python (opcional, para CI/headless)
 
 ```bash
@@ -70,6 +100,21 @@ pip install -e .
 | `@kata --task nome` | Retoma tarefa existente |
 | `@kata --task nome --judge` | Verificação adversarial (caça fraudes) |
 | `@kata --task nome --report` | Relatório outcome-first |
+
+### No Claude Code
+
+A skill `kata` recebe os mesmos argumentos que o agente OpenCode, passados
+como texto após o nome (ex: `/kata --init nome-da-tarefa`):
+
+| Comando | Ação |
+|---------|------|
+| `/kata` | Ciclo interativo completo |
+| `/kata --init nome-da-tarefa` | Cria tarefa e executa FIT + THINK |
+| `/kata --check-only` | Só verificação (CI/snapshot) |
+| `/kata --plan nome-da-tarefa` | Modo planejamento: FIT + THINK, para sem modificar código |
+| `/kata --task nome` | Retoma tarefa existente |
+| `/kata --task nome --judge` | Verificação adversarial (caça fraudes) |
+| `/kata --task nome --report` | Relatório outcome-first |
 
 ### CLI Python
 
@@ -144,11 +189,13 @@ O kata usa `.kata/` na raiz do projeto. Cada tarefa é um arquivo YAML:
 ## Desenvolvimento
 
 ```bash
-make test      # pytest + coverage
-make lint       # ruff check
-make format     # ruff format
-make install    # instala agente + skills
-make uninstall  # remove symlinks
+make test                  # pytest + coverage
+make lint                  # ruff check
+make format                # ruff format
+make install                # instala agente + skills no OpenCode
+make uninstall               # remove symlinks do OpenCode
+make install-claude-code     # instala skills no Claude Code
+make uninstall-claude-code   # remove symlinks do Claude Code
 ```
 
 ## Compatibilidade
@@ -165,8 +212,10 @@ ln -s .karpathy .kata   # symlink preserva acesso ao legado
 ```
 kata/
 ├── opencode/
-│   ├── agent/kata.md           ← Agente @kata
-│   └── skills/kata-*/SKILL.md  ← 9 skills (8 fases + JUDGE)
+│   ├── agent/kata.md                  ← Agente @kata (OpenCode)
+│   └── skills/kata-*/SKILL.md         ← 10 skills (8 fases + question + JUDGE)
+├── claude-code/
+│   └── skills/kata-*/SKILL.md         ← 11 skills (kata orquestrador + 8 fases + question + JUDGE)
 ├── src/kata/
 │   ├── cli.py                  ← CLI headless (orquestra as 8 fases + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
@@ -174,7 +223,9 @@ kata/
 │   ├── judge.py                ← Lógica adversarial (caça fraudes)
 │   ├── __init__.py             ← Versão do pacote
 │   └── __main__.py             ← Entry point para `python -m kata`
-├── scripts/install.sh          ← Instalação via symlinks
+├── scripts/
+│   ├── install.sh / install.ps1                        ← Instalação no OpenCode
+│   └── install-claude-code.sh / install-claude-code.ps1 ← Instalação no Claude Code
 └── tests/                      ← Testes pytest (ver `make test` para cobertura)
 ```
 

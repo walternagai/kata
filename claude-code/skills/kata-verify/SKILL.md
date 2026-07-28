@@ -1,0 +1,173 @@
+---
+name: kata-verify
+description: Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando o kata estiver na fase 4 — executar ruff, pytest e coverage, interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, gate, CI, verificação de qualidade.
+---
+
+# Skill: kata-verify
+
+Fase 4 do Karpathy Development Cycle — **GOAL-DRIVEN**.
+
+## Objetivo
+
+Verificar a qualidade do código com critérios objetivos:
+1. **Ruff** — lint limpo
+2. **pytest** — todos os testes passam
+3. **Coverage** — ≥ gate (default 70%)
+4. **Critério de sucesso** — a tarefa resolve o problema declarado na fase THINK
+
+## Ferramentas
+
+Para esta fase, use:
+
+- **`Bash`**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
+- **`AskUserQuestion`** (via `kata-question`): pergunte ao usuário se o critério de sucesso foi satisfeito.
+- **`Write` / `Edit`**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
+
+## Comandos
+
+### Ruff
+
+```bash
+python -m ruff check src/ tests/
+```
+
+Para projetos com estrutura diferente (ex: mushin):
+```bash
+python -m ruff check mushin/ services/ tests/
+```
+
+**Interpretando resultado:**
+- `returncode == 0` → ✅ limpo
+- `returncode != 0` → ❌ falhou — mostrar output completo
+
+**Problemas comuns:**
+- `F401` — import não utilizado → remover ou adicionar `# noqa: F401`
+- `E501` — linha longa → quebrar ou aumentar `line-length` no ruff config
+- `I001` — import desordenado → `ruff format` ou `ruff check --fix`
+
+### Pytest
+
+```bash
+python -m pytest tests/ --tb=short -q
+```
+
+Para projetos com testes que precisam de ignore (ex: mushin com faiss):
+```bash
+python -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=short -q
+```
+
+**Interpretando resultado:**
+- `returncode == 0` → ✅ passou
+- `returncode != 0` → ❌ falhou — mostrar output completo
+
+**Problemas comuns:**
+- `ModuleNotFoundError: faiss` → usar `--ignore` ou instalar a dependência no
+  ambiente do projeto (`python -m pip install faiss-cpu`; no Windows, `py -m pip`).
+- `ImportError` circular → checar ordem de imports
+- `AssertionError` em teste → investigar se a mudança quebrou comportamento
+
+### Coverage
+
+```bash
+python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=70 -q
+```
+
+Para mushin:
+```bash
+python -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --cov=mushin --cov-report=term-missing --cov-fail-under=70 -q
+```
+
+O `--cov-fail-under` faz o pytest-cov verificar o gate automaticamente:
+returncode com erro se coverage < gate.
+
+**Extraindo percentual (para exibição):**
+```
+TOTAL                 850      42     95%
+```
+
+Extraia do output com regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`. Não infira o valor
+visualmente; se o regex não encontrar, trate como falha.
+
+**Interpretando resultado:**
+- `returncode == 0` → ✅ passou (gate verificado pelo próprio `--cov-fail-under`)
+- `returncode != 0` → ❌ falhou
+
+**Gate padrão: 70%**
+
+Se coverage < gate:
+1. Identificar linhas não cobertas (coluna `Missing` no output)
+2. Adicionar testes para essas linhas
+3. Ou marcar com `# pragma: no cover` se for código não-testável
+
+### Critério de sucesso
+
+Pergunte ao usuário via `AskUserQuestion`:
+> "O critério de sucesso da tarefa está satisfeito?"
+
+O critério volta à fase THINK — o problema declarado foi resolvido?
+
+**Exemplo:**
+- THINK: "AUTH_MODE=api_key + API_KEY vazio bypassa auth silenciosamente"
+- Sucesso: "warn no startup + /health retorna degraded quando misconfig"
+
+Se o critério não está satisfeito, o ciclo é **rejeitado**.
+
+## Resumo final
+
+Após as 4 verificações, reporte ao usuário no formato:
+
+```
+✅ ruff limpo
+✅ pytest 850 passaram
+✅ coverage 87.0% (gate: 70%)
+✅ critério de sucesso satisfeito
+
+┌──────────────────────────────────────────────────────────┐
+│  ✅  KATA CYCLE — APROVADO                               │
+└──────────────────────────────────────────────────────────┘
+```
+
+Ou:
+
+```
+❌ ruff: 3 erros (F401 x2, E501 x1)
+✅ pytest: 850 passaram
+❌ coverage: 65.0% (gate: 70%)
+✅ critério de sucesso satisfeito
+
+┌──────────────────────────────────────────────────────────┐
+│  ❌  KATA CYCLE — REJEITADO                               │
+│     Corrija os problemas e rode novamente.               │
+└──────────────────────────────────────────────────────────┘
+```
+
+## Output no YAML
+
+```yaml
+status: approved
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 87.0
+  coverage_pass: true
+  success_criteria_met: true
+```
+
+## Modo --check-only (CI)
+
+Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
+só as 3 verificações objetivas (ruff + pytest + coverage). O critério de
+sucesso é assumido satisfeito. Útil para CI/CD pipelines — nesse modo, a
+skill nem precisa ser carregada: chame o CLI diretamente via `Bash`.
+
+Para executar via CLI:
+```bash
+python -m kata --check-only
+```
+
+## Princípios
+
+- **Gate é inegociável**: coverage < 70% = rejeitado, sem exceção
+- **Falso verde é pior que vermelho**: se os testes passam mas não testam nada, é pior que falhar
+- **Critério de sucesso é subjetivo mas obrigatório**: o humano precisa confirmar que resolveu
+- **Exit code**: 0 = aprovado, 1 = rejeitado — para integração com CI (via o CLI `python -m kata`)

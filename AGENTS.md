@@ -8,6 +8,8 @@ Kata é a ferramenta que implementa o ciclo FIT → THINK → SIMPLIFY → INTEN
 Este repositório contém o **código da ferramenta** (CLI + agente OpenCode), não
 um projeto onde o kata é aplicado.
 
+A referência técnica detalhada está em [`DOCUMENTATION.md`](DOCUMENTATION.md).
+
 O ciclo é inspirado em duas fontes complementares:
 
 1. **Karpathy Development Cycle** (Andrej Karpathy): pensar antes de codar,
@@ -25,7 +27,7 @@ src/kata/       código Python (cli.py, fit.py, verify.py, judge.py, __init__.py
 tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_judge.py)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
-  skills/kata-*/SKILL.md 8 skills (uma por fase do ciclo)
+  skills/kata-*/SKILL.md 9 skills (8 fases + JUDGE)
 scripts/install.sh       instala via symlinks em ~/.config/opencode/
 ```
 

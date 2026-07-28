@@ -3,6 +3,9 @@
 Cada cenário em `scenarios/` é uma armadilha (trap) que testa se o
 `kata --judge` detecta fraudes plantadas em tarefas "concluídas".
 
+A arquitetura, os vereditos e o contrato do CLI estão documentados em
+[`../DOCUMENTATION.md`](../DOCUMENTATION.md).
+
 ## Como executar
 
 ```bash

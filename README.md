@@ -12,6 +12,8 @@ com JUDGE adversarial opcional, inspirado em:
    agir (fit gate), triviality gate, evidência antes de ação, verificação
    adversarial e relatório outcome-first.
 
+Para a referência técnica completa, consulte [`DOCUMENTATION.md`](DOCUMENTATION.md).
+
 O ciclo completo:
 ```
 FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT
@@ -63,7 +65,7 @@ kata --init minha-tarefa       # Cria .kata/minha-tarefa.yaml
 kata                            # Ciclo interativo completo
 kata --check-only               # Só VERIFY (lint + test + coverage)
 kata --plan                     # Modo planejamento: FIT + THINK, para
-kata --plan minha-tarefa        # Planeja tarefa específica
+kata --plan --task minha-tarefa # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
 ```
 
@@ -78,7 +80,7 @@ kata --task minha-tarefa        # Retoma tarefa específica
 | `--cov-source` | `src` | Pacote fonte para coverage |
 | `--gate` | `70` | Gate mínimo de coverage (%) |
 
-## As 5 Fases
+## Fases do Ciclo
 
 ### 0. FIT (classificação da tarefa)
 
@@ -151,7 +153,7 @@ ln -s .karpathy .kata   # symlink preserva acesso ao legado
 kata/
 ├── opencode/
 │   ├── agent/kata.md           ← Agente @kata
-│   └── skills/kata-*/SKILL.md  ← 8 skills (uma por fase)
+│   └── skills/kata-*/SKILL.md  ← 9 skills (8 fases + JUDGE)
 ├── src/kata/
 │   ├── cli.py                  ← CLI headless (orquestra as 8 fases + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)

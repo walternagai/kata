@@ -145,13 +145,15 @@ twins:
 
 ### Inicialização obrigatória do estado
 
-Antes de ler ou escrever qualquer arquivo de tarefa, verifique se `.kata/`
-existe na raiz do projeto atual. Se não existir, crie-o com a ferramenta de
-arquivos ou com o comando equivalente do shell hospedeiro (por exemplo,
-`mkdir -p .kata` em shells POSIX ou `New-Item -ItemType Directory -Force .kata`
-no PowerShell). Essa verificação vale para todos os modos, inclusive
-`--check-only`, `--judge` e `--report`; nunca tente escrever
-`.kata/<task>.yaml` sem garantir antes que o diretório pai existe.
+Antes de ler ou escrever qualquer arquivo de tarefa, garanta que `.kata/`
+existe. Use o comando adequado ao shell hospedeiro (conforme a seção
+"Compatibilidade operacional" acima):
+
+- **POSIX** (Linux/macOS): `mkdir -p .kata`
+- **Windows PowerShell**: `New-Item -ItemType Directory -Force .kata`
+
+Esta etapa é obrigatória em todos os modos (`--init`, `--check-only`,
+`--judge`, `--report`, `--plan`, `--task`, e modo padrão).
 
 Analise a primeira mensagem do usuário após `@kata` e extraia as flags. Não
 execute comandos antes de identificar o modo. Mapeamento:

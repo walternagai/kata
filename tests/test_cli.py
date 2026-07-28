@@ -55,6 +55,36 @@ class TestTaskPath:
         assert ".kata" in str(path)
         assert "my-task" in str(path)
 
+    @pytest.mark.parametrize(
+        "bad_name",
+        [
+            "../escaped",
+            "../../etc/passwd",
+            "sub/dir",
+            "sub\\dir",
+            "..",
+            "",
+        ],
+    )
+    def test_rejects_path_traversal(self, tmp_path, monkeypatch, bad_name) -> None:
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            cli._task_path(bad_name)
+        assert exc.value.code == 1
+        # nada deve ter sido criado fora de .kata/
+        assert not any(tmp_path.rglob("*escaped*"))
+        assert not any(tmp_path.rglob("*passwd*"))
+
+    def test_does_not_escape_kata_dir(self, tmp_path, monkeypatch) -> None:
+        """Reprodução do finding original: --init com '../foo' não deve
+        conseguir escrever fora de .kata/ mesmo quando o diretório pai existe."""
+        monkeypatch.chdir(tmp_path)
+        cli._kata_dir().mkdir(parents=True, exist_ok=True)
+        with pytest.raises(SystemExit):
+            cli._init_task("../escaped-outside-kata")
+        assert not (tmp_path / "escaped-outside-kata.yaml").exists()
+        assert not (tmp_path.parent / "escaped-outside-kata.yaml").exists()
+
 
 class TestInitTask:
     """Testa criação do template .kata/<task>.yaml."""
@@ -1218,6 +1248,34 @@ class TestMainJudge:
             with pytest.raises(SystemExit) as exc:
                 cli.main()
         assert exc.value.code == 2
+
+
+class TestTaskFlagRejectsPathTraversal:
+    """Testa que --task/--init/--judge/--report rejeitam nomes com '..'/'/'
+    ponta a ponta pelo main(), não só no helper _task_path isolado."""
+
+    def test_report_rejects_traversal(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        with patch("sys.argv", ["kata", "--task", "../escaped", "--report"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+        assert not (tmp_path.parent / "escaped.yaml").exists()
+
+    def test_judge_rejects_traversal(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        with patch("sys.argv", ["kata", "--task", "../../escaped", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+
+    def test_init_rejects_traversal(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        with patch("sys.argv", ["kata", "--init", "../escaped-init"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+        assert not (tmp_path.parent / "escaped-init.yaml").exists()
 
 
 class TestHasDeployDocs:

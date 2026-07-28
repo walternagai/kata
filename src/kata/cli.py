@@ -67,7 +67,19 @@ def _ext() -> str:
     return ".yaml" if _HAS_YAML else ".json"
 
 
+def _validate_task_name(task: str) -> None:
+    """Impede path traversal via nome de tarefa (--task/--init/--judge/--report).
+
+    Sem isso, um nome como '../../etc/foo' escreve/lê fora de .kata/, já que
+    _task_path só concatena o nome ao diretório sem checar separadores.
+    """
+    if not task or "/" in task or "\\" in task or ".." in task:
+        print(f"⚠  Nome de tarefa inválido: '{task}'. Não pode conter '/', '\\' ou '..'.")
+        sys.exit(1)
+
+
 def _task_path(task: str) -> Path:
+    _validate_task_name(task)
     return _kata_dir() / f"{task}{_ext()}"
 
 

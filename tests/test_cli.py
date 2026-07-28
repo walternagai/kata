@@ -85,6 +85,50 @@ class TestInitTask:
         assert "já existe" in captured.out
 
 
+class TestCaptureBaseCommit:
+    """Testa _capture_base_commit — registro do HEAD no início da tarefa."""
+
+    def test_captures_head_in_git_repo(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        subprocess.run(["git", "init", "-q"], check=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
+        subprocess.run(["git", "config", "user.name", "t"], check=True)
+        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], check=True)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        data = cli._capture_base_commit({})
+        assert data["base_commit"] == head
+
+    def test_does_not_overwrite_existing(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        subprocess.run(["git", "init", "-q"], check=True)
+        data = cli._capture_base_commit({"base_commit": "already-set"})
+        assert data["base_commit"] == "already-set"
+
+    def test_no_git_repo_leaves_unset(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        data = cli._capture_base_commit({})
+        assert "base_commit" not in data
+
+    def test_init_task_captures_base_commit(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        subprocess.run(["git", "init", "-q"], check=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
+        subprocess.run(["git", "config", "user.name", "t"], check=True)
+        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], check=True)
+
+        cli._kata_dir().mkdir(parents=True, exist_ok=True)
+        cli._init_task("with-base-commit")
+        data = cli._deserialize(cli._task_path("with-base-commit").read_text(encoding="utf-8"))
+        assert data["base_commit"]
+
+
 class TestDetectTaskFromBranch:
     """Testa detecção de task a partir do branch git."""
 

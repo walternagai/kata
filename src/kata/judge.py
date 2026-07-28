@@ -103,16 +103,39 @@ def collect_claims(task_data: dict[str, Any]) -> list[str]:
 # ── git helpers ───────────────────────────────────────────────────────────
 
 
-def _run_git_diff(cwd: Path | None = None) -> str:
-    """Retorna diff completo (unstaged ou staged)."""
+def _base_commit_resolves(base_commit: str, cwd: Path | None = None) -> bool:
+    """Confirma que base_commit ainda existe no histórico (não foi rebaseado/podado)."""
+    result = _run(["git", "cat-file", "-e", f"{base_commit}^{{commit}}"], cwd=cwd)
+    return result.returncode == 0
+
+
+def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> str:
+    """Retorna o diff da tarefa.
+
+    Se `base_commit` (o HEAD registrado quando a tarefa começou, na fase
+    FIT) estiver disponível, usa `git diff <base_commit>` — cobre commits,
+    staged e unstaged de uma vez, então continua funcionando depois que a
+    tarefa é commitada (o caso normal de uma tarefa "concluída").
+
+    Sem base_commit (tarefas antigas, ou geradas fora do ciclo FIT), cai
+    no comportamento anterior: unstaged, com fallback para staged — que
+    só enxerga mudanças ainda não commitadas.
+    """
+    if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
+        return _run(["git", "diff", base_commit], cwd=cwd).stdout
+
     result = _run(["git", "diff"], cwd=cwd)
     if not result.stdout.strip():
         result = _run(["git", "diff", "--cached"], cwd=cwd)
     return result.stdout
 
 
-def _changed_files(cwd: Path | None = None) -> list[str]:
-    """Retorna lista de arquivos alterados (unstaged ou staged)."""
+def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> list[str]:
+    """Retorna a lista de arquivos alterados pela tarefa (mesma lógica de _run_git_diff)."""
+    if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
+        result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
+        return [f for f in result.stdout.strip().split("\n") if f.strip()]
+
     result = _run(["git", "diff", "--name-only"], cwd=cwd)
     if not result.stdout.strip():
         result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
@@ -276,8 +299,9 @@ def judge_task(
     4. Caça fraudes em 6 categorias
     5. Entrega veredito
     """
-    diff = _run_git_diff(cwd=cwd)
-    changed = _changed_files(cwd=cwd)
+    base_commit = task_data.get("base_commit")
+    diff = _run_git_diff(cwd=cwd, base_commit=base_commit)
+    changed = _changed_files(cwd=cwd, base_commit=base_commit)
     claims = collect_claims(task_data)
 
     verify = task_data.get("verify", {})

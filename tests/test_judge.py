@@ -605,6 +605,38 @@ class TestRunGitDiff:
         assert "staged.py" in diff
         assert mock_run.call_args[0][0] == ["git", "diff", "--cached"]
 
+    @patch("kata.judge._run")
+    def test_base_commit_used_when_it_resolves(self, mock_run: MagicMock) -> None:
+        """Com base_commit válido, compara direto contra ele — mesmo se
+        não houver diff local (unstaged/staged), o que é o caso de uma
+        tarefa já commitada."""
+        from kata.judge import _run_git_diff
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # cat-file
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="diff --git a/f.py b/f.py\n+pass\n", stderr=""
+            ),
+        ]
+        diff = _run_git_diff(base_commit="deadbeef")
+        assert "+pass" in diff
+        assert mock_run.call_args_list[0][0][0] == ["git", "cat-file", "-e", "deadbeef^{commit}"]
+        assert mock_run.call_args_list[1][0][0] == ["git", "diff", "deadbeef"]
+
+    @patch("kata.judge._run")
+    def test_base_commit_falls_back_when_it_does_not_resolve(self, mock_run: MagicMock) -> None:
+        """base_commit inválido (ex: histórico reescrito) não deve travar
+        o judge — cai de volta no diff local."""
+        from kata.judge import _run_git_diff
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad revision"),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="diff --git a/local.py b/local.py\n", stderr=""
+            ),
+        ]
+        diff = _run_git_diff(base_commit="deadbeef")
+        assert "local.py" in diff
+        assert mock_run.call_args_list[1][0][0] == ["git", "diff"]
+
 
 class TestChangedFiles:
     """Testa o helper _changed_files."""
@@ -635,3 +667,82 @@ class TestChangedFiles:
         )
         files = _changed_files()
         assert files == []
+
+    @patch("kata.judge._run")
+    def test_base_commit_used_when_it_resolves(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # cat-file
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="committed.py\n", stderr=""),
+        ]
+        files = _changed_files(base_commit="deadbeef")
+        assert files == ["committed.py"]
+        assert mock_run.call_args_list[1][0][0] == ["git", "diff", "--name-only", "deadbeef"]
+
+    @patch("kata.judge._run")
+    def test_base_commit_falls_back_when_it_does_not_resolve(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad revision"),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="local.py\n", stderr=""),
+        ]
+        files = _changed_files(base_commit="deadbeef")
+        assert files == ["local.py"]
+
+
+class TestJudgeTaskDetectsCommittedFraud:
+    """Prova, com um repo git de verdade, que uma fraude já commitada
+    (o estado normal de uma tarefa "concluída") só é detectada quando
+    base_commit está disponível — sem ele, o judge fica cego."""
+
+    def _make_repo(self, tmp_path) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+
+    def test_committed_fraud_invisible_without_base_commit(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._make_repo(tmp_path)
+        test_file = tmp_path / "tests"
+        test_file.mkdir()
+        (test_file / "test_foo.py").write_text(
+            "def test_foo():\n    assert True\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "clean baseline"], cwd=tmp_path, check=True)
+
+        # fraude: assert vira pass, e a mudança é commitada (tarefa "concluída")
+        (test_file / "test_foo.py").write_text("def test_foo():\n    pass\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "weaken test"], cwd=tmp_path, check=True)
+
+        task_data = {"verify": {}, "surgical": {}, "intent": {}, "artifact": {}}
+        result = judge_task(task_data, cwd=tmp_path)
+        assert not any(f.type == "weakened_checks" for f in result.frauds)
+
+    def test_committed_fraud_detected_with_base_commit(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._make_repo(tmp_path)
+        test_file = tmp_path / "tests"
+        test_file.mkdir()
+        (test_file / "test_foo.py").write_text(
+            "def test_foo():\n    assert True\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "clean baseline"], cwd=tmp_path, check=True)
+        base_commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        (test_file / "test_foo.py").write_text("def test_foo():\n    pass\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "weaken test"], cwd=tmp_path, check=True)
+
+        task_data = {
+            "base_commit": base_commit,
+            "verify": {},
+            "surgical": {},
+            "intent": {},
+            "artifact": {},
+        }
+        result = judge_task(task_data, cwd=tmp_path)
+        assert any(f.type == "weakened_checks" for f in result.frauds)
+        assert result.verdict == "REFUTED"

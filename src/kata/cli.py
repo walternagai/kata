@@ -196,6 +196,23 @@ def _print_judge_verdict(result: JudgeResult) -> None:
 # ── step implementations ────────────────────────────────────────────────
 
 
+def _capture_base_commit(data: dict[str, Any]) -> dict[str, Any]:
+    """Registra o HEAD do git no início da tarefa, uma única vez.
+
+    O JUDGE usa esse commit como ponto de comparação. Sem ele, o JUDGE só
+    enxerga o diff não commitado (unstaged/staged) e fica cego assim que
+    a tarefa é commitada — exatamente o estado de uma tarefa "concluída",
+    que é o caso que o JUDGE existe para verificar.
+    """
+    if data.get("base_commit"):
+        return data
+    result = _run(["git", "rev-parse", "HEAD"])
+    sha = result.stdout.strip()
+    if result.returncode == 0 and sha:
+        data["base_commit"] = sha
+    return data
+
+
 def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
     """Fase 0: FIT — triviality gate + classificação da tarefa antes do THINK.
 
@@ -927,6 +944,7 @@ def _init_task(task: str) -> None:
             "matches_count": 0, "files_count": 0, "fix_applied": False,
         },
     }
+    template = _capture_base_commit(template)
     path.write_text(_serialize(template), encoding="utf-8")
     print(f"✅  {path} criado. Preencha as respostas com o modo interativo.")
 
@@ -1078,6 +1096,7 @@ def main() -> None:
         if path.exists()
         else {"task": task, "status": "draft"}
     )
+    data = _capture_base_commit(data)
 
     data = _step_fit(task, data)
     data = _step_think(task, data)

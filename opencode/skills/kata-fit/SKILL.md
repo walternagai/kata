@@ -75,8 +75,13 @@ Pergunte ao usuário (ou classifique baseado no contexto):
 
 ### 3. Registrar no YAML
 
+Se `base_commit` ainda não estiver gravado na tarefa, registre o HEAD atual
+do git (`git rev-parse HEAD`) nessa chave. É o ponto de comparação que o
+JUDGE usa depois — sem ele, o JUDGE só enxerga diff não commitado.
+
 ```yaml
 status: draft
+base_commit: "a1b2c3d..."
 fit:
   trivial: false
   route: code-loop     # code-loop | plan-first | question | research | inference

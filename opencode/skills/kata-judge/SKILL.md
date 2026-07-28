@@ -16,7 +16,11 @@ que não observou.
 Verificar adversarialmente uma tarefa concluída:
 
 1. **Collect claims** — extrair do YAML o que o relatório diz que foi feito
-2. **Establish ground truth** — `git diff` contra o estado real do código
+2. **Establish ground truth** — diff contra o estado real do código, desde
+   `base_commit` (o HEAD registrado no início da tarefa, na fase FIT) se
+   disponível; senão, diff local (unstaged/staged). `base_commit` é o que
+   permite ao JUDGE continuar enxergando a mudança depois que ela é
+   commitada — o estado normal de uma tarefa "concluída"
 3. **Re-run every claimed verification** — executar de novo e comparar
 4. **Hunt frauds** — 6 categorias
 5. **Deliver verdict** — VERIFIED / VERIFIED WITH CAVEATS / REFUTED

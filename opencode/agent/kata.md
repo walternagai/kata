@@ -91,6 +91,8 @@ Use `.kata/` na raiz do projeto atual. Cada tarefa é um arquivo
 ```yaml
 task: nome-da-tarefa
 status: draft | think-complete | approved | rejected
+base_commit: ""      # HEAD do git no início da tarefa; usado pelo JUDGE para
+                      # comparar mesmo depois que a tarefa é commitada
 fit:
   trivial: false
   route: code-loop     # code-loop | plan-first | question | research | inference

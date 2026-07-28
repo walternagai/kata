@@ -114,6 +114,7 @@ def run_coverage(
         *testpaths,
         f"--cov={source}",
         "--cov-report=term-missing",
+        f"--cov-fail-under={gate}",
         "-q",
     ]
     if ignore:
@@ -127,7 +128,7 @@ def run_coverage(
     if match:
         cov_pct = float(match.group(1))
 
-    passed = result.returncode == 0 and cov_pct >= gate
+    passed = result.returncode == 0
     return VerifyResult(
         ok=passed,
         output=result.stdout + result.stderr,
@@ -149,17 +150,30 @@ def run_all(
 ) -> dict[str, VerifyResult]:
     """Executa todas as verificações: ruff → pytest → coverage.
 
+    Otimização: coverage só roda se pytest passar (short-circuit).
+
     Returns:
         Dicionário com chaves "ruff", "pytest", "coverage" e seus resultados.
     """
-    return {
-        "ruff": run_ruff(paths=ruff_paths, cwd=cwd),
-        "pytest": run_pytest(testpaths=test_paths, ignore=ignore, cwd=cwd),
-        "coverage": run_coverage(
+    results: dict[str, VerifyResult] = {}
+
+    results["ruff"] = run_ruff(paths=ruff_paths, cwd=cwd)
+
+    results["pytest"] = run_pytest(testpaths=test_paths, ignore=ignore, cwd=cwd)
+
+    if results["pytest"].ok:
+        results["coverage"] = run_coverage(
             source=cov_source,
             testpaths=test_paths,
             ignore=ignore,
             gate=gate,
             cwd=cwd,
-        ),
-    }
+        )
+    else:
+        results["coverage"] = VerifyResult(
+            ok=False,
+            output="(skipped — tests failed)",
+            details={"coverage_pct": 0.0, "gate": gate},
+        )
+
+    return results

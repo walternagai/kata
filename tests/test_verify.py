@@ -157,7 +157,7 @@ class TestRunCoverage:
     def test_coverage_below_gate(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
-            returncode=0,
+            returncode=1,
             stdout="TOTAL                 100      50     50%",
             stderr="",
         )
@@ -169,7 +169,7 @@ class TestRunCoverage:
     def test_coverage_no_total_line(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
-            returncode=0,
+            returncode=1,
             stdout="no coverage data",
             stderr="",
         )
@@ -181,7 +181,7 @@ class TestRunCoverage:
     def test_coverage_custom_gate(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
-            returncode=0,
+            returncode=1,
             stdout="TOTAL                 100      20     80%",
             stderr="",
         )

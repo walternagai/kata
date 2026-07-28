@@ -1,17 +1,24 @@
 # Kata (型)
 
-> Karpathy Development Cycle — CLI Python + Agente OpenCode
+> Python 3.11+ | CLI + OpenCode Agent | Karpathy Development Cycle + Fable Method
 
 Kata (型, "forma/padrão") é um agente OpenCode e CLI Python que implementa o
-ciclo de desenvolvimento de 4 passos inspirado em Andrej Karpathy:
+ciclo FIT → THINK → SIMPLIFY → SURGICAL → VERIFY, inspirado em:
 
+1. **Karpathy Development Cycle** (Andrej Karpathy): pensar antes de codar,
+   manter o código mínimo, mudanças cirúrgicas e verificação objetiva.
+2. **The Fable Method** (Sahir619/fable-method): classificar a tarefa antes de
+   agir (fit gate), triviality gate, evidência antes de ação, verificação
+   adversarial e relatório outcome-first.
+
+O ciclo completo:
 ```
-THINK → SIMPLIFY → SURGICAL → VERIFY
+FIT → THINK → SIMPLIFY → SURGICAL → VERIFY
 ```
 
 Como um kata marcial, é uma sequência disciplinada e repetível de movimentos:
-pensar antes de codar, manter o código mínimo, fazer mudanças cirúrgicas e
-verificar com critérios objetivos.
+classificar a tarefa, pensar antes de codar, manter o código mínimo, fazer
+mudanças cirúrgicas e verificar com critérios objetivos.
 
 ## Instalação
 
@@ -38,9 +45,10 @@ pip install -e .
 
 | Comando | Ação |
 |---------|------|
-| `@kata` | Ciclo interativo completo |
-| `@kata --init nome-da-tarefa` | Cria tarefa e executa THINK |
+| `@kata` | Ciclo interativo completo (FIT → THINK → SIMPLIFY → SURGICAL → VERIFY) |
+| `@kata --init nome-da-tarefa` | Cria tarefa e executa FIT + THINK |
 | `@kata --check-only` | Só verificação (CI/snapshot) |
+| `@kata --plan nome-da-tarefa` | Modo planejamento: FIT + THINK, para sem modificar código |
 | `@kata --task nome` | Retoma tarefa existente |
 
 ### CLI Python
@@ -49,6 +57,8 @@ pip install -e .
 kata --init minha-tarefa       # Cria .kata/minha-tarefa.yaml
 kata                            # Ciclo interativo completo
 kata --check-only               # Só VERIFY (lint + test + coverage)
+kata --plan                     # Modo planejamento: FIT + THINK, para
+kata --plan minha-tarefa        # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
 ```
 
@@ -56,13 +66,21 @@ kata --task minha-tarefa        # Retoma tarefa específica
 
 | Flag | Default | Descrição |
 |------|---------|-----------|
+| `--plan` | `False` | Modo planejamento: FIT + THINK, não modifica código |
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
 | `--test-paths` | `tests/` | Caminhos para pytest |
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
 | `--cov-source` | `src` | Pacote fonte para coverage |
 | `--gate` | `70` | Gate mínimo de coverage (%) |
 
-## As 4 Fases
+## As 5 Fases
+
+### 0. FIT (classificação da tarefa)
+
+Inspirado no fit gate do [The Fable Method](https://github.com/Sahir619/fable-method).
+Classifica a tarefa antes de investir esforço:
+- **Triviality gate**: 1 arquivo, <10 linhas, sem busca → vá direto a VERIFY
+- **Rotas**: code-loop, plan-first, question, research, inference
 
 ### 1. THINK
 Declarar problema, assumptions, alternativas e unknowns antes de codar.
@@ -113,9 +131,10 @@ ln -s .karpathy .kata   # symlink preserva acesso ao legado
 kata/
 ├── opencode/
 │   ├── agent/kata.md           ← Agente @kata
-│   └── skills/kata-*/SKILL.md  ← 4 skills (uma por fase)
+│   └── skills/kata-*/SKILL.md  ← 5 skills (uma por fase)
 ├── src/kata/
-│   ├── cli.py                  ← CLI headless (orquestra as 4 fases)
+│   ├── cli.py                  ← CLI headless (orquestra as 5 fases)
+│   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
 │   ├── verify.py               ← Lógica de verificação (ruff/pytest/coverage)
 │   ├── __init__.py             ← Versão do pacote
 │   └── __main__.py             ← Entry point para `python -m kata`

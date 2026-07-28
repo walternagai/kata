@@ -1,13 +1,20 @@
-"""Kata CLI — Karpathy Development Cycle.
+"""Kata CLI — Karpathy Development Cycle + Fable Method.
 
 Modos:
   --init <task>     Cria .kata/<task>.yaml com template
-  (sem args)        Ciclo interativo completo (THINK → SIMPLIFY → SURGICAL → VERIFY)
+  (sem args)        Ciclo: FIT, THINK, SIMPLIFY, INTENT, SURGICAL, VERIFY, ARTIFACT, REPORT
   --check-only      Roda só o passo 4 (lint + test + coverage)
+  --plan            Modo planejamento (FIT → THINK, para)
   --task <name>     Retoma tarefa específica
+  --judge           Modo adversarial verification (caça fraudes em tarefa concluída)
+  --task <name> --judge     Verifica tarefa específica adversarialmente
+  --report          Gera relatório outcome-first de tarefa concluída (usa --task ou branch)
 
 Port do `scripts/karpathy_cycle.py` do mushin, usando `.kata/` e
-lógica de verificação modularizada em `kata.verify`.
+lógica de verificação modularizada em `kata.verify` e `kata.fit`.
+
+Inspirado no Karpathy Development Cycle e no The Fable Method
+(https://github.com/Sahir619/fable-method).
 """
 
 from __future__ import annotations
@@ -20,6 +27,8 @@ from pathlib import Path
 from typing import Any
 
 from kata import __version__
+from kata.fit import diff_stats, is_trivial
+from kata.judge import JudgeResult, judge_task
 from kata.verify import VerifyResult, run_all
 
 try:
@@ -102,7 +111,11 @@ def _pick_task() -> str:
                 return existing[idx]
         elif choice in existing:
             return choice
-    return input("Nome da tarefa: ").strip().replace(" ", "-") or "untitled"
+    name = input("Nome da tarefa: ").strip().replace(" ", "-") or "untitled"
+    if "/" in name or "\\" in name or ".." in name:
+        print("⚠  Nome de tarefa inválido. Usando 'untitled'")
+        return "untitled"
+    return name
 
 
 def _run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
@@ -139,7 +152,106 @@ def _print_header(text: str) -> None:
     print()
 
 
+def _print_judge_verdict(result: JudgeResult) -> None:
+    """Imprime o veredito do juiz adversarial."""
+    verdict_icon = {"VERIFIED": "✅", "VERIFIED WITH CAVEATS": "⚠️", "REFUTED": "❌"}
+    icon = verdict_icon.get(result.verdict, "❓")
+    print(f"\n{icon}  VEREDITO: {result.verdict}")
+    print()
+
+    if result.claims:
+        print("  Claims verificadas:")
+        for c in result.claims:
+            print(f"    • {c}")
+        print()
+
+    if result.frauds:
+        print("  Fraudes encontradas:")
+        for f in result.frauds:
+            sev_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}
+            print(f"    {sev_icon.get(f.severity, '⚪')} [{f.severity}] {f.type}")
+            print(f"       {f.description}")
+            if f.evidence:
+                print(f"       → {f.evidence}")
+        print()
+
+    if result.caveats:
+        print("  Ressalvas:")
+        for c in result.caveats:
+            print(f"    • {c}")
+        print()
+
+    if result.re_ran_checks:
+        print("  Re-execução:")
+        for check, ok in result.re_ran_checks.items():
+            status = "✅" if ok else "❌"
+            print(f"    {status} {check}")
+        print()
+
+    print("─" * 58)
+    print(f"\n{icon}  KATA JUDGE — {result.verdict}")
+    print()
+
+
 # ── step implementations ────────────────────────────────────────────────
+
+
+def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Fase 0: FIT — triviality gate + classificação da tarefa antes do THINK.
+
+    Inspirado no fit gate do fable-method (think → act → prove → grow)
+    e no Karpathy Development Cycle.
+    """
+    fit = data.get("fit", {})
+    if fit.get("answered"):
+        print("(fit gate já respondido)")
+        return data
+
+    if not sys.stdin.isatty():
+        print("(modo não-interativo — assumindo code-loop)")
+        data["fit"] = {
+            "trivial": False,
+            "route": "code-loop",
+            "reason": "non-interactive mode",
+        }
+        return data
+
+    _print_header("0. FIT — Classificação da tarefa")
+
+    files, lines = diff_stats()
+    trivial = is_trivial(files, lines)
+
+    print(f"  diff: {len(files)} arquivo(s), {lines} linha(s) alteradas")
+    if trivial:
+        print("  ↳ tarefa parece trivial (<=1 arquivo, <10 linhas)")
+    else:
+        print("  ↳ tarefa não-trivial")
+
+    print()
+    print("  Rotas disponíveis:")
+    print("    [1] code-loop   — ciclo completo (THINK → SIMPLIFY → SURGICAL → VERIFY)")
+    print("    [2] plan-first  — só planejamento (para e entrega um plano)")
+    print("    [3] question    — só diagnóstico, sem alterar código")
+    print("    [4] research    — precisa pesquisar antes de agir")
+    print("    [5] inference   — baseado só em inferência (baixa confiança)")
+
+    choice = input("\n  Rota escolhida [1]: ").strip() or "1"
+    route_map = {
+        "1": "code-loop",
+        "2": "plan-first",
+        "3": "question",
+        "4": "research",
+        "5": "inference",
+    }
+    route = route_map.get(choice, "code-loop")
+    reason = input("  Justificativa breve (opcional): ").strip()
+
+    data["fit"] = {
+        "trivial": trivial,
+        "route": route,
+        "reason": reason or f"Rota {choice} escolhida pelo usuário",
+    }
+    return data
 
 
 def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -214,16 +326,65 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     simplify = data.get("simplify", {})
     simplify["minimum_code"] = _confirm("  O código mínimo resolve o problema?")
-    simplify["no_single_use_abstractions"] = not _confirm(
-        "  Alguma abstração para uso único?", default=False
+    simplify["no_single_use_abstractions"] = _confirm(
+        "  Código livre de abstrações para uso único?", default=True
     )
-    simplify["no_speculative_config"] = not _confirm(
-        "  Configurabilidade/flexibilidade não solicitada?", default=False
+    simplify["no_speculative_config"] = _confirm(
+        "  Código livre de configurabilidade não solicitada?", default=True
     )
     notes = input("  Observações (opcional): ").strip()
     if notes:
         simplify["notes"] = notes
     data["simplify"] = simplify
+    return data
+
+
+def _step_intent(task: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Fase 2.5: INTENT — verificar intenção antes de mudar comportamento.
+
+    Inspirado no intent gate do fable-method: antes de qualquer mudança
+    de comportamento, registrar o que o código faz, o que o teste espera,
+    e o que a especificação diz.
+    """
+    intent = data.get("intent", {})
+    if intent.get("answered"):
+        print("(intent gate já respondido)")
+        return data
+
+    if not sys.stdin.isatty():
+        print("(modo não-interativo — assumindo intenção alinhada)")
+        data["intent"] = {
+            "code_does": "",
+            "check_expects": "",
+            "spec_says": "",
+            "all_agree": True,
+            "answered": True,
+        }
+        return data
+
+    _print_header("2.5 INTENT — Antes de mudar, verifique a intenção")
+
+    print("  Se esta tarefa muda comportamento, responda:")
+    code_does = input("  O que o código FAZ hoje? ").strip()
+    check_expects = input("  O que o teste/check ESPERA? ").strip()
+    spec_says = input("  O que a especificação/README DIZ? ").strip()
+
+    all_agree = _confirm("  Código, teste e especificação concordam?", default=True)
+    if not all_agree:
+        print("  ⚠  Conflito detectado! A ordem de autoridade é:")
+        print("     declaração do usuário > spec > testes > código")
+        resolve = input("  Como resolver o conflito? ").strip()
+    else:
+        resolve = ""
+
+    data["intent"] = {
+        "code_does": code_does,
+        "check_expects": check_expects,
+        "spec_says": spec_says,
+        "all_agree": all_agree,
+        "conflict_resolution": resolve,
+        "answered": True,
+    }
     return data
 
 
@@ -240,11 +401,14 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
         data["surgical"] = {"files": [], "removed_imports_clean": True}
         return data
 
-    # Lista arquivos alterados
+    # Lista arquivos alterados (incluindo untracked)
     result = _run(["git", "diff", "--name-only"])
     files = [f for f in result.stdout.strip().split("\n") if f.strip()]
     if not files:
         result = _run(["git", "diff", "--cached", "--name-only"])
+        files = [f for f in result.stdout.strip().split("\n") if f.strip()]
+    if not files:
+        result = _run(["git", "ls-files", "--others", "--exclude-standard"])
         files = [f for f in result.stdout.strip().split("\n") if f.strip()]
 
     surgical = data.get("surgical", {})
@@ -297,7 +461,7 @@ def _step_verify(
     else:
         all_ok = False
         print("  ❌ falhou — saída:")
-        for line in ruff_res.output.split("\n")[:10]:
+        for line in ruff_res.output.split("\n"):
             print(f"     {line}")
 
     # ── pytest ──
@@ -309,7 +473,7 @@ def _step_verify(
     else:
         all_ok = False
         print("  ❌ falhou — últimas linhas:")
-        for line in pytest_res.output.split("\n")[-10:]:
+        for line in pytest_res.output.split("\n"):
             print(f"     {line}")
 
     # ── coverage ──
@@ -323,7 +487,7 @@ def _step_verify(
     else:
         all_ok = False
         print(f"  ❌ falhou ({cov_pct:.1f}% — gate: {gate:.0f}%)")
-        for line in cov_res.output.split("\n")[-5:]:
+        for line in cov_res.output.split("\n"):
             print(f"     {line}")
 
     # ── success criteria ──
@@ -355,6 +519,294 @@ def _step_verify(
     return data
 
 
+def _has_unpushed_commits() -> bool:
+    """Detecta se há commits não enviados para o remote."""
+    try:
+        result = _run(["git", "log", "--oneline", "origin..HEAD", "--"])
+        return bool(result.stdout.strip())
+    except Exception:
+        return False
+
+
+def _has_deploy_docs() -> bool:
+    """Detecta se README menciona passos de deploy."""
+    readme = _cwd() / "README.md"
+    if not readme.exists():
+        return False
+    deploy_keywords = ["deploy", "docker", "push", "publish", "rollout", "release"]
+    try:
+        text = readme.read_text(encoding="utf-8").lower()
+        return any(kw in text for kw in deploy_keywords)
+    except Exception:
+        return False
+
+
+def _detect_auth_owed(data: dict[str, Any]) -> bool:
+    """Detecta se AUTH line é devida (ação irreversível realizada)."""
+    # Heurística 1: commits não enviados
+    if _has_unpushed_commits():
+        return True
+    # Heurística 2: dados de auth já existentes
+    auth = data.get("auth", {})
+    if auth.get("action_taken"):
+        return True
+    return False
+
+
+def _detect_pending_owed(data: dict[str, Any]) -> bool:
+    """Detecta se PENDING line é devida (follow-up prescrito não tomado)."""
+    # Heurística 1: README tem instruções de deploy e tarefa está aprovada
+    if data.get("status") == "approved" and _has_deploy_docs():
+        return True
+    # Heurística 2: dados de pending já existentes
+    pending = data.get("pending", {})
+    if pending.get("action"):
+        return True
+    return False
+
+
+def _detect_twins_owed(data: dict[str, Any]) -> bool:
+    """Detecta se TWINS line é devida (defeito corrigido, padrão pode se repetir)."""
+    # Heurística 1: intent teve conflito (spec betrayal potencial)
+    intent = data.get("intent", {})
+    if intent.get("answered") and not intent.get("all_agree"):
+        return True
+    # Heurística 2: dados de twins já existentes
+    twins = data.get("twins", {})
+    if twins.get("pattern"):
+        return True
+    return False
+
+
+def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Fase 4.5: ARTIFACT — verificar linhas devidas no relatório.
+
+    Inspirado no artifact gate do fable-method: antes de finalizar, verificar
+    se INTENT, AUTH, PENDING e TWINS estão presentes quando devidos.
+    """
+    _print_header("4.5 ARTIFACT — Verificação de linhas devidas")
+
+    intent = data.get("intent", {})
+    verify = data.get("verify", {})
+
+    # Intent: devida se verify foi executado com mudança de comportamento
+    intent_owed = verify.get("tests_pass") is not None
+    intent_present = bool(intent.get("answered")) and intent.get("code_does", "") != ""
+
+    # AUTH: devida se ação irreversível foi tomada
+    auth_owed = _detect_auth_owed(data)
+    auth_present = bool(data.get("auth", {}).get("authorized"))
+
+    # PENDING: devida se docs prescrevem follow-up e não foi tomado
+    pending_owed = _detect_pending_owed(data)
+    pending_present = bool(data.get("pending", {}).get("documented"))
+
+    # TWINS: devida se defeito foi corrigido
+    twins_owed = _detect_twins_owed(data)
+    twins_present = bool(data.get("twins", {}).get("searched"))
+
+    checks: dict[str, Any] = {
+        "intent_owed": intent_owed,
+        "intent_present": intent_present,
+        "auth_owed": auth_owed,
+        "auth_present": auth_present,
+        "pending_owed": pending_owed,
+        "pending_present": pending_present,
+        "twins_owed": twins_owed,
+        "twins_present": twins_present,
+    }
+
+    missing = []
+    if intent_owed and not intent_present:
+        missing.append("INTENT: código/teste/spec não documentados")
+    if auth_owed and not auth_present:
+        missing.append("AUTH: ação externa sem autorização documentada")
+    if pending_owed and not pending_present:
+        missing.append("PENDING: follow-up não documentado")
+    if twins_owed and not twins_present:
+        missing.append("TWINS: busca de padrão recorrente não realizada")
+
+    if missing:
+        print("  ⚠  Linhas devidas ausentes:")
+        for msg in missing:
+            print(f"     • {msg}")
+        if sys.stdin.isatty():
+            print()
+            for msg in missing:
+                if msg.startswith("AUTH"):
+                    action = input("  Ação realizada: ").strip()
+                    auth_line = input("  Citação exata da autorização: ").strip()
+                    data["auth"] = {
+                        "action_taken": True, "authorized": True,
+                        "action": action, "quote": auth_line,
+                    }
+                elif msg.startswith("PENDING"):
+                    action = input("  Ação pendente: ").strip()
+                    data["pending"] = {"action": action, "documented": True}
+                elif msg.startswith("TWINS"):
+                    pattern = input("  Padrão buscado: ").strip()
+                    result = input("  Resultado: ").strip()
+                    data["twins"] = {"pattern": pattern, "result": result, "searched": True}
+                elif msg.startswith("INTENT"):
+                    code = input("  O que o código FAZ hoje? ").strip()
+                    check = input("  O que o teste/check ESPERA? ").strip()
+                    spec = input("  O que a especificação DIZ? ").strip()
+                    data["intent"] = {
+                        "code_does": code, "check_expects": check,
+                        "spec_says": spec, "all_agree": True, "answered": True,
+                    }
+    else:
+        print("  ✅ Todas as linhas devidas estão presentes")
+
+    data["artifact"] = checks
+    return data
+
+
+def _detect_scratch_files() -> list[str]:
+    """Detecta arquivos temporários/de lixo no diff."""
+    diff = _run(["git", "diff", "--name-only"])
+    if not diff.stdout.strip():
+        diff = _run(["git", "diff", "--cached", "--name-only"])
+    if not diff.stdout.strip():
+        return []
+    scratch_patterns = [".tmp", ".bak", "scratch/", "temp"]
+    files = diff.stdout.strip().split("\n")
+    return [f for f in files if any(p in f for p in scratch_patterns)]
+
+
+def _format_intent_line(intent: dict[str, Any]) -> str:
+    """Formata a linha INTENT no formato fable."""
+    code = intent.get("code_does", "")
+    check = intent.get("check_expects", "")
+    spec = intent.get("spec_says", "")
+    if code or check or spec:
+        return f"INTENT: code does {code}; check expects {check}; spec says {spec}"
+    return ""
+
+
+def _format_auth_line(auth: dict[str, Any]) -> str:
+    """Formata a linha AUTH no formato fable."""
+    if auth.get("authorized") and auth.get("quote"):
+        return f'AUTH: user said "{auth["quote"]}"'
+    return ""
+
+
+def _format_pending_line(pending: dict[str, Any]) -> str:
+    """Formata a linha PENDING no formato fable."""
+    if pending.get("documented") and pending.get("action"):
+        return f"PENDING: {pending['action']} - awaiting your authorization"
+    return ""
+
+
+def _format_twins_line(twins: dict[str, Any]) -> str:
+    """Formata a linha TWINS no formato fable."""
+    if twins.get("searched") and twins.get("pattern"):
+        found = twins.get("result", "none")
+        return f"TWINS: searched {twins['pattern']} - found {found}"
+    return ""
+
+
+def _step_report(task: str, data: dict[str, Any]) -> None:
+    """Fase 5: REPORT — relatório outcome-first.
+
+    Inspirado no Step 6 do fable-method: primeira frase = resultado,
+    detalhes depois, sem números de passo, com linhas INTENT/AUTH/PENDING/TWINS.
+    """
+    status = data.get("status", "unknown")
+    icon = "✅" if status == "approved" else "❌"
+    verify = data.get("verify", {})
+
+    # Outcome first
+    print()
+    if status == "approved":
+        print(f"{icon}  KATA CYCLE — APROVADO: critério de sucesso satisfeito")
+    elif status == "rejected":
+        print(f"{icon}  KATA CYCLE — REJEITADO: verifique os problemas abaixo")
+    else:
+        print(f"  ⏳  Tarefa '{task}' está em andamento (status: {status})")
+        return
+
+    # O que foi feito
+    intent = data.get("intent", {})
+    surgical = data.get("surgical", {})
+    think = data.get("think", {})
+
+    print()
+    if think.get("problem"):
+        print(f"  Problema: {think['problem']}")
+
+    files = surgical.get("files", [])
+    if files:
+        needed = [f.get("path") for f in files if f.get("necessary")]
+        if needed:
+            print(f"  Arquivos alterados: {', '.join(needed)}")
+
+    # INTENT line
+    intent_line = _format_intent_line(intent)
+    if intent_line:
+        print(f"  {intent_line}")
+
+    # Verificações
+    print()
+    checks = []
+    ruff = verify.get("ruff_clean")
+    if ruff is not None:
+        checks.append(f"  {'✅' if ruff else '❌'} ruff check {'limpo' if ruff else 'com erros'}")
+    tests = verify.get("tests_pass")
+    if tests is not None:
+        checks.append(f"  {'✅' if tests else '❌'} pytest {'passou' if tests else 'falhou'}")
+    cov = verify.get("coverage_pass")
+    cov_pct = verify.get("coverage_pct", 0)
+    if cov is not None:
+        label = f"  {'✅' if cov else '❌'} coverage {cov_pct:.1f}% {'≥' if cov else '<'} gate"
+        checks.append(label)
+    success = verify.get("success_criteria_met")
+    if success is not None:
+        checks.append(f"  {'✅' if success else '❌'} critério de sucesso satisfeito")
+    if checks:
+        print("  Verificações:")
+        for c in checks:
+            print(c)
+
+    # Caveats
+    caveats: list[str] = []
+    if status == "rejected":
+        caveats.append("Ciclo rejeitado — problemas de qualidade pendentes")
+    scratch = _detect_scratch_files()
+    if scratch:
+        caveats.append(f"Arquivos temporários detectados: {', '.join(scratch)}")
+    artifact = data.get("artifact", {})
+    if artifact.get("intent_owed") and not artifact.get("intent_present"):
+        caveats.append("INTENT não documentada — comportamento alterado sem registro de intenção")
+    if artifact.get("auth_owed") and not artifact.get("auth_present"):
+        caveats.append("AÇÃO EXTERNA sem autorização documentada (AUTH ausente)")
+
+    if caveats:
+        print()
+        print("  Caveats:")
+        for c in caveats:
+            print(f"    ⚠ {c}")
+
+    # Forced artifact lines
+    lines: list[str] = []
+    auth_line = _format_auth_line(data.get("auth", {}))
+    if auth_line:
+        lines.append(auth_line)
+    pending_line = _format_pending_line(data.get("pending", {}))
+    if pending_line:
+        lines.append(pending_line)
+    twins_line = _format_twins_line(data.get("twins", {}))
+    if twins_line:
+        lines.append(twins_line)
+    if lines:
+        print()
+        for line in lines:
+            print(f"  {line}")
+
+    print()
+    print("─" * 58)
+
+
 # ── init ────────────────────────────────────────────────────────────────
 
 
@@ -368,6 +820,11 @@ def _init_task(task: str) -> None:
     template: dict[str, Any] = {
         "task": task,
         "status": "draft",
+        "fit": {
+            "trivial": False,
+            "route": "code-loop",
+            "reason": "",
+        },
         "think": {
             "problem": "",
             "assumptions": [],
@@ -375,9 +832,32 @@ def _init_task(task: str) -> None:
             "unknowns": "",
             "answered": False,
         },
-        "simplify": {},
-        "surgical": {},
-        "verify": {},
+        "simplify": {
+            "minimum_code": True,
+            "no_single_use_abstractions": True,
+            "no_speculative_config": True,
+        },
+        "intent": {
+            "code_does": "",
+            "check_expects": "",
+            "spec_says": "",
+            "all_agree": True,
+            "answered": False,
+        },
+        "surgical": {
+            "files": [],
+            "removed_imports_clean": True,
+        },
+        "verify": {
+            "ruff_clean": None,
+            "tests_pass": None,
+            "coverage_pct": None,
+            "coverage_pass": None,
+            "success_criteria_met": None,
+        },
+        "auth": {"action_taken": False, "authorized": False},
+        "pending": {"action": "", "documented": False},
+        "twins": {"searched": False},
     }
     path.write_text(_serialize(template), encoding="utf-8")
     print(f"✅  {path} criado. Preencha as respostas com o modo interativo.")
@@ -397,6 +877,11 @@ def main() -> None:
         "--check-only",
         action="store_true",
         help="Roda só o passo 4 (lint + test + coverage)",
+    )
+    parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Modo planejamento: executa THINK e para (não modifica código)",
     )
     parser.add_argument(
         "--task",
@@ -432,7 +917,30 @@ def main() -> None:
         default=70.0,
         help="Gate mínimo de coverage, em %% (default: %(default)s)",
     )
+    parser.add_argument(
+        "--judge",
+        action="store_true",
+        help="Modo adversarial verification — re-executa verificações e caça fraudes",
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Gera relatório outcome-first de tarefa concluída",
+    )
     args = parser.parse_args()
+
+    if args.plan and args.check_only:
+        parser.error("--plan e --check-only são mutuamente exclusivos")
+    if args.judge and (args.plan or args.check_only):
+        parser.error("--judge é mutuamente exclusivo com --plan e --check-only")
+    if args.report and args.judge:
+        parser.error("--report e --judge são mutuamente exclusivos")
+    if args.report and (args.plan or args.check_only):
+        parser.error("--report é mutuamente exclusivo com --plan e --check-only")
+
+    if args.plan and args.task:
+        # --plan e --task: carrega tarefa existente, executa só think
+        pass
 
     _kata_dir().mkdir(parents=True, exist_ok=True)
 
@@ -440,6 +948,37 @@ def main() -> None:
     if args.init:
         _init_task(args.init)
         return
+
+    # Modo --report (outcome-first)
+    if args.report:
+        task = args.task or _pick_task()
+        path = _task_path(task)
+        if not path.exists():
+            print(f"⚠  {path} não encontrado. Execute o ciclo primeiro.")
+            sys.exit(1)
+        data = _deserialize(path.read_text(encoding="utf-8"))
+        _step_report(task, data)
+        sys.exit(0 if data.get("status") == "approved" else 1)
+
+    # Modo --judge (adversarial verification)
+    if args.judge:
+        task = args.task or _pick_task()
+        path = _task_path(task)
+        if not path.exists():
+            print(f"⚠  {path} não encontrado. Execute o ciclo primeiro.")
+            sys.exit(1)
+        data = _deserialize(path.read_text(encoding="utf-8"))
+        _print_header(f"JUDGE — Verificação adversarial de '{task}'")
+        result = judge_task(
+            data,
+            ruff_paths=args.ruff_paths,
+            test_paths=args.test_paths,
+            ignore=args.ignore,
+            cov_source=args.cov_source,
+            gate=args.gate,
+        )
+        _print_judge_verdict(result)
+        sys.exit(0 if result.verdict == "VERIFIED" else 1)
 
     # Modo --check-only (CI)
     if args.check_only:
@@ -472,8 +1011,17 @@ def main() -> None:
         else {"task": task, "status": "draft"}
     )
 
+    data = _step_fit(task, data)
     data = _step_think(task, data)
+
+    if args.plan:
+        path.write_text(_serialize(data), encoding="utf-8")
+        print(f"\n📝  Plano salvo em {path}")
+        print("    Próximas fases: SIMPLIFY → SURGICAL → VERIFY")
+        return
+
     data = _step_simplify(task, data)
+    data = _step_intent(task, data)
     data = _step_surgical(task, data)
     data = _step_verify(
         task,
@@ -484,6 +1032,8 @@ def main() -> None:
         cov_source=args.cov_source,
         gate=args.gate,
     )
+    data = _step_artifact(task, data)
+    _step_report(task, data)
 
     path.write_text(_serialize(data), encoding="utf-8")
     print(f"\n📝  Resultado salvo em {path}")

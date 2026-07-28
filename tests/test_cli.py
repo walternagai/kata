@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from kata import cli
 from kata.verify import VerifyResult
 
@@ -70,6 +72,8 @@ class TestInitTask:
         data = cli_mod._deserialize(path.read_text(encoding="utf-8"))
         assert data["task"] == "test-task"
         assert data["status"] == "draft"
+        assert data["fit"]["trivial"] is False
+        assert data["fit"]["route"] == "code-loop"
         assert data["think"]["answered"] is False
 
     def test_init_existing_warns(self, tmp_path, monkeypatch, capsys) -> None:
@@ -648,12 +652,105 @@ class TestStepSurgicalNoFiles:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
         ]
         mock_confirm.return_value = True
         data: dict = {}
         result = cli._step_surgical("task", data)
         assert result["surgical"]["files"] == []
         assert result["surgical"]["removed_imports_clean"] is True
+
+
+class TestStepIntent:
+    """Testa _step_intent em modos interativo e não-interativo."""
+
+    @patch("kata.cli.sys.stdin")
+    def test_intent_non_tty(self, mock_stdin) -> None:
+        mock_stdin.isatty.return_value = False
+        data: dict = {}
+        result = cli._step_intent("task", data)
+        assert result["intent"]["answered"] is True
+        assert result["intent"]["all_agree"] is True
+        assert result["intent"]["code_does"] == ""
+
+    def test_intent_already_answered(self, capsys) -> None:
+        data: dict = {"intent": {"answered": True, "code_does": "func X"}}
+        result = cli._step_intent("task", data)
+        assert result["intent"]["code_does"] == "func X"
+        assert "já respondido" in capsys.readouterr().out
+
+    @patch("kata.cli.input")
+    @patch("kata.cli.sys.stdin")
+    def test_intent_interactive_all_agree(self, mock_stdin, mock_input) -> None:
+        mock_stdin.isatty.return_value = True
+        mock_input.side_effect = [
+            "parse_date retorna datetime naive",
+            "datetime com timezone UTC",
+            "README: preservar fuso",
+            "",
+        ]
+        with patch("kata.cli._confirm", return_value=True):
+            data: dict = {}
+            result = cli._step_intent("task", data)
+        assert result["intent"]["code_does"] == "parse_date retorna datetime naive"
+        assert result["intent"]["check_expects"] == "datetime com timezone UTC"
+        assert result["intent"]["spec_says"] == "README: preservar fuso"
+        assert result["intent"]["all_agree"] is True
+
+    @patch("kata.cli.input")
+    @patch("kata.cli.sys.stdin")
+    def test_intent_interactive_conflict(self, mock_stdin, mock_input) -> None:
+        mock_stdin.isatty.return_value = True
+        mock_input.side_effect = [
+            "func X retorna int",
+            "func X retorna str",
+            "func X retorna int",
+            "spec ganha, teste errado",
+        ]
+        with patch("kata.cli._confirm", return_value=False):
+            data: dict = {}
+            result = cli._step_intent("task", data)
+        assert result["intent"]["all_agree"] is False
+        assert "spec ganha" in result["intent"]["conflict_resolution"]
+
+
+class TestStepArtifact:
+    """Testa _step_artifact em modos interativo e não-interativo."""
+
+    @patch("kata.cli.sys.stdin")
+    def test_artifact_non_tty_all_present(self, mock_stdin) -> None:
+        mock_stdin.isatty.return_value = False
+        data: dict = {
+            "intent": {"answered": True, "code_does": "func X"},
+            "verify": {"tests_pass": True},
+        }
+        result = cli._step_artifact("task", data)
+        assert result["artifact"]["intent_owed"] is True
+        assert result["artifact"]["intent_present"] is True
+
+    @patch("kata.cli.sys.stdin")
+    def test_artifact_non_tty_missing_intent(self, mock_stdin) -> None:
+        mock_stdin.isatty.return_value = False
+        data: dict = {"verify": {"tests_pass": True}}
+        result = cli._step_artifact("task", data)
+        assert result["artifact"]["intent_owed"] is True
+        assert result["artifact"]["intent_present"] is False
+
+    @patch("kata.cli.sys.stdin")
+    def test_artifact_non_tty_no_intent_needed(self, mock_stdin) -> None:
+        """Se verify não tem tests_pass, INTENT não é devida."""
+        mock_stdin.isatty.return_value = False
+        data: dict = {"intent": {}}
+        result = cli._step_artifact("task", data)
+        assert result["artifact"]["intent_owed"] is False
+
+    @patch("kata.cli.sys.stdin")
+    def test_artifact_non_tty_empty_data(self, mock_stdin, capsys) -> None:
+        mock_stdin.isatty.return_value = False
+        data: dict = {}
+        result = cli._step_artifact("task", data)
+        assert result["artifact"]["intent_owed"] is False
+        assert "Todas as linhas devidas" in capsys.readouterr().out
 
 
 class TestMainInteractive:
@@ -756,6 +853,125 @@ class TestMainInteractive:
                 assert e.code == 1
 
 
+class TestStepFit:
+    """Testa _step_fit em modos interativo e não-interativo."""
+
+    @patch("kata.cli.sys.stdin")
+    def test_step_fit_non_tty(self, mock_stdin) -> None:
+        mock_stdin.isatty.return_value = False
+        data: dict = {}
+        result = cli._step_fit("task", data)
+        assert result["fit"]["trivial"] is False
+        assert result["fit"]["route"] == "code-loop"
+        assert result["fit"]["reason"] == "non-interactive mode"
+
+    def test_step_fit_already_answered(self, capsys) -> None:
+        data: dict = {"fit": {"answered": True, "trivial": True}}
+        result = cli._step_fit("task", data)
+        assert result["fit"]["trivial"] is True
+        assert "já respondido" in capsys.readouterr().out
+
+    @patch("kata.cli.diff_stats")
+    @patch("kata.cli.input")
+    @patch("kata.cli.sys.stdin")
+    def test_step_fit_interactive_code_loop(
+        self, mock_stdin, mock_input, mock_diff_stats
+    ) -> None:
+        mock_stdin.isatty.return_value = True
+        mock_diff_stats.return_value = (["src/foo.py"], 3)
+        mock_input.side_effect = ["1", "bugfix simples"]
+        data: dict = {}
+        result = cli._step_fit("task", data)
+        assert result["fit"]["trivial"] is True
+        assert result["fit"]["route"] == "code-loop"
+        assert "bugfix" in result["fit"]["reason"]
+
+    @patch("kata.cli.diff_stats")
+    @patch("kata.cli.input")
+    @patch("kata.cli.sys.stdin")
+    def test_step_fit_interactive_plan_first(
+        self, mock_stdin, mock_input, mock_diff_stats
+    ) -> None:
+        mock_stdin.isatty.return_value = True
+        mock_diff_stats.return_value = ([], 0)
+        mock_input.side_effect = ["2", "precisa de planejamento"]
+        data: dict = {}
+        result = cli._step_fit("task", data)
+        assert result["fit"]["trivial"] is True
+        assert result["fit"]["route"] == "plan-first"
+
+
+class TestMainPlanMode:
+    """Testa main() no modo --plan."""
+
+    @patch("kata.cli._step_think")
+    @patch("kata.cli._init_task")
+    @patch("kata.cli._kata_dir")
+    def test_plan_mode_creates_and_stops(
+        self, mock_kata_dir, mock_init, mock_think, tmp_path, monkeypatch
+    ) -> None:
+        """--plan cria task, executa FIT + THINK, salva e para."""
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        monkeypatch.chdir(tmp_path)
+
+        mock_think.return_value = {
+            "task": "plan-task",
+            "status": "think-complete",
+            "think": {"answered": True},
+        }
+
+        with patch("sys.argv", ["kata", "--plan", "--task", "plan-task"]):
+            cli.main()
+
+        mock_init.assert_called_once_with("plan-task")
+        mock_think.assert_called_once()
+
+        # Verifica que o arquivo foi salvo
+        ext = cli._ext()
+        plan_file = kata_dir / f"plan-task{ext}"
+        assert plan_file.exists()
+
+    @patch("kata.cli._pick_task")
+    @patch("kata.cli._step_think")
+    @patch("kata.cli._init_task")
+    @patch("kata.cli._kata_dir")
+    def test_plan_mode_without_task_arg(
+        self, mock_kata_dir, mock_init, mock_think, mock_pick, tmp_path, monkeypatch
+    ) -> None:
+        """--plan sem --task usa _pick_task."""
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        monkeypatch.chdir(tmp_path)
+
+        mock_pick.return_value = "auto-plan"
+        mock_think.return_value = {
+            "task": "auto-plan",
+            "status": "think-complete",
+            "think": {"answered": True},
+        }
+
+        with patch("sys.argv", ["kata", "--plan"]):
+            cli.main()
+
+        mock_pick.assert_called_once()
+        mock_init.assert_called_once_with("auto-plan")
+        mock_think.assert_called_once()
+
+
+class TestMainPlanCheckOnlyConflict:
+    """Testa que --plan e --check-only são mutuamente exclusivos."""
+
+    def test_plan_and_check_only_conflict(self) -> None:
+        with patch("sys.argv", ["kata", "--plan", "--check-only"]):
+            try:
+                cli.main()
+            except SystemExit as e:
+                assert e.code == 2  # parser.error exit code
+
+
 class TestMainInteractiveNoTaskArg:
     """Testa main() sem --task — usa _pick_task (modo não-TTY)."""
 
@@ -849,3 +1065,368 @@ class TestPickTaskInteractiveMenu:
             with patch.object(Path, "glob", return_value=[fake_path]):
                 result = cli._pick_task()
         assert result == "beta"
+
+
+class TestMainJudge:
+    """Testa o modo --judge (adversarial verification)."""
+
+    @patch("kata.cli.judge_task")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_judge_verified(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
+        tmp_path, monkeypatch,
+    ) -> None:
+        from kata.judge import JudgeResult
+
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "test-task.yaml"
+        task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+
+        mock_deserialize.return_value = {"task": "test-task", "status": "approved"}
+        mock_judge.return_value = JudgeResult(
+            verdict="VERIFIED",
+            claims=["ruff passou"],
+            re_ran_checks={"ruff": True},
+        )
+
+        with patch("sys.argv", ["kata", "--task", "test-task", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 0
+
+    @patch("kata.cli.judge_task")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_judge_refuted(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
+        tmp_path, monkeypatch,
+    ) -> None:
+        from kata.judge import JudgeFraud, JudgeResult
+
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "test-task.yaml"
+        task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+
+        mock_deserialize.return_value = {"task": "test-task", "status": "approved"}
+        mock_judge.return_value = JudgeResult(
+            verdict="REFUTED",
+            claims=["ruff passou"],
+            frauds=[
+                JudgeFraud(type="false_completion", severity="high",
+                           description="ruff re-executado falhou", evidence="realidade: falha"),
+            ],
+            re_ran_checks={"ruff": False},
+        )
+
+        with patch("sys.argv", ["kata", "--task", "test-task", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_judge_task_not_found(self, mock_kata_dir, mock_path, tmp_path, monkeypatch) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        mock_path.return_value = kata_dir / "nonexistent.yaml"
+
+        with patch("sys.argv", ["kata", "--task", "nonexistent", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+
+    def test_judge_conflicts_with_plan(self) -> None:
+        with patch("sys.argv", ["kata", "--judge", "--plan"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+    def test_judge_conflicts_with_check_only(self) -> None:
+        with patch("sys.argv", ["kata", "--judge", "--check-only"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+
+class TestDetectAuthOwed:
+    """Testa _detect_auth_owed — detecção de ação irreversível."""
+
+    @patch("kata.cli._has_unpushed_commits", return_value=True)
+    def test_unpushed_commits(self, mock_unpushed) -> None:
+        assert cli._detect_auth_owed({}) is True
+
+    @patch("kata.cli._has_unpushed_commits", return_value=False)
+    def test_no_unpushed_no_auth_data(self, mock_unpushed) -> None:
+        assert cli._detect_auth_owed({}) is False
+
+    @patch("kata.cli._has_unpushed_commits", return_value=False)
+    def test_auth_data_exists(self, mock_unpushed) -> None:
+        data = {"auth": {"action_taken": True}}
+        assert cli._detect_auth_owed(data) is True
+
+    @patch("kata.cli._has_unpushed_commits", return_value=False)
+    def test_auth_data_not_taken(self, mock_unpushed) -> None:
+        data = {"auth": {"action_taken": False}}
+        assert cli._detect_auth_owed(data) is False
+
+
+class TestDetectPendingOwed:
+    """Testa _detect_pending_owed — detecção de follow-up pendente."""
+
+    @patch("kata.cli._has_deploy_docs", return_value=True)
+    def test_approved_with_deploy_docs(self, mock_deploy) -> None:
+        data = {"status": "approved"}
+        assert cli._detect_pending_owed(data) is True
+
+    @patch("kata.cli._has_deploy_docs", return_value=False)
+    def test_approved_no_deploy_docs(self, mock_deploy) -> None:
+        data = {"status": "approved"}
+        assert cli._detect_pending_owed(data) is False
+
+    @patch("kata.cli._has_deploy_docs", return_value=True)
+    def test_not_approved(self, mock_deploy) -> None:
+        data = {"status": "draft"}
+        assert cli._detect_pending_owed(data) is False
+
+    @patch("kata.cli._has_deploy_docs", return_value=False)
+    def test_pending_data_exists(self, mock_deploy) -> None:
+        data = {"pending": {"action": "deploy container"}}
+        assert cli._detect_pending_owed(data) is True
+
+
+class TestDetectTwinsOwed:
+    """Testa _detect_twins_owed — detecção de defeito corrigido."""
+
+    def test_intent_conflict(self) -> None:
+        data = {"intent": {"answered": True, "all_agree": False}}
+        assert cli._detect_twins_owed(data) is True
+
+    def test_intent_all_agree(self) -> None:
+        data = {"intent": {"answered": True, "all_agree": True}}
+        assert cli._detect_twins_owed(data) is False
+
+    def test_twins_data_exists(self) -> None:
+        data = {"twins": {"pattern": "parse_date"}}
+        assert cli._detect_twins_owed(data) is True
+
+    def test_no_intent(self) -> None:
+        assert cli._detect_twins_owed({}) is False
+
+    def test_intent_not_answered(self) -> None:
+        data = {"intent": {"answered": False, "all_agree": False}}
+        assert cli._detect_twins_owed(data) is False
+
+
+class TestFormatLines:
+    """Testa formatação das linhas INTENT/AUTH/PENDING/TWINS."""
+
+    def test_intent_line_full(self) -> None:
+        intent = {
+            "code_does": "retorna None",
+            "check_expects": "retorna str",
+            "spec_says": "retorna int",
+        }
+        line = cli._format_intent_line(intent)
+        assert "INTENT:" in line
+        assert "retorna None" in line
+        assert "retorna str" in line
+        assert "retorna int" in line
+
+    def test_intent_line_empty(self) -> None:
+        assert cli._format_intent_line({}) == ""
+
+    def test_auth_line_full(self) -> None:
+        auth = {"authorized": True, "quote": "pode fazer deploy"}
+        line = cli._format_auth_line(auth)
+        assert "AUTH:" in line
+        assert "pode fazer deploy" in line
+
+    def test_auth_line_not_authorized(self) -> None:
+        assert cli._format_auth_line({"authorized": False}) == ""
+        assert cli._format_auth_line({}) == ""
+
+    def test_pending_line_full(self) -> None:
+        pending = {"documented": True, "action": "push to staging"}
+        line = cli._format_pending_line(pending)
+        assert "PENDING:" in line
+        assert "push to staging" in line
+
+    def test_pending_line_not_documented(self) -> None:
+        assert cli._format_pending_line({}) == ""
+
+    def test_twins_line_full(self) -> None:
+        twins = {"searched": True, "pattern": "parse_date", "result": "3 other files"}
+        line = cli._format_twins_line(twins)
+        assert "TWINS:" in line
+        assert "parse_date" in line
+        assert "3 other files" in line
+
+    def test_twins_line_not_searched(self) -> None:
+        assert cli._format_twins_line({}) == ""
+
+    def test_twins_line_no_result(self) -> None:
+        twins = {"searched": True, "pattern": "bug_pattern"}
+        line = cli._format_twins_line(twins)
+        assert "none" in line
+
+
+class TestDetectScratch:
+    """Testa _detect_scratch_files."""
+
+    @patch("kata.cli._run")
+    def test_no_diff(self, mock_run) -> None:
+        mock_run.return_value.stdout = ""
+        assert cli._detect_scratch_files() == []
+
+    @patch("kata.cli._run")
+    def test_scratch_file_detected(self, mock_run) -> None:
+        mock_run.return_value.stdout = "file.tmp\nscratch/data.txt\n"
+        files = cli._detect_scratch_files()
+        assert len(files) == 2
+
+    @patch("kata.cli._run")
+    def test_normal_files_ignored(self, mock_run) -> None:
+        mock_run.return_value.stdout = "src/main.py\ntests/test_foo.py\n"
+        assert cli._detect_scratch_files() == []
+
+
+class TestStepReport:
+    """Testa _step_report — formato e conteúdo do relatório outcome-first."""
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_approved_report(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "approved",
+            "think": {"problem": "validacao de data falha"},
+            "intent": {
+                "code_does": "retorna None",
+                "check_expects": "retorna str",
+                "spec_says": "retorna int",
+            },
+            "surgical": {"files": [{"path": "src/parser.py", "necessary": True}]},
+            "verify": {"ruff_clean": True, "tests_pass": True, "coverage_pass": True,
+                       "coverage_pct": 92.0, "success_criteria_met": True},
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "APROVADO" in out
+        assert "validacao de data falha" in out
+        assert "src/parser.py" in out
+        assert "INTENT:" in out
+        assert "92.0%" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_rejected_report_has_caveats(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "rejected",
+            "verify": {"ruff_clean": False, "tests_pass": False},
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "REJEITADO" in out
+        assert "Ciclo rejeitado" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=["debug.tmp"])
+    def test_scratch_caveat(self, mock_scratch, capsys) -> None:
+        data = {"status": "approved", "verify": {}, "artifact": {}}
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "debug.tmp" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_pending_line_in_report(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "approved",
+            "verify": {"tests_pass": True},
+            "artifact": {},
+            "pending": {"documented": True, "action": "deploy to production"},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "PENDING:" in out
+        assert "deploy to production" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_draft_status_returns_early(self, mock_scratch, capsys) -> None:
+        data = {"status": "draft"}
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "em andamento" in out
+        assert "APROVADO" not in out
+
+
+class TestMainReport:
+    """Testa o modo --report (outcome-first reporting)."""
+
+    @patch("kata.cli._step_report")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_report_approved(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_report,
+        tmp_path, monkeypatch,
+    ) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "test-task.yaml"
+        task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {"task": "test-task", "status": "approved"}
+
+        with patch("sys.argv", ["kata", "--task", "test-task", "--report"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 0
+        mock_report.assert_called_once()
+
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_report_task_not_found(self, mock_kata_dir, mock_path, tmp_path) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        mock_path.return_value = kata_dir / "nonexistent.yaml"
+
+        with patch("sys.argv", ["kata", "--task", "nonexistent", "--report"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+
+    def test_report_conflicts_with_judge(self) -> None:
+        with patch("sys.argv", ["kata", "--report", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+    def test_report_conflicts_with_plan(self) -> None:
+        with patch("sys.argv", ["kata", "--report", "--plan"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+
+class TestInitTaskTemplate:
+    """Testa que o template do _init_task inclui auth/pending/twins."""
+
+    def test_template_has_auth_pending_twins(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir(parents=True, exist_ok=True)
+        cli._init_task("template-test")
+        path = tmp_path / ".kata" / "template-test.yaml"
+        data = cli._deserialize(path.read_text(encoding="utf-8"))
+        assert "auth" in data
+        assert "pending" in data
+        assert "twins" in data

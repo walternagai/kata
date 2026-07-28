@@ -134,7 +134,7 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
     for line in diff.split("\n"):
         if line.startswith("diff --git"):
             parts = line.split()
-            current_file = parts[2].replace("b/", "", 1) if len(parts) >= 3 else ""
+            current_file = parts[3].replace("b/", "", 1) if len(parts) >= 4 else ""
         if not current_file or not _is_test_file(current_file):
             continue
         for pattern, desc in _WEAKENED_PATTERNS:

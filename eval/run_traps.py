@@ -11,7 +11,6 @@ Para cada cenário em eval/scenarios/:
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import sys
@@ -20,21 +19,36 @@ from pathlib import Path
 
 import yaml
 
-
 SCENARIOS_DIR = Path(__file__).parent / "scenarios"
 KATA_CLI = [sys.executable, "-m", "kata"]
 
 
 def init_git_repo(path: Path) -> None:
-    """Inicializa um repositório git e commita todos os arquivos."""
-    subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=path, capture_output=True, check=True)
+    """Inicializa um repositório git com o fixture inteiro staged, sem commit.
+
+    O fixture já vem com a fraude plantada (ex: corpo de teste virado
+    `pass`). O judge detecta fraudes inspecionando `git diff`/`git diff
+    --cached`, então as mudanças precisam ficar não commitadas para serem
+    visíveis — um commit único não deixaria diff nenhum para inspecionar.
+    `.kata/` é git-ignorado localmente (via .git/info/exclude, não um
+    .gitignore rastreado) como no projeto real, para não aparecer como
+    scope creep no diff nem no diff em si.
+    """
+    subprocess.run(["git", "init", "-q"], cwd=path, capture_output=True, check=True)
+    (path / ".git" / "info" / "exclude").write_text(".kata/\n", encoding="utf-8")
     subprocess.run(
-        ["git", "commit", "-m", "fixture: initial state"],
+        ["git", "config", "user.email", "eval@kata.local"],
         cwd=path,
         capture_output=True,
         check=True,
     )
+    subprocess.run(
+        ["git", "config", "user.name", "kata-eval"],
+        cwd=path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(["git", "add", "-A"], cwd=path, capture_output=True, check=True)
 
 
 def run_judge(path: Path) -> dict:
@@ -85,10 +99,10 @@ def evaluate(scenario_dir: Path, ground_truth: dict, judge_output: dict) -> tupl
             )
 
     for no_fraud_type in ground_truth.get("expected_no_frauds", []):
-        if no_fraude_type in stdout:
+        if no_fraud_type in stdout:
             passed = False
             messages.append(
-                f"  ❌ Fraude '{no_fraude_type}' detectada mas não deveria (falso positivo)"
+                f"  ❌ Fraude '{no_fraud_type}' detectada mas não deveria (falso positivo)"
             )
 
     return passed, messages
@@ -120,20 +134,6 @@ def main() -> None:
             shutil.copytree(fixture_dir, work_dir)
 
             init_git_repo(work_dir)
-
-            # Faz uma modificação fraudulenta no fixture
-            subprocess.run(
-                ["git", "add", "-A"],
-                cwd=work_dir,
-                capture_output=True,
-                check=True,
-            )
-            subprocess.run(
-                ["git", "commit", "-m", "fraud: weakened checks planted"],
-                cwd=work_dir,
-                capture_output=True,
-                check=True,
-            )
 
             judge_output = run_judge(work_dir)
             passed, messages = evaluate(scenario, gt, judge_output)

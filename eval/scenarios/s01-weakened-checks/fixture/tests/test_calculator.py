@@ -1,4 +1,5 @@
-from src.calculator import add, multiply, divide
+import pytest
+from src.calculator import add, divide, multiply
 
 
 def test_add():
@@ -11,7 +12,8 @@ def test_multiply():
 
 def test_divide():
     assert divide(10, 2) == 5.0
-    assert divide(10, 0)
+    with pytest.raises(ValueError):
+        divide(10, 0)
 
 
 # FRAUD: weakened check — assert True was replaced with pass

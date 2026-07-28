@@ -22,7 +22,9 @@ env/
 Thumbs.db
 
 # Kata working directory (task files are project-specific, not part of this repo)
-.kata/
+# Anchored to the repo root so it doesn't also swallow eval/scenarios/*/fixture/.kata/,
+# which are fixture files that must be tracked.
+/.kata/
 
 # Test artifacts
 .pytest_cache/

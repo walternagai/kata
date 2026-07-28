@@ -1176,15 +1176,6 @@ class TestMainJudge:
         assert exc.value.code == 2
 
 
-class TestHasUnpushed:
-    """Testa _has_unpushed_commits — detecção de commits não enviados."""
-
-    @patch("kata.cli._run")
-    def test_has_unpushed_commits_exception(self, mock_run) -> None:
-        mock_run.side_effect = Exception("git error")
-        assert cli._has_unpushed_commits() is False
-
-
 class TestHasDeployDocs:
     """Testa _has_deploy_docs — detecção de docs de deploy."""
 
@@ -1211,23 +1202,27 @@ class TestHasDeployDocs:
 class TestDetectAuthOwed:
     """Testa _detect_auth_owed — detecção de ação irreversível."""
 
-    @patch("kata.cli._has_unpushed_commits", return_value=True)
-    def test_unpushed_commits(self, mock_unpushed) -> None:
-        assert cli._detect_auth_owed({}) is True
-
-    @patch("kata.cli._has_unpushed_commits", return_value=False)
-    def test_no_unpushed_no_auth_data(self, mock_unpushed) -> None:
+    def test_no_auth_data(self) -> None:
         assert cli._detect_auth_owed({}) is False
 
-    @patch("kata.cli._has_unpushed_commits", return_value=False)
-    def test_auth_data_exists(self, mock_unpushed) -> None:
+    def test_auth_data_exists(self) -> None:
         data = {"auth": {"action_taken": True}}
         assert cli._detect_auth_owed(data) is True
 
-    @patch("kata.cli._has_unpushed_commits", return_value=False)
-    def test_auth_data_not_taken(self, mock_unpushed) -> None:
+    def test_auth_data_not_taken(self) -> None:
         data = {"auth": {"action_taken": False}}
         assert cli._detect_auth_owed(data) is False
+
+    def test_unpushed_local_commits_do_not_imply_auth_owed(self, tmp_path, monkeypatch) -> None:
+        """Commits locais não enviados são reversíveis — não devem disparar AUTH."""
+        monkeypatch.chdir(tmp_path)
+        subprocess.run(["git", "init", "-q"], check=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], check=True)
+        subprocess.run(["git", "config", "user.name", "test"], check=True)
+        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "local only"], check=True)
+        assert cli._detect_auth_owed({}) is False
 
 
 class TestDetectPendingOwed:

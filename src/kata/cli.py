@@ -584,15 +584,6 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def _has_unpushed_commits() -> bool:
-    """Detecta se há commits não enviados para o remote."""
-    try:
-        result = _run(["git", "log", "--oneline", "origin..HEAD", "--"])
-        return bool(result.stdout.strip())
-    except Exception:
-        return False
-
-
 def _has_deploy_docs() -> bool:
     """Detecta se README menciona passos de deploy."""
     readme = _cwd() / "README.md"
@@ -607,15 +598,17 @@ def _has_deploy_docs() -> bool:
 
 
 def _detect_auth_owed(data: dict[str, Any]) -> bool:
-    """Detecta se AUTH line é devida (ação irreversível realizada)."""
-    # Heurística 1: commits não enviados
-    if _has_unpushed_commits():
-        return True
-    # Heurística 2: dados de auth já existentes
+    """Detecta se AUTH line é devida (ação irreversível realizada).
+
+    Não há como inferir de forma confiável, só a partir do estado local do
+    git, que uma ação irreversível (push, deploy, publish) foi tomada:
+    commits locais não enviados ao remote são o estado normal e reversível
+    de qualquer branch em progresso, não evidência de uma ação irreversível.
+    Por isso a detecção depende de quem executou a ação (o agente ou o
+    usuário) registrar `auth.action_taken` explicitamente.
+    """
     auth = data.get("auth", {})
-    if auth.get("action_taken"):
-        return True
-    return False
+    return bool(auth.get("action_taken"))
 
 
 def _detect_pending_owed(data: dict[str, Any]) -> bool:

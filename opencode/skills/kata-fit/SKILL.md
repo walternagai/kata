@@ -22,7 +22,8 @@ a tarefa para evitar desperdício de rigor em tarefas triviais ou mal-classifica
 
 Para esta fase, use:
 
-- **`bash`**: `git diff --stat` e `git diff --name-only` para medir volume do diff.
+- **shell do sistema** (a ferramenta `bash` do OpenCode, quando disponível):
+  `git diff --stat` e `git diff --name-only` para medir volume do diff.
 - **`question`**: classifique a tarefa com o usuário, uma pergunta por vez.
 - **`grep`**: investigue se a tarefa exige pesquisa no código.
 - **`write` / `edit`**: registre a classificação em `.kata/<task>.yaml`.

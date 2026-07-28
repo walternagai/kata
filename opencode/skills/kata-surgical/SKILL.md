@@ -18,7 +18,8 @@ Nenhuma mudança deve ser "de passagem" ou "enquanto estou aqui".
 
 Para esta fase, use:
 
-- **`bash`**: `git diff --name-only` (ou `--cached` se vazio) para listar arquivos.
+- **shell do sistema** (a ferramenta `bash` do OpenCode, quando disponível):
+  `git diff --name-only` (ou `--cached` se vazio) para listar arquivos.
 - **`read`**: inspecione o diff de cada arquivo suspeito (`git diff <arquivo>`).
 - **`grep`**: busque callers quando uma assinatura mudar.
 - **`question`**: confirme com o usuário se cada arquivo é necessário.
@@ -102,8 +103,10 @@ Pergunte:
 **Detecção automática** (opcional):
 ```bash
 # Encontra imports não utilizados com ruff
-ruff check --select F401 <caminhos-do-projeto>
+python -m ruff check --select F401 <caminhos-do-projeto>
 ```
+
+Se `python` não estiver disponível no Windows, use `py -m ruff`.
 
 Se houver imports F401 que **não** são resultado da sua mudança, são efeito
 colateral desnecessário — questione.

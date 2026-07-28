@@ -38,6 +38,19 @@ make install
 
 Após reiniciar, use `@kata` no OpenCode para iniciar o ciclo.
 
+No Windows PowerShell, use o instalador nativo:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install.ps1
+# Para evitar links simbólicos/junctions, use cópias:
+# .\scripts\install.ps1 -Copy
+# Desinstalar: .\scripts\install.ps1 -Uninstall
+```
+
+O instalador usa `OPENCODE_CONFIG_DIR` quando definido; caso contrário, usa
+`~/.config/opencode`, o caminho global do OpenCode em todas as plataformas.
+
 ### CLI Python (opcional, para CI/headless)
 
 ```bash

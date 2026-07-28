@@ -18,7 +18,8 @@ Guia para o uso da ferramenta `question` e da rota `question` no Karpathy Develo
 Para esta skill, use:
 
 - **`question`**: faça uma pergunta por chamada. Não agrupe múltiplas perguntas em uma única chamada.
-- **`bash`**: `git diff`, `grep`, `pytest` etc., para coletar evidências antes de perguntar.
+- **shell do sistema** (a ferramenta `bash` do OpenCode, quando disponível):
+  `git diff`, `grep`, `pytest` etc., para coletar evidências antes de perguntar.
 - **`read` / `grep`**: investigue o código para embasar a pergunta.
 - **`write` / `edit`**: registre a resposta ou os achados em `.kata/<task>.yaml`.
 
@@ -36,7 +37,7 @@ A rota `question` é escolhida quando o usuário quer entender algo antes de dec
 ### Procedimento da rota `question`
 
 1. **Entenda a pergunta** — reformule para o usuário confirmar.
-2. **Colete evidências** — use `bash`, `read`, `grep` para obter dados.
+2. **Colete evidências** — use o shell do sistema, `read` e `grep` para obter dados.
 3. **Não altere código** — a menos que o usuário autorize explicitamente.
 4. **Entregue achados** — organize em: contexto, evidências, recomendação.
 5. **Registre** em `.kata/<task>.yaml` sob `question` e finalize o ciclo.

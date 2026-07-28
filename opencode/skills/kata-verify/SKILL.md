@@ -19,7 +19,7 @@ Verificar a qualidade do código com critérios objetivos:
 
 Para esta fase, use:
 
-- **`bash`**: execute `ruff`, `pytest` e `coverage` (ou `python3 -m kata --check-only` para modo padronizado).
+- **shell hospedeiro**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
 - **`question`**: pergunte ao usuário se o critério de sucesso foi satisfeito.
 - **`write` / `edit`**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
 
@@ -28,12 +28,12 @@ Para esta fase, use:
 ### Ruff
 
 ```bash
-python3 -m ruff check src/ tests/
+python -m ruff check src/ tests/
 ```
 
 Para projetos com estrutura diferente (ex: mushin):
 ```bash
-python3 -m ruff check mushin/ services/ tests/
+python -m ruff check mushin/ services/ tests/
 ```
 
 **Interpretando resultado:**
@@ -48,12 +48,12 @@ python3 -m ruff check mushin/ services/ tests/
 ### Pytest
 
 ```bash
-python3 -m pytest tests/ --tb=short -q
+python -m pytest tests/ --tb=short -q
 ```
 
 Para projetos com testes que precisam de ignore (ex: mushin com faiss):
 ```bash
-python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=short -q
+python -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=short -q
 ```
 
 **Interpretando resultado:**
@@ -61,20 +61,20 @@ python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=sh
 - `returncode != 0` → ❌ falhou — mostrar output completo
 
 **Problemas comuns:**
-- `ModuleNotFoundError: faiss` → usar `--ignore` ou `pip install faiss-cpu`
+- `ModuleNotFoundError: faiss` → usar `--ignore` ou instalar a dependência no
+  ambiente do projeto (`python -m pip install faiss-cpu`; no Windows, `py -m pip`).
 - `ImportError` circular → checar ordem de imports
 - `AssertionError` em teste → investigar se a mudança quebrou comportamento
 
 ### Coverage
 
 ```bash
-python3 -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=70 -q
+python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=70 -q
 ```
 
 Para mushin:
 ```bash
-python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py \
-  --cov=mushin --cov-report=term-missing --cov-fail-under=70 -q
+python -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --cov=mushin --cov-report=term-missing --cov-fail-under=70 -q
 ```
 
 O `--cov-fail-under` faz o pytest-cov verificar o gate automaticamente:
@@ -161,7 +161,7 @@ sucesso é assumido satisfeito. Útil para CI/CD pipelines.
 
 Para executar via CLI:
 ```bash
-python3 -m kata --check-only
+python -m kata --check-only
 ```
 
 ## Princípios

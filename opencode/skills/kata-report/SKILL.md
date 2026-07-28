@@ -25,8 +25,8 @@ Produzir um relatório legível por humanos que:
 ## Execução
 
 ```bash
-python3 -m kata --task <name>     # relatório automático ao final do ciclo
-python3 -m kata --task <name> --report   # regenerar relatório de tarefa existente
+python -m kata --task <name>     # relatório automático ao final do ciclo
+python -m kata --task <name> --report   # regenerar relatório de tarefa existente
 ```
 
 ## Formato do relatório
@@ -75,7 +75,7 @@ python3 -m kata --task <name> --report   # regenerar relatório de tarefa existe
 Regenera o relatório de uma tarefa já concluída sem reexecutar o ciclo:
 
 ```bash
-python3 -m kata --task minha-tarefa --report
+python -m kata --task minha-tarefa --report
 ```
 
 Útil para compartilhar resultados em CI ou revisão.

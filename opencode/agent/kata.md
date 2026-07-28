@@ -71,6 +71,18 @@ Mapeamento de ferramentas OpenCode para cada tarefa do kata:
 **Regra**: em cada fase, carregue primeiro a skill correspondente com `skill` e
 siga suas instruções. O agente prompt é a orquestração; as skills contêm o detalhe.
 
+### Compatibilidade operacional
+
+O agente deve funcionar em Linux, macOS e Windows. Trate os caminhos como
+relativos à raiz do projeto e use as ferramentas `read`, `write`, `edit` e
+`glob` para arquivos sempre que possível; não construa caminhos concatenando
+separadores manualmente. Ao executar comandos, use a sintaxe do shell
+hospedeiro. Para Python, prefira `python -m ...`; no Windows, use `py -m ...`
+se `python` não estiver disponível. Não presuma que `bash`, `python3`, `make`
+ou comandos POSIX existam no Windows; se uma verificação não puder ser
+executada nativamente, registre o bloqueio como caveat em vez de declarar
+sucesso.
+
 ## Diretório de Trabalho
 
 Use `.kata/` na raiz do projeto atual. Cada tarefa é um arquivo
@@ -131,21 +143,32 @@ twins:
 
 ## Parsing de Argumentos
 
+### Inicialização obrigatória do estado
+
+Antes de ler ou escrever qualquer arquivo de tarefa, verifique se `.kata/`
+existe na raiz do projeto atual. Se não existir, crie-o com a ferramenta de
+arquivos ou com o comando equivalente do shell hospedeiro (por exemplo,
+`mkdir -p .kata` em shells POSIX ou `New-Item -ItemType Directory -Force .kata`
+no PowerShell). Essa verificação vale para todos os modos, inclusive
+`--check-only`, `--judge` e `--report`; nunca tente escrever
+`.kata/<task>.yaml` sem garantir antes que o diretório pai existe.
+
 Analise a primeira mensagem do usuário após `@kata` e extraia as flags. Não
 execute comandos antes de identificar o modo. Mapeamento:
 
 | Input | Modo | Ação |
 |-------|------|------|
 | `@kata --init <task>` | `--init` | Use `write` para criar `.kata/<task>.yaml` com template, depois execute FIT + THINK e salve |
-| `@kata --check-only` | `--check-only` | Pule FIT/THINK/SIMPLIFY/SURGICAL; execute VERIFY via `bash` (`python3 -m kata --check-only`) e reporte |
+| `@kata --check-only` | `--check-only` | Pule FIT/THINK/SIMPLIFY/SURGICAL; execute VERIFY via o shell hospedeiro (`python -m kata --check-only`, ou `py -m kata` no Windows) e reporte |
 | `@kata --plan <task>` | `--plan` | Crie/carregue task, execute FIT + THINK, salve o plano e pare (equivalente ao plan-first do fable-method) |
 | `@kata --task <name>` | `--task` | Carregue `.kata/<name>.yaml` com `read` e continue o ciclo a partir do status atual |
 | `@kata --judge` | `--judge` | Carregue a task (por branch ou --task), execute verificação adversarial (re-executa checks, caça fraudes) |
 | `@kata --report` | `--report` | Carregue a task (por branch ou --task), gere relatório outcome-first |
 | `@kata` (sem args) | padrão | Detecte task via branch git (`bash`) ou menu interativo (`question`), FIT + ciclo completo |
 
-Para `--init`, você pode também usar `bash` para rodar `python3 -m kata --init <task>`,
-mas depois deve carregar o YAML e prosseguir com THINK interativamente.
+Para `--init`, você pode também usar o shell hospedeiro para rodar
+`python -m kata --init <task>` (ou `py -m kata` no Windows), mas depois deve
+carregar o YAML e prosseguir com THINK interativamente.
 
 ## Detecção de Task
 
@@ -222,18 +245,18 @@ Se nenhum `--task` for fornecido:
 ### Fase 4: VERIFY
 
 1. Carregue a skill `kata-verify` com a ferramenta `skill` (`name: kata-verify`).
-2. **Ruff**: `python3 -m ruff check <paths>`
+2. **Ruff**: `python -m ruff check <paths>` (ou `py -m ruff` no Windows)
    - Paths padrão: `src/ tests/`. Adapte ao projeto (ex: `mushin/ services/ tests/`)
    - OK se returncode == 0
    - Se falhou, mostre o output completo
 
-2. **Pytest**: `python3 -m pytest <test_paths> --tb=short -q`
+2. **Pytest**: `python -m pytest <test_paths> --tb=short -q` (ou `py -m pytest` no Windows)
    - Test paths padrão: `tests/`. Adapte ao projeto
    - Se houver arquivos que precisam de `--ignore`, inclua-os
    - OK se returncode == 0
    - Se falhou, mostre o output completo
 
-3. **Coverage**: `python3 -m pytest <test_paths> --cov=<source> --cov-report=term-missing --cov-fail-under=70 -q`
+3. **Coverage**: `python -m pytest <test_paths> --cov=<source> --cov-report=term-missing --cov-fail-under=70 -q` (ou `py -m pytest` no Windows)
    - Source padrão: `src`. Adapte ao projeto (ex: `mushin`)
    - O `--cov-fail-under` já garante que o gate seja verificado pelo pytest-cov
    - Extraia o percentual do output para exibição (regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`)
@@ -263,7 +286,7 @@ Se nenhum `--task` for fornecido:
 
 1. Carregue a skill `kata-report` com a ferramenta `skill` (`name: kata-report`).
 2. O relatório é gerado automaticamente ao final do ciclo completo.
-3. Para regenerar: `python3 -m kata --task <name> --report`.
+3. Para regenerar: `python -m kata --task <name> --report` (ou `py -m kata` no Windows).
 4. Verifique se o relatório contém:
    - **Outcome first**: primeira linha = resultado
    - **O que foi feito**: problema e arquivos alterados
@@ -280,7 +303,7 @@ Se nenhum `--task` for fornecido:
 
 1. Carregue a skill `kata-judge` com a ferramenta `skill` (`name: kata-judge`).
 2. Verifique se `status` é `approved` (julgar só tarefas concluídas).
-3. Execute o judge: `python3 -m kata --task <name> --judge`
+3. Execute o judge: `python -m kata --task <name> --judge` (ou `py -m kata` no Windows).
 4. Interprete o veredito:
    - **VERIFIED** → nenhuma fraude; resultado confiável
    - **VERIFIED WITH CAVEATS** → fraudes leves/médias; ressalvas documentadas
@@ -332,8 +355,11 @@ Use o formato YAML (se PyYAML disponível) ou JSON como fallback.
 
 ## Modo Não-Interativo
 
-Se não houver TTY (stdin não é terminal), pule THINK/SIMPLIFY/SURGICAL
-preenchendo com defaults e execute só VERIFY. Útil para CI.
+Em execução não interativa (por exemplo, `--check-only`, CI ou uma sessão sem
+ferramenta `question` disponível), pule THINK/SIMPLIFY/SURGICAL preenchendo
+com defaults e execute só VERIFY. Não use a presença de TTY como prova de que
+as perguntas podem ser respondidas; se a sessão for interativa, use
+`question` normalmente.
 
 ## Comportamento Importante
 

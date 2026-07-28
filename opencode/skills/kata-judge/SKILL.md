@@ -26,13 +26,13 @@ Verificar adversarialmente uma tarefa concluída:
 Use o CLI do kata:
 
 ```bash
-python3 -m kata --task <name> --judge
+python -m kata --task <name> --judge
 ```
 
 Ou para tarefa detectada por branch:
 
 ```bash
-python3 -m kata --judge
+python -m kata --judge
 ```
 
 ## As 6 Fraudes

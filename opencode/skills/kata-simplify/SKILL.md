@@ -19,7 +19,8 @@ declarado na fase THINK. Detectar:
 
 Para esta fase, use:
 
-- **`bash`**: `git diff --stat` (ou `git diff --cached --stat` se vazio) para medir volume.
+- **shell do sistema** (a ferramenta `bash` do OpenCode, quando disponível):
+  `git diff --stat` (ou `git diff --cached --stat` se vazio) para medir volume.
 - **`question`**: checklist de minimalismo — pergunte ao usuário, não valide sozinho.
 - **`read`**: inspecione partes do diff que parecerem suspeitas.
 - **`write` / `edit`**: registre as respostas em `.kata/<task>.yaml`.

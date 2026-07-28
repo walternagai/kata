@@ -4,6 +4,7 @@
 # Uso:
 #   bash scripts/install.sh             # instalar
 #   bash scripts/install.sh --uninstall # remover
+#   powershell -ExecutionPolicy Bypass -File scripts/install.ps1 # Windows
 #
 # Os symlinks são criados em ~/.config/opencode/agent/ e ~/.config/opencode/skills/
 # apontando para os arquivos neste repositório. Isso permite que mudanças

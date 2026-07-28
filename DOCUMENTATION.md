@@ -117,6 +117,18 @@ make install
 The installer uses `$OPENCODE_CONFIG_DIR` when set, otherwise
 `~/.config/opencode`. Restart OpenCode after installation and use `@kata`.
 
+On Windows, run the native PowerShell installer from the repository root:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install.ps1
+```
+
+Use `-Copy` if symbolic links or junctions are unavailable, and
+`-Uninstall` to remove the installed agent and skills. The PowerShell
+installer also honors `OPENCODE_CONFIG_DIR` and otherwise uses
+`~/.config/opencode`.
+
 To remove the installed symlinks:
 
 ```bash

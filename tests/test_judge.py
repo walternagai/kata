@@ -579,6 +579,33 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         )
 
 
+class TestRunGitDiff:
+    """Testa o helper _run_git_diff."""
+
+    @patch("kata.judge._run")
+    def test_git_diff_unstaged(self, mock_run: MagicMock) -> None:
+        from kata.judge import _run_git_diff
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="diff --git a/a.py b/a.py\n", stderr="",
+        )
+        diff = _run_git_diff()
+        assert "diff --git" in diff
+        assert mock_run.call_args[0][0] == ["git", "diff"]
+
+    @patch("kata.judge._run")
+    def test_git_diff_staged_fallback(self, mock_run: MagicMock) -> None:
+        from kata.judge import _run_git_diff
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="diff --git a/staged.py b/staged.py\n", stderr=""
+            ),
+        ]
+        diff = _run_git_diff()
+        assert "staged.py" in diff
+        assert mock_run.call_args[0][0] == ["git", "diff", "--cached"]
+
+
 class TestChangedFiles:
     """Testa o helper _changed_files."""
 

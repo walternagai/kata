@@ -75,7 +75,26 @@ Para cada arquivo, verifique:
 - **Mudança de comportamento**: se a lógica mudou, os testes foram atualizados?
 - **Imports novos**: cada import novo é realmente necessário para a mudança?
 
-### 4. Verificar imports órfãos
+### 4. Recall Gate — verificar fontes antes de usar de memória
+
+Antes de utilizar qualquer API, endpoint, assinatura de função, chave de
+configuração, ou valor que você está escrevendo de memória:
+
+1. **Pare e abra a fonte real** — o arquivo de documentação, o código-fonte
+   da biblioteca, a página de referência, ou o arquivo de configuração real.
+2. Se a fonte não estiver acessível, **marque no relatório** que o valor veio
+   de memória e não foi verificado (low-confidence).
+3. Descobrir ignorância durante a edição re-abre a fase de evidência
+   (volte ao código-fonte, à documentação, ou à pergunta ao usuário).
+
+**Sinais de que o recall gate deve disparar:**
+- Nome de função/método de biblioteca externa escrito sem abrir a fonte
+- Payload de API, endpoint, ou formato de requisição sem consulta à spec
+- Chave de configuração, variável de ambiente, ou caminho de arquivo sem
+  verificar que existe no código atual
+- Valor numérico (timeout, limite, taxa) sem fonte que o justifique
+
+### 5. Verificar imports órfãos
 
 Pergunte:
 > "Imports removidos são só os que sua mudança tornou inúteis?"

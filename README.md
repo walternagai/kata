@@ -3,7 +3,8 @@
 > Python 3.11+ | CLI + OpenCode Agent | Karpathy Development Cycle + Fable Method
 
 Kata (型, "forma/padrão") é um agente OpenCode e CLI Python que implementa o
-ciclo FIT → THINK → SIMPLIFY → SURGICAL → VERIFY, inspirado em:
+ciclo FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT,
+com JUDGE adversarial opcional, inspirado em:
 
 1. **Karpathy Development Cycle** (Andrej Karpathy): pensar antes de codar,
    manter o código mínimo, mudanças cirúrgicas e verificação objetiva.
@@ -13,12 +14,14 @@ ciclo FIT → THINK → SIMPLIFY → SURGICAL → VERIFY, inspirado em:
 
 O ciclo completo:
 ```
-FIT → THINK → SIMPLIFY → SURGICAL → VERIFY
+FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT
+                                                                  ↓ (opcional)
+                                                                JUDGE
 ```
 
 Como um kata marcial, é uma sequência disciplinada e repetível de movimentos:
-classificar a tarefa, pensar antes de codar, manter o código mínimo, fazer
-mudanças cirúrgicas e verificar com critérios objetivos.
+classificar a tarefa, pensar antes de codar, manter o código mínimo, verificar
+intenção, mudanças cirúrgicas e verificar com critérios objetivos.
 
 ## Instalação
 
@@ -45,11 +48,13 @@ pip install -e .
 
 | Comando | Ação |
 |---------|------|
-| `@kata` | Ciclo interativo completo (FIT → THINK → SIMPLIFY → SURGICAL → VERIFY) |
+| `@kata` | Ciclo interativo completo |
 | `@kata --init nome-da-tarefa` | Cria tarefa e executa FIT + THINK |
 | `@kata --check-only` | Só verificação (CI/snapshot) |
 | `@kata --plan nome-da-tarefa` | Modo planejamento: FIT + THINK, para sem modificar código |
 | `@kata --task nome` | Retoma tarefa existente |
+| `@kata --task nome --judge` | Verificação adversarial (caça fraudes) |
+| `@kata --task nome --report` | Relatório outcome-first |
 
 ### CLI Python
 
@@ -89,12 +94,27 @@ Declarar problema, assumptions, alternativas e unknowns antes de codar.
 Verificar se o código é mínimo — sem abstrações especulativas (YAGNI) ou
 configurabilidade não solicitada.
 
-### 3. SURGICAL
+### 3. INTENT
+Verificar se a intenção do código está clara — nomes, imports, estrutura
+refletem o que o código faz.
+
+### 4. SURGICAL
 Validar arquivo-por-arquivo que cada mudança rastreia direto ao pedido,
 sem efeitos colaterais.
 
-### 4. VERIFY
-Rodar ruff + pytest + coverage (gate >= 70%) e checar critério de sucesso.
+### 5. VERIFY
+Rodar ruff + pytest + coverage (gate >= 70%) usando `--cov-fail-under` e
+checar critério de sucesso.
+
+### 6. ARTIFACT
+Gerar artefatos da tarefa (provas, verificações, etc).
+
+### 7. REPORT
+Relatório outcome-first documentando o que foi feito.
+
+### 8. JUDGE (opcional)
+Verificação adversarial — tenta caçar fraudes e inconsistências no
+código produzido.
 
 ## Diretório de Trabalho
 
@@ -131,11 +151,12 @@ ln -s .karpathy .kata   # symlink preserva acesso ao legado
 kata/
 ├── opencode/
 │   ├── agent/kata.md           ← Agente @kata
-│   └── skills/kata-*/SKILL.md  ← 5 skills (uma por fase)
+│   └── skills/kata-*/SKILL.md  ← 8 skills (uma por fase)
 ├── src/kata/
-│   ├── cli.py                  ← CLI headless (orquestra as 5 fases)
+│   ├── cli.py                  ← CLI headless (orquestra as 8 fases + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
 │   ├── verify.py               ← Lógica de verificação (ruff/pytest/coverage)
+│   ├── judge.py                ← Lógica adversarial (caça fraudes)
 │   ├── __init__.py             ← Versão do pacote
 │   └── __main__.py             ← Entry point para `python -m kata`
 ├── scripts/install.sh          ← Instalação via symlinks

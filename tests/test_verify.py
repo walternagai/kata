@@ -11,6 +11,7 @@ from kata.verify import (
     run_coverage,
     run_pytest,
     run_ruff,
+    search_pattern,
 )
 
 
@@ -257,3 +258,141 @@ class TestRunAll:
         )
         results = run_all()
         assert set(results.keys()) == {"ruff", "pytest", "coverage"}
+
+
+    @patch("kata.verify._run")
+    def test_run_all_pytest_fails_coverage_skipped(self, mock_run: MagicMock) -> None:
+        """Quando pytest falha, coverage é pulado e retorna ok=False."""
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="ruff error", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="2 failed", stderr=""),
+        ]
+        results = run_all()
+        assert results["ruff"].ok is False
+        assert results["pytest"].ok is False
+        assert results["coverage"].ok is False
+        assert "(skipped" in results["coverage"].output
+        assert results["coverage"].details["coverage_pct"] == 0.0
+
+
+class TestSearchPattern:
+    """Testa search_pattern — busca de padrão no projeto."""
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
+    def test_search_with_rg_finds_matches(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout="src/main.py:42:def add(a, b):\nsrc/utils.py:10:def add(x, y):\n",
+            stderr="",
+        )
+        result = search_pattern("def add")
+        assert len(result.matches) == 2
+        assert result.total_files == 2
+        assert result.pattern == "def add"
+        assert result.matches[0].file == "src/main.py"
+        assert result.matches[0].line == 42
+        assert result.matches[0].content == "def add(a, b):"
+        assert result.matches[1].file == "src/utils.py"
+        assert result.matches[1].line == 10
+        called = mock_run.call_args[0][0]
+        assert called[0] == "rg"
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value=None)
+    def test_search_with_grep_fallback(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout="src/main.py:42:def add(a, b):\n",
+            stderr="",
+        )
+        result = search_pattern("def add")
+        assert len(result.matches) == 1
+        called = mock_run.call_args[0][0]
+        assert called[0] == "grep"
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
+    def test_search_no_matches(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr="",
+        )
+        result = search_pattern("nonexistent_pattern_xyz")
+        assert len(result.matches) == 0
+        assert result.total_files == 0
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
+    def test_search_with_custom_paths(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout="src/app.py:5:DEBUG = True\n",
+            stderr="",
+        )
+        result = search_pattern("DEBUG", paths=["src/"])
+        assert len(result.matches) == 1
+        called = mock_run.call_args[0][0]
+        assert "src/" in called
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
+    def test_search_empty_lines_skipped(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout="src/main.py:42:def foo():\n\n\nsrc/utils.py:10:def bar():\n",
+            stderr="",
+        )
+        result = search_pattern("def")
+        assert len(result.matches) == 2
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
+    def test_search_non_numeric_line_sets_zero(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout="src/main.py:abc:content here\n",
+            stderr="",
+        )
+        result = search_pattern("content")
+        assert len(result.matches) == 1
+        assert result.matches[0].line == 0
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
+    def test_search_malformed_line_handled(
+        self, mock_which: MagicMock, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout=":no-colons-here\n",
+            stderr="",
+        )
+        result = search_pattern("foo")
+        assert len(result.matches) == 0
+        assert result.total_files == 0
+
+    def test_search_match_defaults(self) -> None:
+        from kata.verify import SearchMatch
+        m = SearchMatch(file="f.py", line=1, content="x")
+        assert m.file == "f.py"
+        assert m.line == 1
+        assert m.content == "x"
+
+    def test_search_result_defaults(self) -> None:
+        from kata.verify import SearchResult
+        r = SearchResult(pattern="test")
+        assert r.pattern == "test"
+        assert r.matches == []
+        assert r.total_files == 0

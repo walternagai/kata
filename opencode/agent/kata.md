@@ -210,10 +210,13 @@ Se nenhum `--task` for fornecido:
 
 1. Carregue a skill `kata-surgical` com a ferramenta `skill` (`name: kata-surgical`).
 2. Execute `git diff --name-only` (ou `git diff --cached --name-only`)
-2. Para cada arquivo, pergunte: "`<arquivo>` — necessário para esta tarefa?"
-3. Verifique imports órfãos: `ruff check --select F401 <paths>`
-4. Pergunte: "Imports removidos são só os que sua mudança tornou inúteis?"
-5. Registre a lista de arquivos com `necessary: true/false` no YAML sob `surgical`
+3. Para cada arquivo, pergunte: "`<arquivo>` — necessário para esta tarefa?"
+4. **Recall Gate**: antes de usar qualquer API/endpoint/config de memória,
+   abra a fonte real (docstring, docs, lib source). Se não acessível, marque
+   como low-confidence no relatório.
+5. Verifique imports órfãos: `ruff check --select F401 <paths>`
+6. Pergunte: "Imports removidos são só os que sua mudança tornou inúteis?"
+7. Registre a lista de arquivos com `necessary: true/false` no YAML sob `surgical`
 
 ### Fase 4: VERIFY
 
@@ -221,18 +224,19 @@ Se nenhum `--task` for fornecido:
 2. **Ruff**: `python3 -m ruff check <paths>`
    - Paths padrão: `src/ tests/`. Adapte ao projeto (ex: `mushin/ services/ tests/`)
    - OK se returncode == 0
-   - Se falhou, mostre as primeiras 10 linhas do output
+   - Se falhou, mostre o output completo
 
 2. **Pytest**: `python3 -m pytest <test_paths> --tb=short -q`
    - Test paths padrão: `tests/`. Adapte ao projeto
    - Se houver arquivos que precisam de `--ignore`, inclua-os
    - OK se returncode == 0
-   - Se falhou, mostre as últimas 10 linhas do output
+   - Se falhou, mostre o output completo
 
-3. **Coverage**: `python3 -m pytest <test_paths> --cov=<source> --cov-report=term-missing -q`
+3. **Coverage**: `python3 -m pytest <test_paths> --cov=<source> --cov-report=term-missing --cov-fail-under=70 -q`
    - Source padrão: `src`. Adapte ao projeto (ex: `mushin`)
-   - Extraia o percentual com regex `TOTAL\s+\d+\s+\d+\s+(\d+)%`
-   - Gate: 70%. OK se returncode == 0 AND coverage >= 70
+   - O `--cov-fail-under` já garante que o gate seja verificado pelo pytest-cov
+   - Extraia o percentual do output para exibição (regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`)
+   - Gate: 70%. OK se returncode == 0 (já inclui o gate)
 
 4. **Critério de sucesso**: pergunte ao usuário "O critério de sucesso da tarefa está satisfeito?"
    - Em modo `--check-only`, assuma satisfeito

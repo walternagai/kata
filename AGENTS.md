@@ -4,7 +4,7 @@
 
 ## O que é este repo
 
-Kata é a ferramenta que implementa o ciclo FIT → THINK → SIMPLIFY → SURGICAL → VERIFY.
+Kata é a ferramenta que implementa o ciclo FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT, com JUDGE adversarial opcional.
 Este repositório contém o **código da ferramenta** (CLI + agente OpenCode), não
 um projeto onde o kata é aplicado.
 
@@ -21,18 +21,21 @@ O ciclo é inspirado em duas fontes complementares:
 ## Arquitetura
 
 ```
-src/kata/       código Python (cli.py, fit.py, verify.py, __init__.py, __main__.py)
-tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py)
+src/kata/       código Python (cli.py, fit.py, verify.py, judge.py, __init__.py, __main__.py)
+tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_judge.py)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
-  skills/kata-*/SKILL.md 5 skills (uma por fase do ciclo)
+  skills/kata-*/SKILL.md 8 skills (uma por fase do ciclo)
 scripts/install.sh       instala via symlinks em ~/.config/opencode/
 ```
 
-- `fit.py` é a lógica do fit gate (diff_stats, is_trivial, classify_route),
-  modularizada para testes independentes.
-- `verify.py` é a lógica de verificação (ruff/pytest/coverage) modularizada para
-  testes independentes. O CLI (`cli.py`) orquestra as 5 fases e chama `fit.py` e `verify.py`.
+- `fit.py` é a lógica do fit gate (diff_stats, is_trivial) modularizada para
+  testes independentes.
+- `verify.py` é a lógica de verificação (ruff/pytest/coverage via
+  `--cov-fail-under`) modularizada para testes independentes.
+- `judge.py` é a lógica adversarial que verifica fraudes e inconsistências.
+- O CLI (`cli.py`) orquestra as 8 fases + judge opcional e chama `fit.py`,
+  `verify.py`, `judge.py`.
 - Entry point do CLI: `kata.cli:main` (declarado em `pyproject.toml`).
 
 ## Desenvolvimento

@@ -38,7 +38,7 @@ python3 -m ruff check mushin/ services/ tests/
 
 **Interpretando resultado:**
 - `returncode == 0` → ✅ limpo
-- `returncode != 0` → ❌ falhou — mostrar primeiras 10 linhas do output
+- `returncode != 0` → ❌ falhou — mostrar output completo
 
 **Problemas comuns:**
 - `F401` — import não utilizado → remover ou adicionar `# noqa: F401`
@@ -58,7 +58,7 @@ python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=sh
 
 **Interpretando resultado:**
 - `returncode == 0` → ✅ passou
-- `returncode != 0` → ❌ falhou — mostrar últimas 10 linhas do output
+- `returncode != 0` → ❌ falhou — mostrar output completo
 
 **Problemas comuns:**
 - `ModuleNotFoundError: faiss` → usar `--ignore` ou `pip install faiss-cpu`
@@ -68,16 +68,19 @@ python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=sh
 ### Coverage
 
 ```bash
-python3 -m pytest tests/ --cov=src --cov-report=term-missing -q
+python3 -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=70 -q
 ```
 
 Para mushin:
 ```bash
 python3 -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py \
-  --cov=mushin --cov-report=term-missing -q
+  --cov=mushin --cov-report=term-missing --cov-fail-under=70 -q
 ```
 
-**Extraindo percentual:**
+O `--cov-fail-under` faz o pytest-cov verificar o gate automaticamente:
+returncode copm erro se coverage < gate.
+
+**Extraindo percentual (para exibição):**
 ```
 TOTAL                 850      42     95%
 ```
@@ -86,8 +89,8 @@ Extraia do output com regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`. Não infira o valor
 visualmente; se o regex não encontrar, trate como falha.
 
 **Interpretando resultado:**
-- `returncode == 0 AND cov_pct >= gate` → ✅ passou
-- `returncode != 0 OR cov_pct < gate` → ❌ falhou
+- `returncode == 0` → ✅ passou (gate verificado pelo próprio `--cov-fail-under`)
+- `returncode != 0` → ❌ falhou
 
 **Gate padrão: 70%**
 

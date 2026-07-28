@@ -752,8 +752,26 @@ class TestStepArtifact:
         assert result["artifact"]["intent_owed"] is False
         assert "Todas as linhas devidas" in capsys.readouterr().out
 
-
-class TestMainInteractive:
+    @patch("kata.cli._detect_auth_owed", return_value=True)
+    @patch("kata.cli._detect_pending_owed", return_value=True)
+    @patch("kata.cli._detect_twins_owed", return_value=True)
+    @patch("kata.cli.sys.stdin")
+    def test_artifact_non_tty_missing_auth_pending_twins(
+        self, mock_stdin, mock_twins, mock_pending, mock_auth, capsys,
+    ) -> None:
+        mock_stdin.isatty.return_value = False
+        data: dict = {
+            "intent": {"answered": True, "code_does": "func X"},
+            "verify": {"tests_pass": True},
+        }
+        result = cli._step_artifact("task", data)
+        out = capsys.readouterr().out
+        assert result["artifact"]["auth_owed"] is True
+        assert result["artifact"]["pending_owed"] is True
+        assert result["artifact"]["twins_owed"] is True
+        assert "AUTH" in out
+        assert "PENDING" in out
+        assert "TWINS" in out
     """Testa main() no modo interativo completo."""
 
     @patch("kata.cli._step_verify")
@@ -1158,6 +1176,38 @@ class TestMainJudge:
         assert exc.value.code == 2
 
 
+class TestHasUnpushed:
+    """Testa _has_unpushed_commits — detecção de commits não enviados."""
+
+    @patch("kata.cli._run")
+    def test_has_unpushed_commits_exception(self, mock_run) -> None:
+        mock_run.side_effect = Exception("git error")
+        assert cli._has_unpushed_commits() is False
+
+
+class TestHasDeployDocs:
+    """Testa _has_deploy_docs — detecção de docs de deploy."""
+
+    def test_no_readme_returns_false(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        assert cli._has_deploy_docs() is False
+
+    def test_readme_with_deploy_keywords(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "README.md").write_text("Use docker compose to deploy", encoding="utf-8")
+        assert cli._has_deploy_docs() is True
+
+    def test_readme_without_deploy_keywords(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "README.md").write_text("Just a library", encoding="utf-8")
+        assert cli._has_deploy_docs() is False
+
+    @patch("kata.cli.Path.read_text")
+    def test_read_error_returns_false(self, mock_read) -> None:
+        mock_read.side_effect = Exception("read error")
+        assert cli._has_deploy_docs() is False
+
+
 class TestDetectAuthOwed:
     """Testa _detect_auth_owed — detecção de ação irreversível."""
 
@@ -1226,6 +1276,18 @@ class TestDetectTwinsOwed:
         data = {"intent": {"answered": False, "all_agree": False}}
         assert cli._detect_twins_owed(data) is False
 
+    def test_verify_passed_triggers_twins(self) -> None:
+        data = {"verify": {"tests_pass": True, "coverage_pass": True}}
+        assert cli._detect_twins_owed(data) is True
+
+    def test_verify_partial_does_not_trigger(self) -> None:
+        data = {"verify": {"tests_pass": True, "coverage_pass": False}}
+        assert cli._detect_twins_owed(data) is False
+
+    def test_verify_none_does_not_trigger(self) -> None:
+        data = {}
+        assert cli._detect_twins_owed(data) is False
+
 
 class TestFormatLines:
     """Testa formatação das linhas INTENT/AUTH/PENDING/TWINS."""
@@ -1278,6 +1340,24 @@ class TestFormatLines:
         twins = {"searched": True, "pattern": "bug_pattern"}
         line = cli._format_twins_line(twins)
         assert "none" in line
+
+    def test_twins_line_with_counts(self) -> None:
+        twins = {
+            "searched": True, "pattern": "parse_date",
+            "result": "3 file(s), 5 occurrence(s)",
+            "files_count": 3, "matches_count": 5,
+        }
+        line = cli._format_twins_line(twins)
+        assert "3 file(s)" in line
+        assert "5 occurrence(s)" in line
+        assert "parse_date" in line
+
+    def test_twins_line_zero_files_omits_detail(self) -> None:
+        twins = {"searched": True, "pattern": "bug_pattern", "result": ""}
+        line = cli._format_twins_line(twins)
+        assert "TWINS:" in line
+        assert "file(s)" not in line
+        assert "occurrence(s)" not in line
 
 
 class TestDetectScratch:
@@ -1366,6 +1446,45 @@ class TestStepReport:
         assert "em andamento" in out
         assert "APROVADO" not in out
 
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_with_auth_caveat(self, mock_scratch, capsys) -> None:
+        """AUTH owed mas não presente gera caveat no relatório."""
+        data = {
+            "status": "approved",
+            "verify": {},
+            "artifact": {"auth_owed": True, "auth_present": False,
+                         "intent_owed": False, "intent_present": True},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "AUTH" in out
+        assert "autorização" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_with_auth_pending_twins(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "approved",
+            "think": {"problem": "bug fix"},
+            "intent": {"code_does": "X", "check_expects": "Y", "spec_says": "Z"},
+            "surgical": {"files": [{"path": "src/main.py", "necessary": True}]},
+            "verify": {"tests_pass": True, "coverage_pass": True, "coverage_pct": 90.0},
+            "artifact": {},
+            "auth": {"authorized": True, "quote": "pode fazer deploy"},
+            "pending": {"documented": True, "action": "rollout to prod"},
+            "twins": {
+                "searched": True, "pattern": "bug_pattern",
+                "result": "2 files, 3 occurrences",
+                "files_count": 2, "matches_count": 3,
+            },
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "AUTH:" in out
+        assert "PENDING:" in out
+        assert "TWINS:" in out
+        assert "2 file(s)" in out
+        assert "rollout to prod" in out
+
 
 class TestMainReport:
     """Testa o modo --report (outcome-first reporting)."""
@@ -1430,3 +1549,153 @@ class TestInitTaskTemplate:
         assert "auth" in data
         assert "pending" in data
         assert "twins" in data
+
+    def test_template_twins_has_new_fields(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir(parents=True, exist_ok=True)
+        cli._init_task("twins-fields")
+        path = tmp_path / ".kata" / "twins-fields.yaml"
+        data = cli._deserialize(path.read_text(encoding="utf-8"))
+        twins = data.get("twins", {})
+        assert "matches_count" in twins
+        assert "files_count" in twins
+        assert "fix_applied" in twins
+        assert twins["matches_count"] == 0
+        assert twins["files_count"] == 0
+        assert twins["fix_applied"] is False
+
+
+class TestPrintJudgeVerdict:
+    """Testa _print_judge_verdict — output do resultado adversarial."""
+
+    @patch("kata.cli.sys.stdout")
+    def test_judge_verdict_shows_caveats(self, mock_stdout) -> None:
+        from kata.judge import JudgeResult
+        result = JudgeResult(
+            verdict="VERIFIED WITH CAVEATS",
+            caveats=["re-execução falhou: pytest"],
+        )
+        cli._print_judge_verdict(result)
+        calls = [str(c) for c in mock_stdout.write.call_args_list]
+        assert any("Ressalvas" in c for c in calls)
+        assert any("pytest" in c for c in calls)
+
+
+class TestStepTwin:
+    """Testa _step_twin — twin check automático após VERIFY."""
+
+    def test_not_approved_returns_early(self) -> None:
+        data = {"status": "rejected"}
+        result = cli._step_twin("task", data)
+        assert "twins" not in result
+
+    def test_already_searched_returns_early(self) -> None:
+        data = {"status": "approved", "twins": {"searched": True, "pattern": "foo"}}
+        result = cli._step_twin("task", data)
+        assert result["twins"]["searched"] is True
+
+    @patch("kata.cli.sys.stdin")
+    def test_non_tty_returns_defaults(self, mock_stdin) -> None:
+        mock_stdin.isatty.return_value = False
+        data = {"status": "approved", "intent": {"all_agree": True}}
+        result = cli._step_twin("task", data)
+        assert result["twins"]["searched"] is False
+
+    @patch("kata.cli._confirm", return_value=False)
+    @patch("kata.cli.sys.stdin")
+    def test_no_defect_no_search(self, mock_stdin, mock_confirm) -> None:
+        mock_stdin.isatty.return_value = True
+        data = {"status": "approved", "intent": {"all_agree": True}}
+        result = cli._step_twin("task", data)
+        assert result["twins"]["searched"] is False
+        mock_confirm.assert_called_once()
+
+    @patch("kata.cli._confirm", return_value=True)
+    @patch("kata.cli.search_pattern")
+    @patch("kata.cli.sys.stdin")
+    def test_defect_fixed_with_matches(
+        self, mock_stdin, mock_search, mock_confirm,
+    ) -> None:
+        from kata.verify import SearchMatch, SearchResult
+
+        mock_stdin.isatty.return_value = True
+        mock_stdin.stdin.isatty.return_value = True
+        mock_search.return_value = SearchResult(
+            pattern="parse_date",
+            matches=[SearchMatch(file="src/parser.py", line=42, content="parse_date(x)")],
+            total_files=1,
+        )
+        data = {"status": "approved", "intent": {"all_agree": True}}
+        with patch("builtins.input", side_effect=["parse_date"]):
+            with patch("kata.cli._confirm") as mock_cf:
+                mock_cf.side_effect = [True, False]
+                result = cli._step_twin("task", data)
+
+        assert result["twins"]["searched"] is True
+        assert result["twins"]["pattern"] == "parse_date"
+        assert "1 arquivo(s)" in result["twins"]["result"]
+        assert result["twins"]["matches_count"] == 1
+        assert result["twins"]["files_count"] == 1
+        assert result["twins"]["fix_applied"] is False
+
+    @patch("kata.cli._confirm", return_value=True)
+    @patch("kata.cli.search_pattern")
+    @patch("kata.cli.sys.stdin")
+    def test_defect_fixed_many_matches_truncated(
+        self, mock_stdin, mock_search, mock_confirm,
+    ) -> None:
+        from kata.verify import SearchMatch, SearchResult
+
+        mock_stdin.isatty.return_value = True
+        mock_search.return_value = SearchResult(
+            pattern="TODO",
+            matches=[SearchMatch(file=f"src/{i}.py", line=i, content="TODO")
+                     for i in range(25)],
+            total_files=25,
+        )
+        data = {"status": "approved", "intent": {"all_agree": True}}
+        with patch("builtins.input", side_effect=["TODO"]):
+            with patch("kata.cli._confirm") as mock_cf:
+                mock_cf.side_effect = [True, False]
+                result = cli._step_twin("task", data)
+
+        assert result["twins"]["searched"] is True
+        assert result["twins"]["matches_count"] == 25
+        assert result["twins"]["files_count"] == 25
+
+    @patch("kata.cli._confirm", return_value=True)
+    @patch("kata.cli.search_pattern")
+    @patch("kata.cli.sys.stdin")
+    def test_defect_fixed_no_matches(
+        self, mock_stdin, mock_search, mock_confirm,
+    ) -> None:
+        from kata.verify import SearchResult
+
+        mock_stdin.isatty.return_value = True
+        mock_search.return_value = SearchResult(pattern="nonexistent", total_files=0)
+        data = {"status": "approved", "intent": {"all_agree": True}}
+        with patch("builtins.input", side_effect=["nonexistent", ""]):
+            result = cli._step_twin("task", data)
+
+        assert result["twins"]["searched"] is True
+        assert result["twins"]["matches_count"] == 0
+        assert result["twins"]["files_count"] == 0
+        assert result["twins"]["fix_applied"] is False
+
+    @patch("kata.cli.search_pattern")
+    @patch("kata.cli.sys.stdin")
+    def test_empty_pattern_returns_early(self, mock_stdin, mock_search) -> None:
+        mock_stdin.isatty.return_value = True
+        data = {"status": "approved", "intent": {"all_agree": False}}
+        with patch("builtins.input", return_value=""):
+            result = cli._step_twin("task", data)
+        assert result["twins"]["searched"] is False
+        mock_search.assert_not_called()
+
+    def test_intent_conflict_triggers_twin(self) -> None:
+        data = {"status": "approved", "intent": {"all_agree": False}}
+        with patch("kata.cli.sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            result = cli._step_twin("task", data)
+        # Non-TTY, so returns defaults even though intent conflict
+        assert result["twins"]["searched"] is False

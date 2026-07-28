@@ -29,7 +29,7 @@ from typing import Any
 from kata import __version__
 from kata.fit import diff_stats, is_trivial
 from kata.judge import JudgeResult, judge_task
-from kata.verify import VerifyResult, run_all
+from kata.verify import VerifyResult, run_all, search_pattern
 
 try:
     import yaml
@@ -519,6 +519,71 @@ def _step_verify(
     return data
 
 
+def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Fase pós-VERIFY: TWIN CHECK — busca automática de padrão recorrente.
+
+    Inspirado no twin check do fable-method: quando um defeito é corrigido,
+    busca o mesmo padrão no projeto inteiro para evitar recorrências.
+    """
+    if data.get("status") != "approved":
+        return data
+
+    twins = data.get("twins", {})
+    if twins.get("searched"):
+        return data
+
+    intent = data.get("intent", {})
+    defect_fixed = (
+        not intent.get("all_agree", True)
+        or _confirm("  Um defeito foi corrigido? Deseja buscar padrão similar?", default=False)
+    )
+
+    if not defect_fixed:
+        data["twins"] = {"searched": False, "pattern": "", "result": ""}
+        return data
+
+    if not sys.stdin.isatty():
+        data["twins"] = {"searched": False, "pattern": "", "result": ""}
+        return data
+
+    _print_header("TWIN CHECK — Busca de padrão recorrente")
+
+    pattern = input("  Padrão a buscar (regex): ").strip()
+    if not pattern:
+        data["twins"] = {"searched": False, "pattern": "", "result": ""}
+        return data
+
+    print(f"\n  Buscando '{pattern}' no projeto...")
+    search_result = search_pattern(pattern, cwd=_cwd())
+
+    if search_result.matches:
+        print(f"\n  ✅ Encontrado em {search_result.total_files} arquivo(s):")
+        for match in search_result.matches[:20]:
+            print(f"     {match.file}:{match.line}  {match.content[:80]}")
+        if len(search_result.matches) > 20:
+            print(f"     ... e mais {len(search_result.matches) - 20} ocorrência(s)")
+    else:
+        print("  Nenhuma ocorrência encontrada.")
+
+    fix_others = False
+    if search_result.matches:
+        fix_others = _confirm("  Corrigir as demais ocorrências agora?", default=False)
+
+    result_str = (
+        f"{search_result.total_files} arquivo(s), "
+        f"{len(search_result.matches)} ocorrência(s)"
+    )
+    data["twins"] = {
+        "pattern": pattern,
+        "result": result_str,
+        "searched": True,
+        "matches_count": len(search_result.matches),
+        "files_count": search_result.total_files,
+        "fix_applied": fix_others,
+    }
+    return data
+
+
 def _has_unpushed_commits() -> bool:
     """Detecta se há commits não enviados para o remote."""
     try:
@@ -571,7 +636,11 @@ def _detect_twins_owed(data: dict[str, Any]) -> bool:
     intent = data.get("intent", {})
     if intent.get("answered") and not intent.get("all_agree"):
         return True
-    # Heurística 2: dados de twins já existentes
+    # Heurística 2: verify passou (defeito possivelmente corrigido)
+    verify = data.get("verify", {})
+    if verify.get("tests_pass") and verify.get("coverage_pass"):
+        return True
+    # Heurística 3: dados de twins já existentes
     twins = data.get("twins", {})
     if twins.get("pattern"):
         return True
@@ -702,7 +771,10 @@ def _format_twins_line(twins: dict[str, Any]) -> str:
     """Formata a linha TWINS no formato fable."""
     if twins.get("searched") and twins.get("pattern"):
         found = twins.get("result", "none")
-        return f"TWINS: searched {twins['pattern']} - found {found}"
+        files = twins.get("files_count", 0)
+        matches = twins.get("matches_count", 0)
+        detail = f" ({files} file(s), {matches} occurrence(s))" if files else ""
+        return f"TWINS: searched {twins['pattern']} - found {found}{detail}"
     return ""
 
 
@@ -857,7 +929,10 @@ def _init_task(task: str) -> None:
         },
         "auth": {"action_taken": False, "authorized": False},
         "pending": {"action": "", "documented": False},
-        "twins": {"searched": False},
+        "twins": {
+            "searched": False, "pattern": "", "result": "",
+            "matches_count": 0, "files_count": 0, "fix_applied": False,
+        },
     }
     path.write_text(_serialize(template), encoding="utf-8")
     print(f"✅  {path} criado. Preencha as respostas com o modo interativo.")
@@ -1032,6 +1107,7 @@ def main() -> None:
         cov_source=args.cov_source,
         gate=args.gate,
     )
+    data = _step_twin(task, data)
     data = _step_artifact(task, data)
     _step_report(task, data)
 

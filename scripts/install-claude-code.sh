@@ -40,10 +40,31 @@ usage() {
     exit 1
 }
 
+# Só é nosso o que é symlink. Qualquer outra coisa no destino é do usuário:
+# `ln -sfn` sobre um diretório real não substitui nada — cria o link DENTRO
+# dele (skills/kata-fit/kata-fit), e o instalador ainda reportaria sucesso.
+check_targets() {
+    local problema=0
+    for skill in "${SKILLS[@]}"; do
+        local alvo="$CONFIG_DIR/skills/$skill"
+        if [[ -e "$alvo" && ! -L "$alvo" ]]; then
+            echo "  ❌ $alvo já existe e não é symlink"
+            problema=1
+        fi
+    done
+    if (( problema )); then
+        echo ""
+        echo "O instalador não sobrescreve caminhos que não criou."
+        echo "Remova ou renomeie os caminhos acima e rode de novo."
+        return 1
+    fi
+}
+
 install() {
     echo "Instalando kata em $CONFIG_DIR/skills..."
 
     mkdir -p "$CONFIG_DIR/skills"
+    check_targets
     for skill in "${SKILLS[@]}"; do
         ln -sfn "$KATA_DIR/claude-code/skills/$skill" "$CONFIG_DIR/skills/$skill"
         echo "  ✅ skills/$skill → $KATA_DIR/claude-code/skills/$skill"
@@ -60,8 +81,14 @@ uninstall() {
         if [[ -L "$CONFIG_DIR/skills/$skill" ]]; then
             rm "$CONFIG_DIR/skills/$skill"
             echo "  ✅ removido skills/$skill"
-        else
-            echo "  ⚠  skills/$skill não é symlink (pulando)"
+        elif [[ -L "$CONFIG_DIR/skills/$skill/$skill" ]]; then
+            # Órfão de uma instalação anterior, quando `ln -sfn` aninhava o
+            # link dentro do diretório existente. Remover o symlink não toca
+            # no alvo nem no que o usuário guardou no diretório.
+            rm "$CONFIG_DIR/skills/$skill/$skill"
+            echo "  ✅ removido link aninhado skills/$skill/$skill (instalação antiga)"
+        elif [[ -e "$CONFIG_DIR/skills/$skill" ]]; then
+            echo "  ⚠  skills/$skill não é symlink — não foi criado por nós (pulando)"
         fi
     done
 

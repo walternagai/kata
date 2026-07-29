@@ -40,16 +40,40 @@ usage() {
     exit 1
 }
 
+# Só é nosso o que é symlink. Sobre um diretório real, `ln -sfn` cria o link
+# DENTRO dele (skills/kata-fit/kata-fit) e reportaria sucesso; sobre um
+# arquivo real, `ln -sf` substitui o arquivo do usuário sem aviso.
+check_targets() {
+    local problema=0
+    local alvos=("$CONFIG_DIR/agent/$AGENT_FILE")
+    for skill in "${SKILLS[@]}"; do
+        alvos+=("$CONFIG_DIR/skills/$skill")
+    done
+    for alvo in "${alvos[@]}"; do
+        if [[ -e "$alvo" && ! -L "$alvo" ]]; then
+            echo "  ❌ $alvo já existe e não é symlink"
+            problema=1
+        fi
+    done
+    if (( problema )); then
+        echo ""
+        echo "O instalador não sobrescreve caminhos que não criou."
+        echo "Remova ou renomeie os caminhos acima e rode de novo."
+        return 1
+    fi
+}
+
 install() {
     echo "Instalando kata em $CONFIG_DIR..."
 
+    mkdir -p "$CONFIG_DIR/agent" "$CONFIG_DIR/skills"
+    check_targets
+
     # Agente
-    mkdir -p "$CONFIG_DIR/agent"
     ln -sf "$KATA_DIR/opencode/agent/$AGENT_FILE" "$CONFIG_DIR/agent/$AGENT_FILE"
     echo "  ✅ agent/$AGENT_FILE → $KATA_DIR/opencode/agent/$AGENT_FILE"
 
     # Skills
-    mkdir -p "$CONFIG_DIR/skills"
     for skill in "${SKILLS[@]}"; do
         ln -sfn "$KATA_DIR/opencode/skills/$skill" "$CONFIG_DIR/skills/$skill"
         echo "  ✅ skills/$skill → $KATA_DIR/opencode/skills/$skill"
@@ -75,8 +99,13 @@ uninstall() {
         if [[ -L "$CONFIG_DIR/skills/$skill" ]]; then
             rm "$CONFIG_DIR/skills/$skill"
             echo "  ✅ removido skills/$skill"
-        else
-            echo "  ⚠  skills/$skill não é symlink (pulando)"
+        elif [[ -L "$CONFIG_DIR/skills/$skill/$skill" ]]; then
+            # Órfão de instalação anterior, quando `ln -sfn` aninhava o link
+            # dentro do diretório existente.
+            rm "$CONFIG_DIR/skills/$skill/$skill"
+            echo "  ✅ removido link aninhado skills/$skill/$skill (instalação antiga)"
+        elif [[ -e "$CONFIG_DIR/skills/$skill" ]]; then
+            echo "  ⚠  skills/$skill não é symlink — não foi criado por nós (pulando)"
         fi
     done
 

@@ -337,6 +337,7 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
             "trivial": False,
             "route": "code-loop",
             "reason": "non-interactive mode",
+            "answered": True,
         }
         return data
 
@@ -370,10 +371,13 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
     route = route_map.get(choice, "code-loop")
     reason = input("  Justificativa breve (opcional): ").strip()
 
+    # `answered` fecha o guard no topo desta função: sem gravá-la, FIT
+    # repergunta a cada retomada da tarefa. think e intent já gravavam a sua.
     data["fit"] = {
         "trivial": trivial,
         "route": route,
         "reason": reason or f"Rota {choice} escolhida pelo usuário",
+        "answered": True,
     }
     return data
 
@@ -1073,6 +1077,7 @@ def _init_task(task: str) -> None:
             "trivial": False,
             "route": "code-loop",
             "reason": "",
+            "answered": False,
         },
         "think": {
             "problem": "",
@@ -1104,11 +1109,17 @@ def _init_task(task: str) -> None:
             "coverage_pass": None,
             "success_criteria_met": None,
         },
-        "auth": {"action_taken": False, "authorized": False},
+        "auth": {"action_taken": False, "authorized": False, "action": "", "quote": ""},
         "pending": {"action": "", "documented": False},
         "twins": {
-            "searched": False, "pattern": "", "result": "",
+            "searched": False, "pattern": "", "result": "", "defect_fixed": False,
             "matches_count": 0, "files_count": 0, "fix_applied": False,
+        },
+        "artifact": {
+            "intent_owed": False, "intent_present": False,
+            "auth_owed": False, "auth_present": False,
+            "pending_owed": False, "pending_present": False,
+            "twins_owed": False, "twins_present": False,
         },
     }
     template = _capture_base_commit(template)

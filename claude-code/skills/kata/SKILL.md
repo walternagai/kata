@@ -42,6 +42,7 @@ FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → R
 | INTENT | Verificar alinhamento entre código, teste e spec antes de mudar comportamento |
 | SURGICAL | Validar arquivo-por-arquivo que cada mudança rastreia ao pedido |
 | VERIFY | Rodar ruff + pytest + coverage (gate ≥ 70%) e checar critério de sucesso |
+| TWIN CHECK | Se um defeito foi corrigido, buscar o mesmo padrão no projeto inteiro |
 | ARTIFACT | Verificar que todas as linhas devidas (INTENT/AUTH/PENDING/TWINS) estão presentes |
 | REPORT | Relatório outcome-first: resultado na primeira linha, verificações, caveats honestos, INTENT/AUTH/PENDING/TWINS lines |
 | JUDGE *(opcional)* | Verificação adversarial — re-executa verificações, caça 6 tipos de fraude, entrega veredito VERIFIED/CAVEATS/REFUTED |
@@ -97,6 +98,8 @@ fit:
   trivial: false
   route: code-loop     # code-loop | plan-first | question | research | inference
   reason: ""
+  answered: false      # grave true ao concluir o FIT, senão ele repergunta
+                       # a cada retomada da tarefa
 think:
   problem: ""
   assumptions: []
@@ -134,6 +137,9 @@ artifact:
 auth:
   action_taken: false
   authorized: false
+  action: ""           # o que foi feito
+  quote: ""            # citação exata da autorização; sem ela a linha AUTH
+                       # não é emitida, mesmo com authorized: true
 pending:
   action: ""
   documented: false
@@ -141,6 +147,13 @@ twins:
   pattern: ""
   result: ""
   searched: false
+  defect_fixed: false   # é ISTO que o gate TWINS lê para saber que houve
+                        # correção de defeito; sem esta chave o gate nunca
+                        # dispara, porque "verificações passaram" não é
+                        # evidência de defeito corrigido
+  matches_count: 0      # preenchidas pelo TWIN CHECK após a busca
+  files_count: 0
+  fix_applied: false
 ```
 
 ## Parsing de Argumentos
@@ -275,6 +288,35 @@ Se nenhum `--task` for fornecido:
    - Rejeitado caso contrário
 
 7. Atualize `status` para `approved` ou `rejected` no YAML
+
+### Fase 4.2: TWIN CHECK
+
+Executar **depois** do VERIFY e **antes** do ARTIFACT, e só se a tarefa foi
+aprovada. Quando um defeito é corrigido, o mesmo padrão costuma existir em
+outros lugares — foi assim que vários defeitos deste projeto reapareceram
+depois de "corrigidos" num único ponto.
+
+1. Determine se um defeito foi corrigido. Se o intent gate registrou
+   discordância (`intent.all_agree: false`), a resposta já é sim. Caso
+   contrário, pergunte ao usuário com `AskUserQuestion`.
+2. Se não houve correção de defeito, grave `twins.defect_fixed: false` e siga
+   para o ARTIFACT. **Gravar a resposta importa**: é a única evidência de que
+   a pergunta foi feita, e sem ela o gate TWINS não consegue distinguir "não
+   houve defeito" de "ninguém verificou".
+3. Se houve, pergunte qual padrão buscar (regex) e rode a busca com `Grep`
+   no projeto inteiro.
+4. Mostre as ocorrências, pergunte se deseja corrigi-las agora, e registre:
+
+```yaml
+twins:
+  pattern: "assert True"
+  result: "3 arquivo(s), 7 ocorrência(s)"
+  searched: true
+  defect_fixed: true
+  matches_count: 7
+  files_count: 3
+  fix_applied: false
+```
 
 ### Fase 4.5: ARTIFACT
 

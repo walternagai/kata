@@ -34,7 +34,7 @@ following evidence explicit before a task is considered complete:
 The normal flow is:
 
 ```text
-FIT -> THINK -> SIMPLIFY -> INTENT -> SURGICAL -> VERIFY -> ARTIFACT -> REPORT
+FIT -> THINK -> SIMPLIFY -> INTENT -> SURGICAL -> VERIFY -> TWIN CHECK -> ARTIFACT -> REPORT
                                                                             |
                                                                        JUDGE (optional)
 ```
@@ -285,6 +285,14 @@ Runs the objective checks in this order:
 Coverage is short-circuited when pytest fails. A task is `approved` only when
 all checks and the success criterion pass; otherwise it is `rejected`.
 
+### TWIN CHECK
+
+Runs after VERIFY and before ARTIFACT, and only for an approved task. When a
+defect has been fixed, the same pattern often exists elsewhere; the step asks
+whether one was, searches the project for the pattern, and records the answer
+in `twins`. Recording a negative answer is part of the point — it is what
+distinguishes "no defect" from "not checked".
+
 ### ARTIFACT
 
 Checks whether evidence lines are due and present:
@@ -349,6 +357,7 @@ fit:
   trivial: false
   route: code-loop
   reason: ""
+  answered: false
 think:
   problem: ""
   assumptions: []
@@ -377,6 +386,8 @@ verify:
 auth:
   action_taken: false
   authorized: false
+  action: ""
+  quote: ""           # without it the AUTH line is never emitted
 pending:
   action: ""
   documented: false
@@ -384,7 +395,24 @@ twins:
   searched: false
   pattern: ""
   result: ""
+  defect_fixed: false   # the signal the TWINS gate reads
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+artifact:
+  intent_owed: false
+  intent_present: false
+  auth_owed: false
+  auth_present: false
+  pending_owed: false
+  pending_present: false
+  twins_owed: false
+  twins_present: false
 ```
+
+`twins.defect_fixed` is what the TWINS gate consults. It is written by the
+TWIN CHECK step, and recording a `false` matters as much as a `true`: without
+it the gate cannot tell "no defect was fixed" from "nobody checked".
 
 Task selection uses the current Git branch when possible. Slashes and
 underscores are normalized to hyphens; for example, `feature/parser_fix`

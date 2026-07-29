@@ -78,7 +78,7 @@ python -m pytest tests/unit/ --ignore=tests/unit/test_pesado.py --cov=app --cov-
 ```
 
 O `--cov-fail-under` faz o pytest-cov verificar o gate automaticamente:
-returncode copm erro se coverage < gate.
+returncode com erro se coverage < gate.
 
 **Extraindo percentual (para exibição):**
 ```

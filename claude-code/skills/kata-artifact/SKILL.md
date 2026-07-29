@@ -27,7 +27,7 @@ linhas devidas estão presentes. Se algo está ausente e é devido, adicione.
 | `INTENT: code does <X>; check expects <Y>; spec says <Z>` | Comportamento foi alterado | Seção `intent` do YAML |
 | `AUTH: user said "<exact words>"` | Ação irreversível (push, deploy, publish) | Seção `auth` do YAML |
 | `PENDING: <action> - awaiting your authorization` | Ação prescrita pelas docs mas não executada | Seção `pending` do YAML |
-| `TWINS: searched <pattern> - found <N> other sites: <files>` | Defeito foi corrigido | Seção `twin` do YAML |
+| `TWINS: searched <pattern> - found <N> other sites: <files>` | `twins.defect_fixed: true` | Seção `twins` do YAML |
 
 ## Procedimento
 
@@ -50,6 +50,11 @@ Se as docs do projeto prescrevem uma ação pós-tarefa (deploy, restart):
 - Se ausente: registre o follow-up pendente.
 
 ### 4. Verificar TWINS
+
+O sinal é `twins.defect_fixed`, gravado pela fase TWIN CHECK — não "as
+verificações passaram", que é o estado normal de qualquer tarefa concluída e
+faria esta linha ser cobrada sempre. Se a fase TWIN CHECK não rodou, a
+resposta não foi registrada e a linha fica em aberto.
 
 Se um defeito foi corrigido:
 - O YAML deve ter a seção `twin` com o padrão buscado e resultados.

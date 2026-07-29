@@ -216,7 +216,7 @@ used together, and `--judge` cannot be combined with either one.
 | `--ruff-paths PATH ...` | `src/ tests/` | Paths passed to Ruff |
 | `--test-paths PATH ...` | `tests/` | Paths passed to pytest |
 | `--ignore PATH ...` | none | Paths excluded from pytest |
-| `--cov-source VALUE` | `src` | Coverage source passed to pytest-cov |
+| `--cov-source VALUE` | auto-detected | Coverage source passed to pytest-cov: read from `[tool.coverage.run] source` in `pyproject.toml`, falling back to `src` |
 | `--gate PERCENT` | `70` | Minimum coverage percentage |
 
 Example for a project with a different layout:
@@ -470,6 +470,11 @@ make clean
 Tests mock the subprocess wrapper rather than invoking Ruff, pytest, or ripgrep
 for most unit cases. This keeps the unit suite deterministic while preserving
 coverage for command construction and result parsing.
+
+The tests that exercise the judge against Git are a deliberate exception: they
+build a real repository under `tmp_path` and invoke `git`. Blindness to
+committed or untracked changes cannot be reproduced against a mock, because the
+mock is precisely what would hide it.
 
 Adversarial evaluation scenarios live under `eval/scenarios/`. Run them with:
 

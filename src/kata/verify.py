@@ -87,7 +87,7 @@ def run_pytest(
 
 
 def run_coverage(
-    source: str = "kata",
+    source: str = "src",
     testpaths: list[str] | None = None,
     ignore: list[str] | None = None,
     gate: float = 70.0,
@@ -218,13 +218,17 @@ def run_all(
     ruff_paths: list[str] | None = None,
     test_paths: list[str] | None = None,
     ignore: list[str] | None = None,
-    cov_source: str = "kata",
+    cov_source: str = "src",
     gate: float = 70.0,
     cwd: Path | None = None,
 ) -> dict[str, VerifyResult]:
     """Executa todas as verificações: ruff → pytest → coverage.
 
     Otimização: coverage só roda se pytest passar (short-circuit).
+
+    `cov_source` default é "src" — este módulo é genérico e não deve supor
+    o nome do pacote de nenhum projeto, inclusive o próprio kata. Quem
+    conhece o projeto é o CLI, via cli._detect_cov_source().
 
     Returns:
         Dicionário com chaves "ruff", "pytest", "coverage" e seus resultados.

@@ -259,6 +259,19 @@ class TestRunAll:
         results = run_all()
         assert set(results.keys()) == {"ruff", "pytest", "coverage"}
 
+    @patch("kata.verify._run")
+    def test_default_cov_source_is_generic(self, mock_run: MagicMock) -> None:
+        """kata.verify é genérico: o default de coverage não pode supor o
+        nome do pacote de projeto nenhum — nem o do próprio kata. Quem
+        conhece o projeto é cli._detect_cov_source()."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr=""
+        )
+        run_all()
+        cov_cmd = mock_run.call_args_list[-1][0][0]
+        assert "--cov=src" in cov_cmd
+        assert "--cov=kata" not in cov_cmd
+
 
     @patch("kata.verify._run")
     def test_run_all_pytest_fails_coverage_skipped(self, mock_run: MagicMock) -> None:

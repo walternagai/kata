@@ -135,7 +135,7 @@ kata --task minha-tarefa        # Retoma tarefa específica
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
 | `--test-paths` | `tests/` | Caminhos para pytest |
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
-| `--cov-source` | `src` | Pacote fonte para coverage |
+| `--cov-source` | auto-detectado | Pacote fonte para coverage: lê `[tool.coverage.run] source` do `pyproject.toml`, com fallback `src` |
 | `--gate` | `70` | Gate mínimo de coverage (%) |
 
 ## Fases do Ciclo

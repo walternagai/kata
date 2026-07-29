@@ -1,12 +1,12 @@
 # Kata (型) — Agent Instructions
 
-> Python 3.11+ | CLI + OpenCode Agent | Karpathy Development Cycle + Fable Method
+> Python 3.11+ | CLI + OpenCode Agent + Claude Code Skills | Karpathy Development Cycle + Fable Method
 
 ## O que é este repo
 
 Kata é a ferramenta que implementa o ciclo FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT, com JUDGE adversarial opcional.
-Este repositório contém o **código da ferramenta** (CLI + agente OpenCode), não
-um projeto onde o kata é aplicado.
+Este repositório contém o **código da ferramenta** (CLI + agente OpenCode +
+skills do Claude Code), não um projeto onde o kata é aplicado.
 
 A referência técnica detalhada está em [`DOCUMENTATION.md`](DOCUMENTATION.md).
 
@@ -28,8 +28,26 @@ tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_ju
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
   skills/kata-*/SKILL.md 10 skills (8 fases + JUDGE + QUESTION)
-scripts/install.sh       instala via symlinks em ~/.config/opencode/
+claude-code/    skills para o Claude Code
+  skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
+  skills/kata-*/SKILL.md as mesmas 10 skills de fase, portadas 1:1
+eval/           cenários de trap adversarial (python3 eval/run_traps.py)
+scripts/install.sh                instala via symlinks em ~/.config/opencode/
+scripts/install-claude-code.sh    instala via symlinks em ~/.claude/
 ```
+
+Os dois frontends compartilham o mesmo backend Python: só a camada de
+orquestração/interação muda. Ruff, pytest, coverage e o judge sempre rodam
+pelo pacote `kata`.
+
+Diferente do OpenCode, a versão Claude Code é só skills (sem subagente): o
+ciclo pergunta a cada fase, e isso funciona melhor na conversa principal do
+que num subagente isolado que só reporta um resumo no fim.
+
+**Uma fase existe em triplicata.** Ao mudar o comportamento de uma fase,
+sincronize os três lugares: `opencode/skills/kata-<fase>/SKILL.md`,
+`claude-code/skills/kata-<fase>/SKILL.md` e — para fases com lógica objetiva
+(FIT, VERIFY, JUDGE) — a função correspondente em `src/kata/`.
 
 - `fit.py` é a lógica do fit gate (diff_stats, is_trivial) modularizada para
   testes independentes.
@@ -46,27 +64,40 @@ scripts/install.sh       instala via symlinks em ~/.config/opencode/
 make test      # pytest + coverage (gate 70%)
 make lint      # ruff check src/ tests/
 make format    # ruff format src/ tests/
-make install   # symlinks do agente + skills em ~/.config/opencode/
-make uninstall # remove os symlinks
+
+make install                 # symlinks do agente + skills em ~/.config/opencode/
+make uninstall               # remove os symlinks
+make install-claude-code     # symlinks das skills em ~/.claude/
+make uninstall-claude-code   # remove os symlinks
 ```
 
 Rodar um único teste: `python3 -m pytest tests/test_verify.py::TestRunRuff -v`
 
 Ordem recomendada: `make lint && make test`.
 
-## Instalação do agente — symlinks, não cópias
+## Instalação — symlinks, não cópias
 
-`scripts/install.sh` cria **symlinks** de `opencode/` para `~/.config/opencode/`.
-Isso significa que editar arquivos em `opencode/` reflete imediatamente no
-OpenCode sem reinstalar. Use `make reinstall` só se criar **novos** arquivos de
-skill/agent.
+`scripts/install.sh` cria **symlinks** de `opencode/` para `~/.config/opencode/`;
+`scripts/install-claude-code.sh` faz o mesmo de `claude-code/skills/` para
+`~/.claude/skills/`. Isso significa que editar arquivos em `opencode/` ou
+`claude-code/` reflete imediatamente sem reinstalar. Use `make reinstall` /
+`make reinstall-claude-code` só se criar **novos** arquivos de skill/agent.
+
+Ambos respeitam `OPENCODE_CONFIG_DIR` / `CLAUDE_CONFIG_DIR` quando definidos.
+Há instaladores PowerShell equivalentes (`scripts/*.ps1`) com `-Copy` para
+ambientes sem symlink e `-Uninstall`.
 
 ## Cobertura de testes
 
 - `pyproject.toml` omite só `__main__.py` — **`cli.py` é medido**.
 - Gate: `fail_under = 70`. Cobertura atual: alta (ver `make test` para número exato).
-- Testes mockam `kata.verify._run` (wrapper de subprocess) — nunca chamam
-  ruff/pytest reais nos testes.
+- Testes mockam `kata.verify._run` (wrapper de subprocess) — ruff e pytest
+  reais nunca são invocados pela suíte.
+- Exceção deliberada: as classes que exercitam o JUDGE contra o git
+  (`TestJudgeTaskDetectsCommittedFraud`, `TestJudgeSeesUntrackedFiles`) criam
+  um repositório real em `tmp_path` e chamam `git` de verdade. Cegueira a
+  commit/untracked não é reproduzível com mock — o mock é justamente o que
+  esconderia o defeito.
 
 ## Convenções de código
 

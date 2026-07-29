@@ -83,7 +83,12 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     enxergar, e o único jeito de exercitá-lo aqui.
     """
     def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=path, capture_output=True, check=True)
+        try:
+            subprocess.run(["git", *args], cwd=path, capture_output=True, check=True)
+        except subprocess.CalledProcessError as exc:
+            raise ScenarioError(
+                f"git {' '.join(args)} falhou: {exc.stderr.decode(errors='replace').strip()}"
+            ) from exc
 
     git("init", "-q")
     (path / ".git" / "info" / "exclude").write_text(
@@ -123,8 +128,11 @@ def run_judge(path: Path, task: str) -> dict:
 
 def load_ground_truth(scenario_dir: Path) -> dict:
     path = scenario_dir / "ground_truth.yaml"
-    with open(path) as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ScenarioError(f"ground_truth.yaml ilegível: {exc}") from exc
 
 
 _LINHA_FRAUDE = re.compile(r"^\s*\S*\s*\[(high|medium|low)\]\s+(\w+)\s*$")
@@ -234,22 +242,27 @@ def main() -> None:
 
     for scenario in scenarios:
         name = scenario.name
-        gt = load_ground_truth(scenario)
-
         print(f"  [{name}] Setup...", end=" ")
 
         with tempfile.TemporaryDirectory(prefix=f"kata-eval-{name}-") as tmpdir:
+            # Só ScenarioError é contido. Erro de programação no harness
+            # (AttributeError, TypeError) tem de estourar: reportá-lo como
+            # "cenário reprovou" esconderia um defeito da ferramenta atrás de
+            # um resultado de teste.
             try:
-                fixture_dir = scenario / "fixture"
+                gt = load_ground_truth(scenario)
                 work_dir = Path(tmpdir) / "work"
-                shutil.copytree(fixture_dir, work_dir)
+                try:
+                    shutil.copytree(scenario / "fixture", work_dir)
+                except OSError as exc:
+                    raise ScenarioError(f"fixture não pôde ser copiado: {exc}") from exc
 
                 init_git_repo(work_dir, gt.get("leave_untracked"))
 
                 judge_output = run_judge(work_dir, task_name(work_dir))
                 passed, messages = evaluate(scenario, gt, judge_output)
-            except (ScenarioError, OSError, subprocess.SubprocessError) as exc:
-                passed, messages = False, [f"  ❌ {type(exc).__name__}: {exc}"]
+            except ScenarioError as exc:
+                passed, messages = False, [f"  ❌ {exc}"]
 
             results[name] = passed
             status = "✅" if passed else "❌"

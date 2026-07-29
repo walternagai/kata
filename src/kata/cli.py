@@ -333,11 +333,15 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     if not sys.stdin.isatty():
         print("(modo não-interativo — assumindo code-loop)")
+        # `skipped`, não `answered`: nenhum humano respondeu nada aqui. Marcar
+        # como respondido fazia esta fase ser saltada para sempre, inclusive
+        # num ciclo interativo posterior na mesma tarefa.
         data["fit"] = {
             "trivial": False,
             "route": "code-loop",
             "reason": "non-interactive mode",
-            "answered": True,
+            "answered": False,
+            "skipped": True,
         }
         return data
 
@@ -396,12 +400,16 @@ def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     if not sys.stdin.isatty():
         print("(modo não-interativo — pulando THINK)")
+        # `skipped`, não `answered`: nenhum humano respondeu nada aqui. Marcar
+        # como respondido fazia esta fase ser saltada para sempre, inclusive
+        # num ciclo interativo posterior na mesma tarefa.
         data["think"] = {
             "problem": "",
             "assumptions": [],
             "alternatives": [],
             "unknowns": "",
-            "answered": True,
+            "answered": False,
+            "skipped": True,
         }
         return data
 
@@ -501,12 +509,16 @@ def _step_intent(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     if not sys.stdin.isatty():
         print("(modo não-interativo — assumindo intenção alinhada)")
+        # `skipped`, não `answered`: nenhum humano respondeu nada aqui. Marcar
+        # como respondido fazia esta fase ser saltada para sempre, inclusive
+        # num ciclo interativo posterior na mesma tarefa.
         data["intent"] = {
             "code_does": "",
             "check_expects": "",
             "spec_says": "",
             "all_agree": True,
-            "answered": True,
+            "answered": False,
+            "skipped": True,
         }
         return data
 
@@ -1025,6 +1037,19 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     caveats: list[str] = []
     if status == "rejected":
         caveats.append("Ciclo rejeitado — problemas de qualidade pendentes")
+    # Fase preenchida com default em modo não-interativo não foi verificada por
+    # ninguém. Um relatório que não diz isso apresenta como cumprido um gate
+    # que só foi contornado.
+    puladas = [
+        nome.upper()
+        for nome in ("fit", "think", "intent")
+        if data.get(nome, {}).get("skipped")
+    ]
+    if puladas:
+        caveats.append(
+            f"{', '.join(puladas)} preenchida(s) com default em modo não-interativo — "
+            "ninguém respondeu"
+        )
     scratch = _detect_scratch_files()
     if scratch:
         caveats.append(f"Arquivos temporários detectados: {', '.join(scratch)}")
@@ -1078,6 +1103,7 @@ def _init_task(task: str) -> None:
             "route": "code-loop",
             "reason": "",
             "answered": False,
+            "skipped": False,
         },
         "think": {
             "problem": "",
@@ -1085,6 +1111,7 @@ def _init_task(task: str) -> None:
             "alternatives": [],
             "unknowns": "",
             "answered": False,
+            "skipped": False,
         },
         "simplify": {
             "minimum_code": True,
@@ -1097,6 +1124,7 @@ def _init_task(task: str) -> None:
             "spec_says": "",
             "all_agree": True,
             "answered": False,
+            "skipped": False,
         },
         "surgical": {
             "files": [],

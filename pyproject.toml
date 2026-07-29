@@ -34,7 +34,7 @@ target-version = "py311"
 # um F401 justamente para o judge reprovar a re-execução do ruff. São dados de
 # teste, não código do projeto. `eval/run_traps.py`, que é código de verdade,
 # continua lintado.
-extend-exclude = ["eval/scenarios/*/fixture"]
+extend-exclude = ["eval/scenarios/*/fixture", "eval/scenarios/*/baseline"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]

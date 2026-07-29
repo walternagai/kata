@@ -67,6 +67,53 @@ def task_name(fixture_dir: Path) -> str:
     return tarefas[0]
 
 
+def _git_em(path: Path):
+    """Executor de git ligado a um diretório, com falha virando ScenarioError."""
+    def git(*args: str) -> None:
+        try:
+            subprocess.run(["git", *args], cwd=path, capture_output=True, check=True)
+        except subprocess.CalledProcessError as exc:
+            raise ScenarioError(
+                f"git {' '.join(args)} falhou: {exc.stderr.decode(errors='replace').strip()}"
+            ) from exc
+    return git
+
+
+def _aplica_baseline(path: Path, baseline: Path, task: str, git) -> None:
+    """Commita um estado limpo, reaplica o fixture por cima e commita também.
+
+    Sem isto todo fixture é arquivo novo (o harness faz `git add -A` num repo
+    sem commit), e desde o fix do R4-1 arquivo novo pula _WEAKENED_PATTERNS.
+    Os cinco padrões originais — assert removido, teste comentado, corpo virado
+    pass, noqa adicionado — e o caminho base_commit não tinham cenário nenhum.
+
+    O SHA do baseline é gravado no task YAML: só ele existe em tempo de
+    execução, então o fixture não pode trazê-lo pronto.
+    """
+    posterior = {
+        arquivo: arquivo.read_bytes()
+        for arquivo in path.rglob("*")
+        if arquivo.is_file() and ".git" not in arquivo.parts
+    }
+
+    shutil.copytree(baseline, path, dirs_exist_ok=True)
+    git("add", "-A")
+    git("commit", "-q", "-m", "baseline limpo")
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    for arquivo, conteudo in posterior.items():
+        arquivo.write_bytes(conteudo)
+    git("add", "-A")
+    git("commit", "-q", "-m", "tarefa concluida")
+
+    caminho_task = path / ".kata" / f"{task}.yaml"
+    dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
+    dados["base_commit"] = sha
+    caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
 def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     """Inicializa um repositório git com o fixture staged, sem commit.
 
@@ -82,13 +129,7 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     que fiquem só na árvore de trabalho. É o estado que o judge era cego a
     enxergar, e o único jeito de exercitá-lo aqui.
     """
-    def git(*args: str) -> None:
-        try:
-            subprocess.run(["git", *args], cwd=path, capture_output=True, check=True)
-        except subprocess.CalledProcessError as exc:
-            raise ScenarioError(
-                f"git {' '.join(args)} falhou: {exc.stderr.decode(errors='replace').strip()}"
-            ) from exc
+    git = _git_em(path)
 
     git("init", "-q")
     (path / ".git" / "info" / "exclude").write_text(
@@ -259,7 +300,12 @@ def main() -> None:
 
                 init_git_repo(work_dir, gt.get("leave_untracked"))
 
-                judge_output = run_judge(work_dir, task_name(work_dir))
+                tarefa = task_name(work_dir)
+                baseline = scenario / "baseline"
+                if baseline.is_dir():
+                    _aplica_baseline(work_dir, baseline, tarefa, _git_em(work_dir))
+
+                judge_output = run_judge(work_dir, tarefa)
                 passed, messages = evaluate(scenario, gt, judge_output)
             except ScenarioError as exc:
                 passed, messages = False, [f"  ❌ {exc}"]

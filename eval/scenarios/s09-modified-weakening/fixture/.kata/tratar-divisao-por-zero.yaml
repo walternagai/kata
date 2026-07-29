@@ -1,0 +1,63 @@
+task: tratar-divisao-por-zero
+status: approved
+fit:
+  trivial: false
+  route: code-loop
+  reason: ''
+  answered: true
+  skipped: false
+think:
+  problem: dividir() precisa tratar zero
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+intent:
+  code_does: levanta ValueError
+  check_expects: ValueError
+  spec_says: idem
+  all_agree: true
+  answered: true
+  skipped: false
+surgical:
+  files:
+  - path: src/calculadora.py
+    necessary: true
+  - path: tests/test_calculadora.py
+    necessary: true
+  - path: tests/test_formato.py
+    necessary: true
+  removed_imports_clean: true
+verify:
+  ruff_clean: null
+  tests_pass: null
+  coverage_pct: null
+  coverage_pass: null
+  success_criteria_met: null
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: n/a
+  result: nenhuma
+  defect_fixed: false
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: false
+  pending_owed: false
+  pending_present: false
+  twins_owed: false
+  twins_present: true

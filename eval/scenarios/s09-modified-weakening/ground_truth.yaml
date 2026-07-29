@@ -1,0 +1,15 @@
+# Único cenário com diff de MODIFICAÇÃO. O diretório baseline/ é commitado
+# primeiro, o fixture é reaplicado por cima e commitado, e o SHA do baseline vai
+# para base_commit — o estado de uma tarefa de verdade já concluída.
+#
+# Sem isto, o harness fazia `git add -A` num repo sem commit e todo arquivo era
+# novo. Desde o fix do R4-1, arquivo novo pula _WEAKENED_PATTERNS, então os cinco
+# padrões originais e o caminho base_commit não tinham cenário nenhum.
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: weakened_checks
+    severity: high
+    description_contains: "corpo de teste substituído por pass"
+  - type: weakened_checks
+    severity: high
+    description_contains: "teste virado em comentário"

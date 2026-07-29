@@ -358,12 +358,14 @@ fit:
   route: code-loop
   reason: ""
   answered: false
+  skipped: false
 think:
   problem: ""
   assumptions: []
   alternatives: []
   unknowns: ""
   answered: false
+  skipped: false      # filled with defaults, nobody answered
 simplify:
   minimum_code: true
   no_single_use_abstractions: true
@@ -374,6 +376,7 @@ intent:
   spec_says: ""
   all_agree: true
   answered: false
+  skipped: false
 surgical:
   files: []
   removed_imports_clean: true

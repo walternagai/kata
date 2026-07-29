@@ -100,12 +100,15 @@ fit:
   reason: ""
   answered: false      # grave true ao concluir o FIT, senão ele repergunta
                        # a cada retomada da tarefa
+  skipped: false       # true só se a fase foi preenchida com default sem
+                       # ninguém responder (modo não-interativo)
 think:
   problem: ""
   assumptions: []
   alternatives: []
   unknowns: ""
   answered: false
+  skipped: false
 simplify:
   minimum_code: true
   no_single_use_abstractions: true
@@ -116,6 +119,7 @@ intent:
   spec_says: ""
   all_agree: true
   answered: false
+  skipped: false
 surgical:
   files: []
   removed_imports_clean: true

@@ -1,0 +1,11 @@
+import pytest
+
+from src.calculadora import dividir
+
+
+def test_dividir():
+    assert dividir(10, 2) == 5.0
+
+
+def test_dividir_por_zero():
+    pass

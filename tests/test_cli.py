@@ -281,11 +281,15 @@ class TestStepThink:
     """Testa _step_think em modos interativo e não-interativo."""
 
     @patch("kata.cli.sys.stdin")
-    def test_step_think_non_tty_skips(self, mock_stdin) -> None:
+    def test_step_think_non_tty_marks_skipped_not_answered(self, mock_stdin) -> None:
+        """Preencher com default não é responder. Enquanto isto gravava
+        `answered: True`, um ciclo headless fazia o ciclo interativo seguinte
+        pular THINK para sempre — a fase que é a premissa da ferramenta."""
         mock_stdin.isatty.return_value = False
         data: dict = {"think": {}}
         result = cli._step_think("task", data)
-        assert result["think"]["answered"] is True
+        assert result["think"]["answered"] is False
+        assert result["think"]["skipped"] is True
 
     def test_step_think_already_answered(self, capsys) -> None:
         data: dict = {"think": {"answered": True, "problem": "old"}}
@@ -921,15 +925,74 @@ class TestStepSurgicalNoFiles:
         assert result["surgical"]["removed_imports_clean"] is True
 
 
+class TestHeadlessNaoEnvenenaATarefa:
+    """Um ciclo sem tty preenche FIT, THINK e INTENT com defaults. Enquanto isso
+    gravava `answered: True`, o guard no topo de cada fase as saltava para
+    sempre — inclusive num ciclo interativo posterior na mesma tarefa. Nenhum
+    teste cobria a sequência headless → interativo; dois testes fixavam
+    justamente o comportamento defeituoso."""
+
+    def _ciclo_headless(self) -> dict:
+        data: dict = {"task": "t", "status": "draft"}
+        with patch("kata.cli.sys.stdin") as stdin, patch("kata.cli.untracked_files",
+                                                          return_value=[]):
+            stdin.isatty.return_value = False
+            data = cli._step_fit("t", data)
+            data = cli._step_think("t", data)
+            data = cli._step_intent("t", data)
+        return data
+
+    def test_headless_nao_marca_como_respondido(self) -> None:
+        data = self._ciclo_headless()
+        for fase in ("fit", "think", "intent"):
+            assert data[fase]["answered"] is False, fase
+            assert data[fase]["skipped"] is True, fase
+
+    def test_ciclo_interativo_posterior_ainda_pergunta(self, capsys) -> None:
+        data = self._ciclo_headless()
+        capsys.readouterr()
+
+        with patch("kata.cli.sys.stdin") as stdin, \
+             patch("kata.cli.input", return_value="resposta"), \
+             patch("kata.cli._confirm", return_value=True):
+            stdin.isatty.return_value = True
+            depois = cli._step_think("t", dict(data))
+        saida = capsys.readouterr().out
+
+        assert "já respondido" not in saida
+        assert depois["think"]["problem"] == "resposta"
+        assert depois["think"]["answered"] is True
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_relatorio_declara_as_fases_puladas(self, mock_scratch, capsys) -> None:
+        """Corrigir o mecanismo não basta: uma tarefa que rodou headless e foi
+        aprovada seguia com THINK vazio e o relatório não dizia nada."""
+        data = self._ciclo_headless()
+        capsys.readouterr()
+        data["status"] = "approved"
+        data["verify"] = {"ruff_clean": True, "tests_pass": True,
+                          "coverage_pass": True, "coverage_pct": 91.0}
+        data["artifact"] = {}
+
+        cli._step_report("t", data)
+        saida = capsys.readouterr().out
+
+        assert "Caveats" in saida
+        assert "FIT, THINK, INTENT" in saida
+        assert "ninguém respondeu" in saida
+
+
 class TestStepIntent:
     """Testa _step_intent em modos interativo e não-interativo."""
 
     @patch("kata.cli.sys.stdin")
-    def test_intent_non_tty(self, mock_stdin) -> None:
+    def test_intent_non_tty_marks_skipped_not_answered(self, mock_stdin) -> None:
+        """Mesma razão de test_step_think_non_tty_marks_skipped_not_answered."""
         mock_stdin.isatty.return_value = False
         data: dict = {}
         result = cli._step_intent("task", data)
-        assert result["intent"]["answered"] is True
+        assert result["intent"]["answered"] is False
+        assert result["intent"]["skipped"] is True
         assert result["intent"]["all_agree"] is True
         assert result["intent"]["code_does"] == ""
 

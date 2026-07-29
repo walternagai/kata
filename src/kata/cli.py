@@ -217,6 +217,12 @@ def _print_judge_verdict(result: JudgeResult) -> None:
             print(f"    • {c}")
         print()
 
+    if result.unverifiable_claims:
+        print("  Claims aceitas sem verificação (não re-executáveis):")
+        for c in result.unverifiable_claims:
+            print(f"    • {c}")
+        print()
+
     if result.frauds:
         print("  Fraudes encontradas:")
         for f in result.frauds:
@@ -616,19 +622,28 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
         or _confirm("  Um defeito foi corrigido? Deseja buscar padrão similar?", default=False)
     )
 
+    # `defect_fixed` é gravado porque é a única evidência de que um defeito
+    # foi corrigido: sem ele, _detect_twins_owed não tem como distinguir uma
+    # correção de defeito de uma tarefa aprovada qualquer.
     if not defect_fixed:
-        data["twins"] = {"searched": False, "pattern": "", "result": ""}
+        data["twins"] = {
+            "searched": False, "pattern": "", "result": "", "defect_fixed": False,
+        }
         return data
 
     if not sys.stdin.isatty():
-        data["twins"] = {"searched": False, "pattern": "", "result": ""}
+        data["twins"] = {
+            "searched": False, "pattern": "", "result": "", "defect_fixed": True,
+        }
         return data
 
     _print_header("TWIN CHECK — Busca de padrão recorrente")
 
     pattern = input("  Padrão a buscar (regex): ").strip()
     if not pattern:
-        data["twins"] = {"searched": False, "pattern": "", "result": ""}
+        data["twins"] = {
+            "searched": False, "pattern": "", "result": "", "defect_fixed": True,
+        }
         return data
 
     print(f"\n  Buscando '{pattern}' no projeto...")
@@ -655,6 +670,7 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
         "pattern": pattern,
         "result": result_str,
         "searched": True,
+        "defect_fixed": True,
         "matches_count": len(search_result.matches),
         "files_count": search_result.total_files,
         "fix_applied": fix_others,
@@ -673,6 +689,25 @@ def _has_deploy_docs() -> bool:
         return any(kw in text for kw in deploy_keywords)
     except Exception:
         return False
+
+
+_DOC_SUFFIXES = frozenset({".md", ".rst", ".txt"})
+
+
+def _detect_intent_owed(data: dict[str, Any]) -> bool:
+    """Detecta se INTENT line é devida (comportamento mudou).
+
+    Devida quando SURGICAL declarou pelo menos um arquivo alterado que não
+    é documentação. Antes bastava VERIFY ter rodado, o que tornava INTENT
+    devida em toda tarefa — inclusive numa mudança só de docs, onde não há
+    "o que o código FAZ" a declarar. A fonte é surgical.files, e não o git,
+    porque SURGICAL é a fase que estabelece o que mudou.
+    """
+    files = data.get("surgical", {}).get("files", [])
+    return any(
+        path and Path(path).suffix.lower() not in _DOC_SUFFIXES
+        for path in (f.get("path", "") for f in files)
+    )
 
 
 def _detect_auth_owed(data: dict[str, Any]) -> bool:
@@ -702,20 +737,20 @@ def _detect_pending_owed(data: dict[str, Any]) -> bool:
 
 
 def _detect_twins_owed(data: dict[str, Any]) -> bool:
-    """Detecta se TWINS line é devida (defeito corrigido, padrão pode se repetir)."""
-    # Heurística 1: intent teve conflito (spec betrayal potencial)
+    """Detecta se TWINS line é devida (defeito corrigido, padrão pode se repetir).
+
+    "Testes e coverage passaram" era um dos sinais, o que tornava TWINS
+    devida em toda tarefa aprovada — passar nas verificações é o estado
+    normal de uma tarefa concluída, não evidência de defeito corrigido.
+    Sobram os sinais que de fato indicam correção de defeito.
+    """
+    # Sinal 1: intent teve conflito (spec betrayal potencial)
     intent = data.get("intent", {})
     if intent.get("answered") and not intent.get("all_agree"):
         return True
-    # Heurística 2: verify passou (defeito possivelmente corrigido)
-    verify = data.get("verify", {})
-    if verify.get("tests_pass") and verify.get("coverage_pass"):
-        return True
-    # Heurística 3: dados de twins já existentes
+    # Sinal 2: o TWIN CHECK registrou que um defeito foi corrigido
     twins = data.get("twins", {})
-    if twins.get("pattern"):
-        return True
-    return False
+    return bool(twins.get("defect_fixed") or twins.get("pattern"))
 
 
 def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -727,10 +762,9 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
     _print_header("4.5 ARTIFACT — Verificação de linhas devidas")
 
     intent = data.get("intent", {})
-    verify = data.get("verify", {})
 
-    # Intent: devida se verify foi executado com mudança de comportamento
-    intent_owed = verify.get("tests_pass") is not None
+    # INTENT: devida se a tarefa alterou algum arquivo que não é documentação
+    intent_owed = _detect_intent_owed(data)
     intent_present = bool(intent.get("answered")) and intent.get("code_does", "") != ""
 
     # AUTH: devida se ação irreversível foi tomada

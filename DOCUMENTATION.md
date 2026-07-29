@@ -291,6 +291,13 @@ Checks whether evidence lines are due and present:
 | `PENDING` | Documentation prescribes a follow-up that was not taken |
 | `TWINS` | A defect was fixed and recurring patterns should be searched |
 
+`INTENT` is due when SURGICAL declared at least one changed file that is not
+documentation, so a docs-only task is not asked what its code does. `TWINS`
+is due when a defect was actually declared fixed — either the intent gate
+recorded a conflict, or the TWIN CHECK recorded that a defect was corrected.
+Passing lint, tests and coverage is the normal state of a finished task, not
+evidence that a defect was fixed; a gate that fires on every task is noise.
+
 ### REPORT
 
 Prints the outcome first, followed by the problem, changed files, verification
@@ -306,6 +313,13 @@ The judge is opt-in. It re-runs claimed checks and returns:
 | `VERIFIED` | No fraud was detected |
 | `VERIFIED WITH CAVEATS` | Only medium- or low-severity findings were detected |
 | `REFUTED` | At least one high-severity finding was detected |
+
+Claims are reported in two groups. Lint, tests, coverage, surgical scope and
+intent alignment are confronted with the repository and listed as verified.
+The success criterion is not: it is a subjective confirmation the user gives
+during VERIFY, and no command reproduces it. It is listed separately as
+accepted without verification, and it adds a caveat. Presenting it as
+verified would be exactly the fraud the judge exists to hunt.
 
 ## Task files
 
@@ -401,6 +415,7 @@ number of files containing matches.
 
 ```python
 collect_claims(task_data) -> list[str]
+collect_unverifiable_claims(task_data) -> list[str]
 hunt_weakened_checks(diff) -> list[JudgeFraud]
 hunt_false_completion(task_data, verify_results) -> list[JudgeFraud]
 hunt_scope_creep(task_data, changed) -> list[JudgeFraud]
@@ -410,8 +425,8 @@ hunt_debris(diff, changed) -> list[JudgeFraud]
 judge_task(task_data, cwd=None, ...) -> JudgeResult
 ```
 
-`JudgeResult` contains the verdict, extracted claims, caveats, fraud findings,
-re-executed checks, and metadata.
+`JudgeResult` contains the verdict, verified claims, unverifiable claims,
+caveats, fraud findings, re-executed checks, and metadata.
 
 ## OpenCode integration
 

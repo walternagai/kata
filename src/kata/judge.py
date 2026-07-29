@@ -64,7 +64,9 @@ class JudgeResult:
 
     Attributes:
         verdict: VERIFIED | VERIFIED WITH CAVEATS | REFUTED
-        claims: Lista de claims extraídas do relatório da tarefa.
+        claims: Claims que o juiz consegue confrontar com a realidade.
+        unverifiable_claims: Claims aceitas sem verificação, por não haver
+            comando que as reproduza.
         caveats: Ressalvas sobre o resultado.
         frauds: Fraudes encontradas durante a verificação.
         re_ran_checks: Resultados da re-execução das verificações.
@@ -73,6 +75,7 @@ class JudgeResult:
 
     verdict: str = "VERIFIED"
     claims: list[str] = field(default_factory=list)
+    unverifiable_claims: list[str] = field(default_factory=list)
     caveats: list[str] = field(default_factory=list)
     frauds: list[JudgeFraud] = field(default_factory=list)
     re_ran_checks: dict[str, bool] = field(default_factory=dict)
@@ -83,7 +86,11 @@ class JudgeResult:
 
 
 def collect_claims(task_data: dict[str, Any]) -> list[str]:
-    """Extrai claims explícitas do YAML da tarefa."""
+    """Extrai as claims que o juiz consegue confrontar com a realidade.
+
+    O critério de sucesso fica de fora de propósito — ver
+    collect_unverifiable_claims.
+    """
     claims: list[str] = []
     verify = task_data.get("verify", {})
     if verify.get("ruff_clean"):
@@ -92,8 +99,6 @@ def collect_claims(task_data: dict[str, Any]) -> list[str]:
         claims.append("todos os testes passam")
     if verify.get("coverage_pass"):
         claims.append(f"coverage ≥ gate ({verify.get('coverage_pct', '?')}%)")
-    if verify.get("success_criteria_met"):
-        claims.append("critério de sucesso satisfeito")
 
     surgical = task_data.get("surgical", {})
     files = surgical.get("files", [])
@@ -106,6 +111,20 @@ def collect_claims(task_data: dict[str, Any]) -> list[str]:
     if intent.get("all_agree"):
         claims.append("intenção alinhada: código, teste e spec concordam")
 
+    return claims
+
+
+def collect_unverifiable_claims(task_data: dict[str, Any]) -> list[str]:
+    """Extrai as claims que o juiz aceita sem poder verificar.
+
+    O critério de sucesso é uma confirmação subjetiva que o usuário dá no
+    VERIFY: não existe comando que o reproduza. Apresentá-lo junto das
+    claims verificadas faria o relatório afirmar uma verificação que não
+    aconteceu — a fraude que este módulo existe para caçar.
+    """
+    claims: list[str] = []
+    if task_data.get("verify", {}).get("success_criteria_met"):
+        claims.append("critério de sucesso satisfeito")
     return claims
 
 
@@ -363,6 +382,7 @@ def judge_task(
     diff = _run_git_diff(cwd=cwd, base_commit=base_commit)
     changed = _changed_files(cwd=cwd, base_commit=base_commit)
     claims = collect_claims(task_data)
+    unverifiable = collect_unverifiable_claims(task_data)
 
     verify = task_data.get("verify", {})
     claimed_checks: list[str] = []
@@ -400,6 +420,10 @@ def judge_task(
 
     high = [f for f in frauds if f.severity == "high"]
     caveats: list[str] = []
+    if unverifiable:
+        caveats.append(
+            f"{len(unverifiable)} claim(s) aceita(s) sem verificação (não re-executáveis)"
+        )
     if any(not ok for ok in re_ran.values()):
         failed = [k for k, v in re_ran.items() if not v]
         caveats.append(f"re-execução falhou: {', '.join(failed)}")
@@ -415,6 +439,7 @@ def judge_task(
     return JudgeResult(
         verdict=verdict,
         claims=claims,
+        unverifiable_claims=unverifiable,
         caveats=caveats,
         frauds=frauds,
         re_ran_checks=re_ran,

@@ -839,6 +839,7 @@ class TestStepArtifact:
         data: dict = {
             "intent": {"answered": True, "code_does": "func X"},
             "verify": {"tests_pass": True},
+            "surgical": {"files": [{"path": "src/app.py", "necessary": True}]},
         }
         result = cli._step_artifact("task", data)
         assert result["artifact"]["intent_owed"] is True
@@ -847,16 +848,36 @@ class TestStepArtifact:
     @patch("kata.cli.sys.stdin")
     def test_artifact_non_tty_missing_intent(self, mock_stdin) -> None:
         mock_stdin.isatty.return_value = False
-        data: dict = {"verify": {"tests_pass": True}}
+        data: dict = {
+            "verify": {"tests_pass": True},
+            "surgical": {"files": [{"path": "src/app.py", "necessary": True}]},
+        }
         result = cli._step_artifact("task", data)
         assert result["artifact"]["intent_owed"] is True
         assert result["artifact"]["intent_present"] is False
 
     @patch("kata.cli.sys.stdin")
     def test_artifact_non_tty_no_intent_needed(self, mock_stdin) -> None:
-        """Se verify não tem tests_pass, INTENT não é devida."""
+        """Sem arquivo de código alterado, INTENT não é devida."""
         mock_stdin.isatty.return_value = False
         data: dict = {"intent": {}}
+        result = cli._step_artifact("task", data)
+        assert result["artifact"]["intent_owed"] is False
+
+    @patch("kata.cli.sys.stdin")
+    def test_artifact_docs_only_change_owes_no_intent(self, mock_stdin) -> None:
+        """Mudança só de documentação não tem "o que o código FAZ" a declarar.
+        Antes, bastava VERIFY ter rodado para INTENT ser cobrada."""
+        mock_stdin.isatty.return_value = False
+        data: dict = {
+            "verify": {"tests_pass": True, "coverage_pass": True},
+            "surgical": {
+                "files": [
+                    {"path": "README.md", "necessary": True},
+                    {"path": "docs/guide.rst", "necessary": True},
+                ]
+            },
+        }
         result = cli._step_artifact("task", data)
         assert result["artifact"]["intent_owed"] is False
 
@@ -911,7 +932,10 @@ class TestStepArtifact:
     ) -> None:
         """Em modo interativo, preenche INTENT/AUTH/PENDING/TWINS ausentes via input()."""
         mock_stdin.isatty.return_value = True
-        data: dict = {"verify": {"tests_pass": True}}
+        data: dict = {
+            "verify": {"tests_pass": True},
+            "surgical": {"files": [{"path": "src/app.py", "necessary": True}]},
+        }
         result = cli._step_artifact("task", data)
 
         assert result["intent"] == {
@@ -951,7 +975,10 @@ class TestStepArtifact:
     ) -> None:
         """Regressão: artifact['intent_present'] deve refletir dados recém-preenchidos."""
         mock_stdin.isatty.return_value = True
-        data: dict = {"verify": {"tests_pass": True}}
+        data: dict = {
+            "verify": {"tests_pass": True},
+            "surgical": {"files": [{"path": "src/app.py", "necessary": True}]},
+        }
         result = cli._step_artifact("task", data)
 
         assert result["artifact"]["intent_owed"] is True
@@ -1592,12 +1619,26 @@ class TestDetectTwinsOwed:
         data = {"intent": {"answered": False, "all_agree": False}}
         assert cli._detect_twins_owed(data) is False
 
-    def test_verify_passed_triggers_twins(self) -> None:
+    def test_verify_passed_alone_does_not_trigger(self) -> None:
+        """Passar nas verificações é o estado normal de uma tarefa concluída,
+        não evidência de defeito corrigido. Enquanto isso bastava, TWINS era
+        devida em toda tarefa aprovada e o gate virava ruído."""
         data = {"verify": {"tests_pass": True, "coverage_pass": True}}
-        assert cli._detect_twins_owed(data) is True
+        assert cli._detect_twins_owed(data) is False
 
     def test_verify_partial_does_not_trigger(self) -> None:
         data = {"verify": {"tests_pass": True, "coverage_pass": False}}
+        assert cli._detect_twins_owed(data) is False
+
+    def test_declared_defect_fix_triggers(self) -> None:
+        data = {"twins": {"defect_fixed": True}}
+        assert cli._detect_twins_owed(data) is True
+
+    def test_declined_defect_fix_does_not_trigger(self) -> None:
+        data = {
+            "verify": {"tests_pass": True, "coverage_pass": True},
+            "twins": {"defect_fixed": False, "searched": False},
+        }
         assert cli._detect_twins_owed(data) is False
 
     def test_verify_none_does_not_trigger(self) -> None:
@@ -1739,6 +1780,21 @@ class TestStepReport:
         assert "src/parser.py" in out
         assert "INTENT:" in out
         assert "92.0%" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_warns_when_owed_intent_is_absent(self, mock_scratch, capsys) -> None:
+        """Comportamento mudou mas a intenção não foi registrada: o relatório
+        tem de dizer isso em vez de passar batido."""
+        data = {
+            "status": "approved",
+            "verify": {"ruff_clean": True, "tests_pass": True,
+                       "coverage_pass": True, "coverage_pct": 91.0},
+            "artifact": {"intent_owed": True, "intent_present": False},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "Caveats" in out
+        assert "INTENT não documentada" in out
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_report_survives_null_coverage_pct(self, mock_scratch, capsys) -> None:
@@ -1934,6 +1990,25 @@ class TestPrintJudgeVerdict:
         assert any("Ressalvas" in c for c in calls)
         assert any("pytest" in c for c in calls)
 
+    def test_unverifiable_claims_are_labelled_apart(self, capsys) -> None:
+        """O critério de sucesso não pode aparecer sob "Claims verificadas":
+        nada o re-executa, e apresentá-lo como verificado é a fraude que o
+        próprio JUDGE existe para caçar."""
+        from kata.judge import JudgeResult
+        result = JudgeResult(
+            verdict="VERIFIED",
+            claims=["todos os testes passam"],
+            unverifiable_claims=["critério de sucesso satisfeito"],
+        )
+        cli._print_judge_verdict(result)
+        out = capsys.readouterr().out
+
+        verificadas = out.index("Claims verificadas:")
+        sem_verificacao = out.index("Claims aceitas sem verificação")
+        assert out.index("todos os testes passam") < sem_verificacao
+        assert verificadas < sem_verificacao
+        assert out.index("critério de sucesso") > sem_verificacao
+
 
 class TestStepTwin:
     """Testa _step_twin — twin check automático após VERIFY."""
@@ -1963,6 +2038,10 @@ class TestStepTwin:
         result = cli._step_twin("task", data)
         assert result["twins"]["searched"] is False
         mock_confirm.assert_called_once()
+        # A resposta "não houve defeito" precisa ficar gravada: é o que
+        # impede _detect_twins_owed de cobrar TWINS de toda tarefa aprovada.
+        assert result["twins"]["defect_fixed"] is False
+        assert cli._detect_twins_owed(result) is False
 
     @patch("kata.cli._confirm", return_value=True)
     @patch("kata.cli.search_pattern")

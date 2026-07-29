@@ -13,6 +13,7 @@ from kata.judge import (
     _changed_files,
     _run_git_diff,
     collect_claims,
+    collect_unverifiable_claims,
     hunt_debris,
     hunt_false_completion,
     hunt_scope_creep,
@@ -91,13 +92,19 @@ class TestCollectClaims:
             "intent": {"all_agree": True},
         }
         claims = collect_claims(data)
-        assert len(claims) == 6
+        assert len(claims) == 5
         assert any("ruff" in c for c in claims)
         assert any("testes" in c for c in claims)
         assert any("coverage" in c for c in claims)
-        assert any("critério" in c for c in claims)
         assert any("intenção" in c for c in claims)
         assert any("arquivo" in c for c in claims)
+        # O critério de sucesso não é re-executável, então não entra aqui.
+        assert not any("critério" in c for c in claims)
+        assert collect_unverifiable_claims(data) == ["critério de sucesso satisfeito"]
+
+    def test_unverifiable_claims_empty_when_criterion_not_met(self) -> None:
+        assert collect_unverifiable_claims({"verify": {"success_criteria_met": False}}) == []
+        assert collect_unverifiable_claims({}) == []
 
     def test_partial_claims(self) -> None:
         data = {"verify": {"ruff_clean": True}}
@@ -572,7 +579,9 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
             }
         }
         result = judge_task(task)
-        assert len(result.claims) == 4
+        assert len(result.claims) == 3
+        assert result.unverifiable_claims == ["critério de sucesso satisfeito"]
+        assert any("sem verificação" in c for c in result.caveats)
 
     def test_re_ran_checks_populated(
         self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock

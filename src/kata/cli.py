@@ -67,13 +67,20 @@ def _ext() -> str:
     return ".yaml" if _HAS_YAML else ".json"
 
 
+def _is_invalid_task_name(task: str) -> bool:
+    """Predicado de path traversal, compartilhado entre CLI (--task/--init/...) e
+    o prompt interativo de _pick_task — um único lugar para a regra em si.
+    """
+    return not task or "/" in task or "\\" in task or ".." in task
+
+
 def _validate_task_name(task: str) -> None:
     """Impede path traversal via nome de tarefa (--task/--init/--judge/--report).
 
     Sem isso, um nome como '../../etc/foo' escreve/lê fora de .kata/, já que
     _task_path só concatena o nome ao diretório sem checar separadores.
     """
-    if not task or "/" in task or "\\" in task or ".." in task:
+    if _is_invalid_task_name(task):
         print(f"⚠  Nome de tarefa inválido: '{task}'. Não pode conter '/', '\\' ou '..'.")
         sys.exit(1)
 
@@ -124,7 +131,7 @@ def _pick_task() -> str:
         elif choice in existing:
             return choice
     name = input("Nome da tarefa: ").strip().replace(" ", "-") or "untitled"
-    if "/" in name or "\\" in name or ".." in name:
+    if _is_invalid_task_name(name):
         print("⚠  Nome de tarefa inválido. Usando 'untitled'")
         return "untitled"
     return name
@@ -1035,10 +1042,6 @@ def main() -> None:
         parser.error("--report e --judge são mutuamente exclusivos")
     if args.report and (args.plan or args.check_only):
         parser.error("--report é mutuamente exclusivo com --plan e --check-only")
-
-    if args.plan and args.task:
-        # --plan e --task: carrega tarefa existente, executa só think
-        pass
 
     _kata_dir().mkdir(parents=True, exist_ok=True)
 

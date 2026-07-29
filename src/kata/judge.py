@@ -30,7 +30,16 @@ _WEAKENED_PATTERNS: list[tuple[str, str]] = [
     (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
 ]
 
-_DEBRIS_FILE_PATTERNS = [r"\.tmp$", r"\.bak$", r"scratch", r"temp\d*"]
+_DEBRIS_FILE_PATTERNS = [
+    r"\.tmp$",
+    r"\.bak$",
+    r"scratch",
+    # "temp" só conta como detrito quando é um segmento isolado do path (delimitado
+    # por /, _, . ou -), não uma substring qualquer — sem isso, "templates/x.html",
+    # "attempt_parser.py", "src/temperature.py" e "contemporary_utils.py" seriam
+    # falsos positivos.
+    r"(?:^|[/_.\-])temp\d*(?:[/_.\-]|$)",
+]
 
 _DEBRIS_LINE_PATTERNS: list[tuple[str, str]] = [
     (r"^\+.*print\(.*debug", "debug print statement"),

@@ -414,6 +414,35 @@ class TestHuntDebris:
         # At least 3 debris items (file + print + TODO)
         assert len(frauds) >= 2
 
+    def test_temp_filename_without_extension_detected(self) -> None:
+        frauds = hunt_debris("", ["temp.py"])
+        assert len(frauds) == 1
+        assert "temp.py" in frauds[0].description
+
+    def test_temp_file_with_number_detected(self) -> None:
+        frauds = hunt_debris("", ["scratch/temp2"])
+        assert len(frauds) >= 1
+
+    def test_temp_as_separated_segment_detected(self) -> None:
+        frauds = hunt_debris("", ["my_temp_file.py"])
+        assert len(frauds) == 1
+
+    def test_templates_directory_not_flagged(self) -> None:
+        frauds = hunt_debris("", ["templates/email.html"])
+        assert frauds == []
+
+    def test_attempt_filename_not_flagged(self) -> None:
+        frauds = hunt_debris("", ["attempt_parser.py"])
+        assert frauds == []
+
+    def test_temperature_filename_not_flagged(self) -> None:
+        frauds = hunt_debris("", ["src/temperature.py"])
+        assert frauds == []
+
+    def test_contemporary_filename_not_flagged(self) -> None:
+        frauds = hunt_debris("", ["contemporary_utils.py"])
+        assert frauds == []
+
 
 @patch("kata.judge._changed_files")
 @patch("kata.judge._run_git_diff")

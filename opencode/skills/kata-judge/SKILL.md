@@ -83,6 +83,25 @@ python -m kata --judge
 ❌  KATA JUDGE — REFUTED
 ```
 
+## Registro no YAML
+
+O CLI Python não persiste o resultado do judge de volta no arquivo de
+tarefa — `--judge` é uma verificação stateless, re-executada a cada chamada.
+Se o agente decidir registrar o veredito em `.kata/<task>.yaml` (via
+`write`/`edit`), use a chave `judge`:
+
+```yaml
+judge:
+  verdict: "REFUTED"           # VERIFIED | VERIFIED WITH CAVEATS | REFUTED
+  frauds:
+    - type: false_completion
+      severity: high
+      description: "ruff re-executado falhou, mas relatório afirma que passou"
+  caveats:
+    - "1 fraude(s) de alta severidade"
+  judged_at: "2026-07-28"      # data (ou commit) em que o judge rodou
+```
+
 ## Modo Automático
 
 O judge executa automaticamente como fase extra ao final do ciclo se

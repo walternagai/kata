@@ -1,7 +1,8 @@
 # Kata Documentation
 
-Technical reference for Kata (型), the Python CLI and OpenCode agent that
-guides software changes through a disciplined development cycle.
+Technical reference for Kata (型): a Python CLI, an OpenCode agent, and a set
+of Claude Code skills that all guide software changes through the same
+disciplined development cycle.
 
 ## Contents
 
@@ -13,6 +14,7 @@ guides software changes through a disciplined development cycle.
 - [Task files](#task-files)
 - [Python API](#python-api)
 - [OpenCode integration](#opencode-integration)
+- [Claude Code integration](#claude-code-integration)
 - [Testing and evaluation](#testing-and-evaluation)
 - [Compatibility and limitations](#compatibility-and-limitations)
 
@@ -41,6 +43,19 @@ Kata is the tool itself, not a framework that must be embedded in the project
 being changed. It stores task evidence in `.kata/` at the target project's
 root.
 
+Two frontends share the same Python backend and cycle logic:
+
+- **OpenCode**: a single `@kata` agent (`opencode/agent/kata.md`) that
+  orchestrates the cycle, backed by 10 phase-specific skills.
+- **Claude Code**: a `kata` skill (`claude-code/skills/kata/SKILL.md`) that
+  plays the same orchestration role, backed by the same 10 phase-specific
+  skills ported to Claude Code's tool set. See
+  [Claude Code integration](#claude-code-integration).
+
+Only the orchestration/interaction layer differs between the two — the
+verification and fraud-hunting logic (Ruff, pytest, coverage, judge) always
+runs through the `kata` Python package.
+
 ## Architecture
 
 ```text
@@ -56,9 +71,14 @@ opencode/
 ├── agent/kata.md                 OpenCode @kata agent definition
 └── skills/kata-*/SKILL.md        Phase-specific operating instructions
 
+claude-code/
+└── skills/kata-*/SKILL.md        kata orchestrator skill + the same 10
+                                   phase-specific skills, ported to Claude Code
+
 tests/                            Unit tests for the Python implementation
 eval/                             Adversarial trap scenarios
 scripts/install.sh                OpenCode symlink installer
+scripts/install-claude-code.sh    Claude Code symlink installer
 ```
 
 ### Module responsibilities
@@ -138,6 +158,37 @@ make uninstall
 Because the installer creates symlinks, edits to files under `opencode/` are
 visible without reinstalling. Use `make reinstall` after adding new installable
 agent or skill entries.
+
+### Claude Code skills
+
+Install the `kata` skill and its 10 phase skills into Claude Code, also
+through symlinks:
+
+```bash
+make install-claude-code
+```
+
+The installer uses `$CLAUDE_CONFIG_DIR` when set, otherwise `~/.claude`. Use
+the `kata` skill afterward (e.g. `/kata`, or describe the task and let Claude
+Code invoke it by description).
+
+On Windows:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install-claude-code.ps1
+```
+
+Same `-Copy` / `-Uninstall` flags as the OpenCode PowerShell installer.
+
+```bash
+make uninstall-claude-code
+```
+
+Unlike the OpenCode `@kata` agent, the Claude Code version ships as skills
+only — no subagent. The cycle asks a question at nearly every phase, which
+fits the main conversation better than an isolated subagent that only
+reports a summary at the end.
 
 ## CLI
 
@@ -273,6 +324,8 @@ The core schema is:
 ```yaml
 task: improve-parser
 status: draft
+base_commit: ""    # HEAD captured when the task started; lets JUDGE diff
+                    # against it even after the task has been committed
 fit:
   trivial: false
   route: code-loop
@@ -370,10 +423,29 @@ phase to a dedicated skill and defines the expected use of OpenCode tools:
 - `bash` for Git and verification commands;
 - `edit` or `write` for surgical changes and task persistence.
 
-The repository contains skills for FIT, THINK, SIMPLIFY, INTENT, SURGICAL,
-VERIFY, ARTIFACT, REPORT, and JUDGE. The installer currently creates symlinks
-for the four core implementation skills listed in `scripts/install.sh`:
-`kata-think`, `kata-simplify`, `kata-surgical`, and `kata-verify`.
+The repository contains skills for FIT, QUESTION, THINK, SIMPLIFY, INTENT,
+SURGICAL, VERIFY, ARTIFACT, REPORT, and JUDGE. `scripts/install.sh` symlinks
+all 10 of them under `$CONFIG_DIR/skills/`, plus the `@kata` agent itself
+under `$CONFIG_DIR/agent/`.
+
+## Claude Code integration
+
+The Claude Code orchestrator is `claude-code/skills/kata/SKILL.md`. It plays
+the same role as the OpenCode `@kata` agent, mapped onto Claude Code's tool
+set instead of OpenCode's:
+
+- `Read` and `Grep`/`Glob` for evidence;
+- free text or `AskUserQuestion` for decisions that require user input — see
+  `claude-code/skills/kata-question/SKILL.md` for which one to use where,
+  since Claude Code has no single dedicated free-text question tool the way
+  OpenCode does;
+- `Bash` for Git and verification commands;
+- `Edit` or `Write` for surgical changes and task persistence.
+
+The repository contains the same 10 phase skills as the OpenCode side,
+ported 1:1 (`claude-code/skills/kata-*/SKILL.md`), plus the `kata` skill
+itself. `scripts/install-claude-code.sh` symlinks all 11 under
+`$CLAUDE_CONFIG_DIR/skills/`.
 
 ## Testing and evaluation
 
@@ -390,6 +462,8 @@ Other development targets are:
 make format
 make install
 make uninstall
+make install-claude-code
+make uninstall-claude-code
 make clean
 ```
 
@@ -418,9 +492,6 @@ the verdict and frauds that the judge must find. See
   defaults; `--check-only` is the intended CI entry point.
 - Coverage percentage extraction expects a standard pytest-cov `TOTAL` line.
   If it cannot parse that line, the reported percentage is `0.0`.
-- The current installer does not symlink every skill directory. If an OpenCode
-  environment needs the ARTIFACT, REPORT, FIT, INTENT, or JUDGE skills directly,
-  install those links explicitly or extend `scripts/install.sh`.
 
 ## License
 

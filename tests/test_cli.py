@@ -637,6 +637,21 @@ class TestPickTask:
                 result = cli._pick_task()
         assert result == "untitled"
 
+    @patch("kata.cli.input", return_value="../../etc/passwd")
+    @patch("kata.cli._detect_task_from_branch", return_value=None)
+    @patch("kata.cli.sys.stdin")
+    def test_pick_task_interactive_traversal_returns_untitled(
+        self, mock_stdin, mock_branch, mock_input
+    ) -> None:
+        mock_stdin.isatty.return_value = True
+        with patch("kata.cli._kata_dir") as mock_kata_dir:
+            from pathlib import Path
+
+            mock_kata_dir.return_value = Path("/tmp/.kata")
+            with patch("kata.cli.Path.glob", return_value=[]):
+                result = cli._pick_task()
+        assert result == "untitled"
+
     @patch("kata.cli._detect_task_from_branch")
     @patch("kata.cli.sys.stdin")
     def test_pick_task_branch_matches_existing(self, mock_stdin, mock_branch) -> None:
@@ -846,6 +861,54 @@ class TestStepArtifact:
         assert "AUTH" in out
         assert "PENDING" in out
         assert "TWINS" in out
+
+    @patch("kata.cli._detect_auth_owed", return_value=True)
+    @patch("kata.cli._detect_pending_owed", return_value=True)
+    @patch("kata.cli._detect_twins_owed", return_value=True)
+    @patch("kata.cli.sys.stdin")
+    @patch(
+        "kata.cli.input",
+        side_effect=[
+            "código faz X",             # INTENT code_does
+            "teste espera Y",           # INTENT check_expects
+            "spec diz Z",               # INTENT spec_says
+            "fez deploy em prod",       # AUTH action
+            'usuário disse "manda"',    # AUTH quote
+            "revisar módulo Y",         # PENDING action
+            "assert True",              # TWINS pattern
+            "3 ocorrências",            # TWINS result
+        ],
+    )
+    def test_artifact_tty_backfills_all_missing_lines(
+        self, mock_input, mock_stdin, mock_twins, mock_pending, mock_auth,
+    ) -> None:
+        """Em modo interativo, preenche INTENT/AUTH/PENDING/TWINS ausentes via input()."""
+        mock_stdin.isatty.return_value = True
+        data: dict = {"verify": {"tests_pass": True}}
+        result = cli._step_artifact("task", data)
+
+        assert result["intent"] == {
+            "code_does": "código faz X",
+            "check_expects": "teste espera Y",
+            "spec_says": "spec diz Z",
+            "all_agree": True,
+            "answered": True,
+        }
+        assert result["auth"] == {
+            "action_taken": True,
+            "authorized": True,
+            "action": "fez deploy em prod",
+            "quote": 'usuário disse "manda"',
+        }
+        assert result["pending"] == {"action": "revisar módulo Y", "documented": True}
+        assert result["twins"] == {
+            "pattern": "assert True",
+            "result": "3 ocorrências",
+            "searched": True,
+        }
+
+
+class TestMainInteractive:
     """Testa main() no modo interativo completo."""
 
     @patch("kata.cli._step_verify")

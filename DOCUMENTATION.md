@@ -232,8 +232,13 @@ kata --check-only \
 ### Exit codes
 
 - `0`: the requested operation passed;
-- `1`: the cycle, report status, or judge verdict failed;
+- `1`: the cycle or report status failed, or the judge returned `REFUTED`;
 - `2`: invalid CLI arguments, as produced by `argparse`.
+
+`VERIFIED WITH CAVEATS` exits `0`. The judge did verify the task and approved
+it with low- or medium-severity notes; treating that as a failure would equate
+a caveat with a high-severity fraud and push callers to ignore the exit code.
+Read the printed caveats to decide whether they matter for your workflow.
 
 ## Development cycle
 

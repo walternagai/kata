@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,6 +40,8 @@ except ImportError:
     _HAS_YAML = False
 
 # ── helpers ──────────────────────────────────────────────────────────────
+
+_TASK_WHITESPACE = re.compile(r"\s")
 
 
 def _cwd() -> Path:
@@ -94,12 +97,22 @@ def _detect_cov_source() -> str:
 
 
 def _is_invalid_task_name(task: str) -> bool:
-    """Predicado de path traversal, compartilhado entre CLI (--task/--init/...) e
-    o prompt interativo de _pick_task — um único lugar para a regra em si.
+    """Predicado de nome de tarefa, compartilhado entre CLI (--task/--init/...)
+    e o prompt interativo de _pick_task — um único lugar para a regra em si.
+
+    Rejeita, além de path traversal: espaços em branco (que produziriam
+    `.kata/my task.yaml`), nomes iniciados por ponto (arquivo oculto, e
+    cobre "." e "..") e nomes que já trazem a extensão de serialização
+    (`--init foo.yaml` produziria `.kata/foo.yaml.yaml`, porque _task_path
+    concatena a extensão).
     """
     if not task or not task.strip():
         return True
-    if task.strip() == ".":
+    if _TASK_WHITESPACE.search(task):
+        return True
+    if task.startswith("."):
+        return True
+    if task.endswith(_ext()):
         return True
     return "/" in task or "\\" in task or ".." in task
 
@@ -113,7 +126,8 @@ def _validate_task_name(task: str) -> None:
     if _is_invalid_task_name(task):
         print(
             f"⚠  Nome de tarefa inválido: '{task}'. "
-            "Não pode ser vazio, '.', conter '/', '\\' ou '..'."
+            "Não pode ser vazio, conter espaços, começar com '.', "
+            f"terminar em '{_ext()}', nem conter '/', '\\' ou '..'."
         )
         sys.exit(1)
 
@@ -146,9 +160,7 @@ def _pick_task() -> str:
     if not sys.stdin.isatty():
         return "untitled"
     branch_task = _detect_task_from_branch()
-    existing = sorted(
-        p.stem for p in _kata_dir().glob(f"*{_ext()}") if p.stem != ".gitkeep"
-    )
+    existing = sorted(p.stem for p in _kata_dir().glob(f"*{_ext()}"))
     if branch_task and branch_task in existing:
         return branch_task
     if existing:
@@ -170,8 +182,12 @@ def _pick_task() -> str:
     return name
 
 
-def _run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-    """Executa comando capturando saída, com defaults sobrescreíveis pelo caller.
+def _run_git(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    """Executa um comando git capturando saída, com defaults sobrescreíveis.
+
+    Nome distinto de kata.verify._run de propósito: são helpers diferentes,
+    com assinaturas diferentes, e judge.py importa o de verify. Dois `_run`
+    homônimos no mesmo projeto é convite a erro de manutenção.
 
     Defaults (capture_output, text, cwd) podem ser sobrescritos via kwargs
     sem causar colisão de argumentos.
@@ -264,7 +280,7 @@ def _capture_base_commit(data: dict[str, Any]) -> dict[str, Any]:
     """
     if data.get("base_commit"):
         return data
-    result = _run(["git", "rev-parse", "HEAD"])
+    result = _run_git(["git", "rev-parse", "HEAD"])
     sha = result.stdout.strip()
     if result.returncode == 0 and sha:
         data["base_commit"] = sha
@@ -388,13 +404,13 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     # Mostra diff stat
     has_changes = False
-    result = _run(["git", "diff", "--stat"])
+    result = _run_git(["git", "diff", "--stat"])
     if result.stdout.strip():
         print("git diff --stat:")
         print(result.stdout)
         has_changes = True
     else:
-        result = _run(["git", "diff", "--cached", "--stat"])
+        result = _run_git(["git", "diff", "--cached", "--stat"])
         if result.stdout.strip():
             print("git diff --cached --stat (staged):")
             print(result.stdout)
@@ -485,13 +501,13 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     # Lista arquivos alterados (incluindo untracked)
-    result = _run(["git", "diff", "--name-only"])
+    result = _run_git(["git", "diff", "--name-only"])
     files = [f for f in result.stdout.strip().split("\n") if f.strip()]
     if not files:
-        result = _run(["git", "diff", "--cached", "--name-only"])
+        result = _run_git(["git", "diff", "--cached", "--name-only"])
         files = [f for f in result.stdout.strip().split("\n") if f.strip()]
     if not files:
-        result = _run(["git", "ls-files", "--others", "--exclude-standard"])
+        result = _run_git(["git", "ls-files", "--others", "--exclude-standard"])
         files = [f for f in result.stdout.strip().split("\n") if f.strip()]
 
     surgical = data.get("surgical", {})
@@ -852,9 +868,9 @@ def _detect_scratch_files() -> list[str]:
     regra. A cópia que existia aqui casava a substring "temp" e marcava
     `templates/`, `temperature.py` e `attempt_parser.py` como detrito.
     """
-    diff = _run(["git", "diff", "--name-only"])
+    diff = _run_git(["git", "diff", "--name-only"])
     if not diff.stdout.strip():
-        diff = _run(["git", "diff", "--cached", "--name-only"])
+        diff = _run_git(["git", "diff", "--cached", "--name-only"])
     if not diff.stdout.strip():
         return []
     files = diff.stdout.strip().split("\n")
@@ -1171,7 +1187,11 @@ def main() -> None:
             gate=args.gate,
         )
         _print_judge_verdict(result)
-        sys.exit(0 if result.verdict == "VERIFIED" else 1)
+        # Só REFUTED é falha. "VERIFIED WITH CAVEATS" significa que o juiz
+        # verificou e aprovou com ressalvas de severidade baixa/média;
+        # tratá-lo como falha equipara ressalva a fraude grave e leva o CI
+        # a ignorar o exit code por inútil.
+        sys.exit(1 if result.verdict == "REFUTED" else 0)
 
     # Modo --check-only (CI)
     if args.check_only:

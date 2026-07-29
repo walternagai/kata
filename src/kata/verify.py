@@ -123,9 +123,14 @@ def run_coverage(
             cmd.extend(["--ignore", path])
     result = _run(cmd, cwd=cwd)
 
-    # Extrai percentual de coverage do output
+    # Extrai percentual de coverage da linha TOTAL. O percentual é sempre a
+    # última coluna, mas quantas colunas o antecedem varia: branch coverage
+    # acrescenta duas, e `precision` acrescenta casas decimais. Fixar o
+    # número de colunas fazia o regex falhar calado e gravar 0.0 junto de
+    # coverage_pass=True — um YAML internamente contraditório que o JUDGE
+    # depois lê como verdade.
     cov_pct = 0.0
-    match = re.search(r"TOTAL\s+\d+\s+\d+\s+(\d+)%", result.stdout)
+    match = re.search(r"^TOTAL\s+.*?(\d+(?:\.\d+)?)%", result.stdout, re.MULTILINE)
     if match:
         cov_pct = float(match.group(1))
 

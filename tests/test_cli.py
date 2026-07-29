@@ -325,7 +325,7 @@ class TestStepSimplify:
         assert result["simplify"]["no_speculative_config"] is True
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
     def test_step_simplify_interactive_with_diff(self, mock_stdin, mock_run, mock_confirm) -> None:
         mock_stdin.isatty.return_value = True
@@ -339,7 +339,7 @@ class TestStepSimplify:
         assert result["simplify"]["minimum_code"] is True
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
     def test_step_simplify_no_diff_uses_staged(self, mock_stdin, mock_run, mock_confirm) -> None:
         mock_stdin.isatty.return_value = True
@@ -357,7 +357,7 @@ class TestStepSimplify:
         assert result["simplify"]["minimum_code"] is True
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
     def test_step_simplify_no_changes(self, mock_stdin, mock_run, mock_confirm) -> None:
         mock_stdin.isatty.return_value = True
@@ -387,7 +387,7 @@ class TestStepSurgical:
         assert result["surgical"]["removed_imports_clean"] is True
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
     def test_step_surgical_interactive_with_files(self, mock_stdin, mock_run, mock_confirm) -> None:
         mock_stdin.isatty.return_value = True
@@ -402,7 +402,7 @@ class TestStepSurgical:
         assert result["surgical"]["files"][0]["necessary"] is True
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
     def test_step_surgical_no_diff_uses_staged(self, mock_stdin, mock_run, mock_confirm) -> None:
         mock_stdin.isatty.return_value = True
@@ -719,6 +719,43 @@ class TestJsonFallback:
         assert cli._ext() == ".json"
 
 
+class TestIsInvalidTaskName:
+    """Regra de nome de tarefa — guarda de path traversal e de nomes que
+    produziriam arquivos estranhos em .kata/."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "../../etc/passwd",     # traversal
+            "a/b",                  # separador POSIX
+            "a\\b",                 # separador Windows
+            "..",
+            ".",
+            "",
+            "   ",
+            ".oculto",              # arquivo oculto
+            "my task",              # viraria ".kata/my task.yaml"
+            "tab\tname",
+            "foo.yaml",             # viraria ".kata/foo.yaml.yaml"
+        ],
+    )
+    def test_rejected(self, name: str) -> None:
+        assert cli._is_invalid_task_name(name) is True
+
+    @pytest.mark.parametrize(
+        "name",
+        ["fix-bug", "feature-123", "bug_fix", "v1.2-hotfix", "correção-de-bug"],
+    )
+    def test_accepted(self, name: str) -> None:
+        assert cli._is_invalid_task_name(name) is False
+
+    def test_validate_exits_on_invalid_name(self, capsys) -> None:
+        with pytest.raises(SystemExit) as exc:
+            cli._validate_task_name("../escape")
+        assert exc.value.code == 1
+        assert "inválido" in capsys.readouterr().out
+
+
 class TestRunHelper:
     """Testa _run com kwargs."""
 
@@ -727,7 +764,7 @@ class TestRunHelper:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="", stderr=""
         )
-        cli._run(["echo", "test"], check=True)
+        cli._run_git(["echo", "test"], check=True)
         # Verifica que check=True foi passado como kwarg
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs.get("check") is True
@@ -737,7 +774,7 @@ class TestRunHelper:
         mock_run.return_value = subprocess.CompletedProcess(
             args=["echo", "test"], returncode=0, stdout="test\n", stderr=""
         )
-        result = cli._run(["echo", "test"])
+        result = cli._run_git(["echo", "test"])
         assert result.returncode == 0
 
     @patch("kata.cli.subprocess.run")
@@ -749,7 +786,7 @@ class TestRunHelper:
             args=[], returncode=0, stdout="", stderr=""
         )
         custom_cwd = Path("/tmp/custom")
-        cli._run(["echo", "test"], capture_output=False, text=False, cwd=custom_cwd)
+        cli._run_git(["echo", "test"], capture_output=False, text=False, cwd=custom_cwd)
         call_kwargs = mock_run.call_args[1]
         # Defaults sobrescritos pelos valores do caller
         assert call_kwargs.get("capture_output") is False
@@ -761,7 +798,7 @@ class TestStepSurgicalNoFiles:
     """Testa _step_surgical sem arquivos alterados."""
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
     def test_surgical_no_files_no_staged(self, mock_stdin, mock_run, mock_confirm) -> None:
         mock_stdin.isatty.return_value = True
@@ -1470,6 +1507,41 @@ class TestMainJudge:
                 cli.main()
         assert exc.value.code == 1
 
+    @patch("kata.cli.judge_task")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_judge_caveats_is_not_a_failure(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
+        tmp_path, monkeypatch,
+    ) -> None:
+        """Só REFUTED é falha. Equiparar ressalva de baixa severidade a fraude
+        grave leva o CI a ignorar o exit code por inútil."""
+        from kata.judge import JudgeFraud, JudgeResult
+
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "test-task.yaml"
+        task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+
+        mock_deserialize.return_value = {"task": "test-task", "status": "approved"}
+        mock_judge.return_value = JudgeResult(
+            verdict="VERIFIED WITH CAVEATS",
+            claims=["ruff passou"],
+            frauds=[
+                JudgeFraud(type="debris", severity="low",
+                           description="TODO deixado no código", evidence="+ # TODO"),
+            ],
+            re_ran_checks={"ruff": True},
+        )
+
+        with patch("sys.argv", ["kata", "--task", "test-task", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 0
+
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_judge_task_not_found(self, mock_kata_dir, mock_path, tmp_path, monkeypatch) -> None:
@@ -1720,23 +1792,23 @@ class TestFormatLines:
 class TestDetectScratch:
     """Testa _detect_scratch_files."""
 
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     def test_no_diff(self, mock_run) -> None:
         mock_run.return_value.stdout = ""
         assert cli._detect_scratch_files() == []
 
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     def test_scratch_file_detected(self, mock_run) -> None:
         mock_run.return_value.stdout = "file.tmp\nscratch/data.txt\n"
         files = cli._detect_scratch_files()
         assert len(files) == 2
 
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     def test_normal_files_ignored(self, mock_run) -> None:
         mock_run.return_value.stdout = "src/main.py\ntests/test_foo.py\n"
         assert cli._detect_scratch_files() == []
 
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     def test_temp_substring_is_not_debris(self, mock_run) -> None:
         """Regressão: a regra do CLI casava a substring "temp" e marcava
         templates/, temperature.py e attempt_parser.py como detrito. O CLI
@@ -1749,7 +1821,7 @@ class TestDetectScratch:
         )
         assert cli._detect_scratch_files() == []
 
-    @patch("kata.cli._run")
+    @patch("kata.cli._run_git")
     def test_real_debris_still_detected_alongside_temp_substrings(self, mock_run) -> None:
         mock_run.return_value.stdout = "templates/email.html\nout.tmp\n"
         assert cli._detect_scratch_files() == ["out.tmp"]

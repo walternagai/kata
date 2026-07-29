@@ -179,6 +179,26 @@ class TestRunCoverage:
         assert result.details["coverage_pct"] == 0.0
 
     @patch("kata.verify._run")
+    def test_coverage_pct_with_branch_columns(self, mock_run: MagicMock) -> None:
+        """Branch coverage acrescenta duas colunas antes do percentual. Com o
+        número de colunas fixo no regex, o parse falhava calado e gravava 0.0
+        junto de coverage_pass=True."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout="TOTAL                    954      6    120     8    97%\n", stderr="",
+        )
+        assert run_coverage().details["coverage_pct"] == 97.0
+
+    @patch("kata.verify._run")
+    def test_coverage_pct_with_decimal_precision(self, mock_run: MagicMock) -> None:
+        """`[tool.coverage.report] precision` acrescenta casas decimais."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0,
+            stdout="TOTAL                    954      6    99.37%\n", stderr="",
+        )
+        assert run_coverage().details["coverage_pct"] == 99.37
+
+    @patch("kata.verify._run")
     def test_coverage_custom_gate(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],

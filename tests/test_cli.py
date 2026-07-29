@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -64,6 +65,8 @@ class TestTaskPath:
             "sub\\dir",
             "..",
             "",
+            "   ",
+            ".",
         ],
     )
     def test_rejects_path_traversal(self, tmp_path, monkeypatch, bad_name) -> None:
@@ -367,7 +370,9 @@ class TestStepSimplify:
             data: dict = {}
             result = cli._step_simplify("task", data)
         assert result["simplify"]["minimum_code"] is True
-        assert result["simplify"]["notes"] == "notas de teste"
+        assert result["simplify"]["no_single_use_abstractions"] is True
+        assert result["simplify"]["no_speculative_config"] is True
+        assert "notes" not in result["simplify"]
 
 
 class TestStepSurgical:
@@ -584,6 +589,28 @@ class TestMainCheckOnly:
                 cli.main()
             except SystemExit as e:
                 assert e.code == 1
+
+
+class TestDetectCovSource:
+    """Testa detecção automática do pacote fonte de coverage."""
+
+    def test_detects_from_pyproject_toml(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.coverage.run]\nsource = ["kata"]\n', encoding="utf-8"
+        )
+        assert cli._detect_cov_source() == "kata"
+
+    def test_fallback_when_pyproject_missing(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        assert cli._detect_cov_source() == "src"
+
+    def test_fallback_when_source_missing(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.ruff]\nline-length = 100\n", encoding="utf-8"
+        )
+        assert cli._detect_cov_source() == "src"
 
 
 class TestCwdHelper:
@@ -907,6 +934,32 @@ class TestStepArtifact:
             "searched": True,
         }
 
+    @patch("kata.cli._detect_auth_owed", return_value=False)
+    @patch("kata.cli._detect_pending_owed", return_value=False)
+    @patch("kata.cli._detect_twins_owed", return_value=False)
+    @patch("kata.cli.sys.stdin")
+    @patch(
+        "kata.cli.input",
+        side_effect=[
+            "código faz X",             # INTENT code_does
+            "teste espera Y",           # INTENT check_expects
+            "spec diz Z",               # INTENT spec_says
+        ],
+    )
+    def test_artifact_checks_updated_after_backfill(
+        self, mock_input, mock_stdin, mock_twins, mock_pending, mock_auth,
+    ) -> None:
+        """Regressão: artifact['intent_present'] deve refletir dados recém-preenchidos."""
+        mock_stdin.isatty.return_value = True
+        data: dict = {"verify": {"tests_pass": True}}
+        result = cli._step_artifact("task", data)
+
+        assert result["artifact"]["intent_owed"] is True
+        assert result["artifact"]["intent_present"] is True
+        assert result["artifact"]["auth_present"] is False
+        assert result["artifact"]["pending_present"] is False
+        assert result["artifact"]["twins_present"] is False
+
 
 class TestMainInteractive:
     """Testa main() no modo interativo completo."""
@@ -1125,6 +1178,109 @@ class TestMainPlanCheckOnlyConflict:
                 cli.main()
             except SystemExit as e:
                 assert e.code == 2  # parser.error exit code
+
+
+class TestMainRouteHandling:
+    """Testa que main() respeita fit.route e fit.trivial."""
+
+    def _setup_task_file(self, kata_dir: Path) -> None:
+        task_file = kata_dir / "route-task.yaml"
+        task_file.write_text("task: route-task\nstatus: draft\n", encoding="utf-8")
+
+    @patch("kata.cli._step_report")
+    @patch("kata.cli._step_artifact")
+    @patch("kata.cli._step_verify")
+    @patch("kata.cli._step_surgical")
+    @patch("kata.cli._step_intent")
+    @patch("kata.cli._step_simplify")
+    @patch("kata.cli._step_think")
+    @patch("kata.cli._step_fit")
+    @patch("kata.cli._init_task")
+    @patch("kata.cli._kata_dir")
+    def test_question_route_stops_after_think(
+        self, mock_kata_dir, mock_init, mock_fit, mock_think,
+        mock_simplify, mock_intent, mock_surgical, mock_verify,
+        mock_artifact, mock_report, tmp_path, monkeypatch,
+    ) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        monkeypatch.chdir(tmp_path)
+        self._setup_task_file(kata_dir)
+
+        mock_fit.return_value = {
+            "task": "route-task",
+            "fit": {"route": "question", "trivial": False},
+        }
+        mock_think.return_value = {
+            "task": "route-task",
+            "fit": {"route": "question", "trivial": False},
+            "think": {"answered": True},
+        }
+
+        with patch("sys.argv", ["kata", "--task", "route-task"]):
+            cli.main()
+
+        mock_think.assert_called_once()
+        mock_simplify.assert_not_called()
+        mock_intent.assert_not_called()
+        mock_surgical.assert_not_called()
+        mock_verify.assert_not_called()
+        mock_artifact.assert_not_called()
+        mock_report.assert_not_called()
+
+    @patch("kata.cli._step_report")
+    @patch("kata.cli._step_artifact")
+    @patch("kata.cli._step_verify")
+    @patch("kata.cli._step_twin")
+    @patch("kata.cli._step_surgical")
+    @patch("kata.cli._step_intent")
+    @patch("kata.cli._step_simplify")
+    @patch("kata.cli._step_think")
+    @patch("kata.cli._step_fit")
+    @patch("kata.cli._init_task")
+    @patch("kata.cli._kata_dir")
+    def test_trivial_route_skips_simplify_intent_surgical_twin(
+        self, mock_kata_dir, mock_init, mock_fit, mock_think,
+        mock_simplify, mock_intent, mock_surgical, mock_twin,
+        mock_verify, mock_artifact, mock_report, tmp_path, monkeypatch,
+    ) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        monkeypatch.chdir(tmp_path)
+        self._setup_task_file(kata_dir)
+
+        mock_fit.return_value = {
+            "task": "route-task",
+            "fit": {"route": "code-loop", "trivial": True},
+        }
+        mock_think.return_value = {
+            "task": "route-task",
+            "fit": {"route": "code-loop", "trivial": True},
+            "think": {"answered": True},
+        }
+        mock_verify.return_value = {
+            "task": "route-task",
+            "status": "approved",
+            "verify": {"ruff_clean": True},
+        }
+        mock_artifact.return_value = {
+            "task": "route-task",
+            "status": "approved",
+            "artifact": {},
+        }
+
+        with patch("sys.argv", ["kata", "--task", "route-task"]):
+            cli.main()
+
+        mock_simplify.assert_not_called()
+        mock_intent.assert_not_called()
+        mock_surgical.assert_not_called()
+        mock_twin.assert_not_called()
+        mock_verify.assert_called_once()
+        mock_artifact.assert_called_once()
+        mock_report.assert_called_once()
 
 
 class TestMainInteractiveNoTaskArg:

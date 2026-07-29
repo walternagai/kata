@@ -67,11 +67,41 @@ def _ext() -> str:
     return ".yaml" if _HAS_YAML else ".json"
 
 
+def _detect_cov_source() -> str:
+    """Detecta o pacote fonte de coverage a partir de pyproject.toml.
+
+    Lê `[tool.coverage.run] source` e retorna o primeiro item. Se não
+    encontrar, cai no fallback "src".
+    """
+    pyproject = _cwd() / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            import tomllib
+
+            text = pyproject.read_text(encoding="utf-8")
+            config = tomllib.loads(text)
+            sources = (
+                config.get("tool", {})
+                .get("coverage", {})
+                .get("run", {})
+                .get("source", [])
+            )
+            if sources:
+                return sources[0]
+        except Exception:
+            pass
+    return "src"
+
+
 def _is_invalid_task_name(task: str) -> bool:
     """Predicado de path traversal, compartilhado entre CLI (--task/--init/...) e
     o prompt interativo de _pick_task — um único lugar para a regra em si.
     """
-    return not task or "/" in task or "\\" in task or ".." in task
+    if not task or not task.strip():
+        return True
+    if task.strip() == ".":
+        return True
+    return "/" in task or "\\" in task or ".." in task
 
 
 def _validate_task_name(task: str) -> None:
@@ -81,7 +111,10 @@ def _validate_task_name(task: str) -> None:
     _task_path só concatena o nome ao diretório sem checar separadores.
     """
     if _is_invalid_task_name(task):
-        print(f"⚠  Nome de tarefa inválido: '{task}'. Não pode conter '/', '\\' ou '..'.")
+        print(
+            f"⚠  Nome de tarefa inválido: '{task}'. "
+            "Não pode ser vazio, '.', conter '/', '\\' ou '..'."
+        )
         sys.exit(1)
 
 
@@ -348,29 +381,37 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     # Mostra diff stat
+    has_changes = False
     result = _run(["git", "diff", "--stat"])
     if result.stdout.strip():
         print("git diff --stat:")
         print(result.stdout)
+        has_changes = True
     else:
         result = _run(["git", "diff", "--cached", "--stat"])
         if result.stdout.strip():
             print("git diff --cached --stat (staged):")
             print(result.stdout)
+            has_changes = True
         else:
-            print("(nenhuma alteração detectada — prossiga mesmo assim)")
+            print("(nenhuma alteração detectada — pulando confirmações)")
 
     simplify = data.get("simplify", {})
-    simplify["minimum_code"] = _confirm("  O código mínimo resolve o problema?")
-    simplify["no_single_use_abstractions"] = _confirm(
-        "  Código livre de abstrações para uso único?", default=True
-    )
-    simplify["no_speculative_config"] = _confirm(
-        "  Código livre de configurabilidade não solicitada?", default=True
-    )
-    notes = input("  Observações (opcional): ").strip()
-    if notes:
-        simplify["notes"] = notes
+    if has_changes:
+        simplify["minimum_code"] = _confirm("  O código mínimo resolve o problema?")
+        simplify["no_single_use_abstractions"] = _confirm(
+            "  Código livre de abstrações para uso único?", default=True
+        )
+        simplify["no_speculative_config"] = _confirm(
+            "  Código livre de configurabilidade não solicitada?", default=True
+        )
+        notes = input("  Observações (opcional): ").strip()
+        if notes:
+            simplify["notes"] = notes
+    else:
+        simplify["minimum_code"] = True
+        simplify["no_single_use_abstractions"] = True
+        simplify["no_speculative_config"] = True
     data["simplify"] = simplify
     return data
 
@@ -455,13 +496,14 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
         for f in files:
             necessary = _confirm(f"  {f} — necessário para esta tarefa?", default=True)
             file_checks.append({"path": f, "necessary": necessary})
+        surgical["removed_imports_clean"] = _confirm(
+            "  Imports removidos são só os que sua mudança tornou inúteis?"
+        )
     else:
-        print("(nenhum arquivo alterado detectado)")
+        print("(nenhum arquivo alterado detectado — pulando confirmações)")
+        surgical["removed_imports_clean"] = True
 
     surgical["files"] = file_checks
-    surgical["removed_imports_clean"] = _confirm(
-        "  Imports removidos são só os que sua mudança tornou inúteis?"
-    )
     data["surgical"] = surgical
     return data
 
@@ -753,6 +795,15 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
                         "code_does": code, "check_expects": check,
                         "spec_says": spec, "all_agree": True, "answered": True,
                     }
+
+        # Recompute present flags after user input so YAML reflects reality.
+        intent = data.get("intent", {})
+        checks["intent_present"] = (
+            bool(intent.get("answered")) and intent.get("code_does", "") != ""
+        )
+        checks["auth_present"] = bool(data.get("auth", {}).get("authorized"))
+        checks["pending_present"] = bool(data.get("pending", {}).get("documented"))
+        checks["twins_present"] = bool(data.get("twins", {}).get("searched"))
     else:
         print("  ✅ Todas as linhas devidas estão presentes")
 
@@ -1013,8 +1064,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--cov-source",
-        default="src",
-        help="Pacote fonte para coverage (default: src)",
+        default=_detect_cov_source(),
+        help="Pacote fonte para coverage (default: %(default)s)",
     )
     parser.add_argument(
         "--gate",
@@ -1116,15 +1167,25 @@ def main() -> None:
     data = _step_fit(task, data)
     data = _step_think(task, data)
 
-    if args.plan:
+    fit_route = data.get("fit", {}).get("route", "code-loop")
+    fit_trivial = data.get("fit", {}).get("trivial", False)
+
+    if fit_route == "question":
+        path.write_text(_serialize(data), encoding="utf-8")
+        print(f"\n📝  Resultado salvo em {path}")
+        return
+
+    if args.plan or fit_route == "plan-first":
         path.write_text(_serialize(data), encoding="utf-8")
         print(f"\n📝  Plano salvo em {path}")
         print("    Próximas fases: SIMPLIFY → SURGICAL → VERIFY")
         return
 
-    data = _step_simplify(task, data)
-    data = _step_intent(task, data)
-    data = _step_surgical(task, data)
+    if not fit_trivial:
+        data = _step_simplify(task, data)
+        data = _step_intent(task, data)
+        data = _step_surgical(task, data)
+
     data = _step_verify(
         task,
         data,
@@ -1134,7 +1195,8 @@ def main() -> None:
         cov_source=args.cov_source,
         gate=args.gate,
     )
-    data = _step_twin(task, data)
+    if not fit_trivial:
+        data = _step_twin(task, data)
     data = _step_artifact(task, data)
     _step_report(task, data)
 

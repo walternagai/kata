@@ -87,7 +87,7 @@ def run_pytest(
 
 
 def run_coverage(
-    source: str = "src",
+    source: str = "kata",
     testpaths: list[str] | None = None,
     ignore: list[str] | None = None,
     gate: float = 70.0,
@@ -218,7 +218,7 @@ def run_all(
     ruff_paths: list[str] | None = None,
     test_paths: list[str] | None = None,
     ignore: list[str] | None = None,
-    cov_source: str = "src",
+    cov_source: str = "kata",
     gate: float = 70.0,
     cwd: Path | None = None,
 ) -> dict[str, VerifyResult]:

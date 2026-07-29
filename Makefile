@@ -26,7 +26,7 @@ test:
 	python3 -m pytest tests/ -v --cov=kata --cov-report=term-missing
 
 lint:
-	ruff check src/ tests/
+	python3 -m ruff check src/ tests/
 
 format:
 	ruff format src/ tests/

@@ -172,9 +172,10 @@ Gerar artefatos da tarefa (provas, verificações, etc).
 ### 7. REPORT
 Relatório outcome-first documentando o que foi feito.
 
-### 8. JUDGE (opcional)
+### JUDGE (opcional)
 Verificação adversarial — tenta caçar fraudes e inconsistências no
-código produzido.
+código produzido. É a nona e última fase, aplicada apenas quando
+solicitada após o REPORT.
 
 ## Diretório de Trabalho
 

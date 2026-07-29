@@ -171,8 +171,14 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
 +    pass
 """
         frauds = hunt_weakened_checks(diff)
-        assert len(frauds) >= 1
-        assert any("assert True" in f.description for f in frauds)
+        # Duas linhas suspeitas, dois achados: a asserção que saiu e o `pass` que
+        # entrou. São observações distintas sobre a mesma mudança, cada uma com
+        # sua evidência — não é contagem inflada.
+        assert len(frauds) == 2
+        assert {f.description.split(": ", 1)[1] for f in frauds} == {
+            "assert True (sempre passa se True for literal)",
+            "corpo de teste substituído por pass",
+        }
         assert all(f.severity == "high" for f in frauds)
 
     def test_assert_false_removed(self) -> None:
@@ -238,7 +244,11 @@ diff --git a/tests/test_b.py b/tests/test_b.py
 +    pass
 """
         frauds = hunt_weakened_checks(diff)
-        assert len(frauds) >= 2
+        # Dois arquivos, dois enfraquecimentos, duas linhas suspeitas cada.
+        assert len(frauds) == 4
+        assert {f.description.split(":", 1)[0] for f in frauds} == {
+            "tests/test_a.py", "tests/test_b.py",
+        }
 
 
 class TestHuntFalseCompletion:
@@ -395,11 +405,11 @@ class TestHuntDebris:
 
     def test_bak_file_detected(self) -> None:
         frauds = hunt_debris("", ["main.py.bak"])
-        assert len(frauds) >= 1
+        assert len(frauds) == 1
 
     def test_scratch_file_detected(self) -> None:
         frauds = hunt_debris("", ["scratch/test.py"])
-        assert len(frauds) >= 1
+        assert len(frauds) == 1
 
     def test_debug_print_detected(self) -> None:
         diff = '+    print("debug: value is", x)\n'
@@ -424,8 +434,9 @@ class TestHuntDebris:
     def test_multiple_debris_types(self) -> None:
         diff = '+    print("debug")\n+    # TODO: fix later\n'
         frauds = hunt_debris(diff, ["scratch/out.txt"])
-        # At least 3 debris items (file + print + TODO)
-        assert len(frauds) >= 2
+        # Três: o arquivo scratch/, o debug print e o TODO. O comentário antigo
+        # dizia "at least 3" e a asserção admitia 2 — discordavam.
+        assert len(frauds) == 3
 
     def test_temp_filename_without_extension_detected(self) -> None:
         frauds = hunt_debris("", ["temp.py"])
@@ -434,7 +445,9 @@ class TestHuntDebris:
 
     def test_temp_file_with_number_detected(self) -> None:
         frauds = hunt_debris("", ["scratch/temp2"])
-        assert len(frauds) >= 1
+        # Uma só, apesar de o path casar dois padrões de detrito: is_debris_file
+        # é predicado, não contador (fix do H1).
+        assert len(frauds) == 1
 
     def test_temp_as_separated_segment_detected(self) -> None:
         frauds = hunt_debris("", ["my_temp_file.py"])
@@ -494,7 +507,11 @@ class TestJudgeTask:
         }
         result = judge_task(task)
         assert result.verdict == "VERIFIED"
-        assert len(result.claims) >= 2
+        assert result.claims == [
+            "ruff check limpo (sem erros de lint)",
+            "todos os testes passam",
+            "coverage ≥ gate (?%)",
+        ]
 
     def test_false_completion_refuted(
         self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,

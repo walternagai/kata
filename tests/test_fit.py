@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from kata.fit import diff_stats, is_trivial
+from kata.fit import diff_stats, is_trivial, untracked_stats
 
 
 class TestIsTrivial:
@@ -48,6 +48,7 @@ class TestDiffStats:
                 stdout=" src/foo.py | 3 +--\n src/bar.py | 2 ++\n",
                 stderr="",
             ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == ["src/foo.py", "src/bar.py"]
@@ -66,6 +67,7 @@ class TestDiffStats:
                 args=[], returncode=0,
                 stdout=" baz.py | 7 ++++++-\n", stderr="",
             ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == ["baz.py"]
@@ -77,6 +79,7 @@ class TestDiffStats:
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == []
@@ -88,6 +91,7 @@ class TestDiffStats:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="file.py\n", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == ["file.py"]
@@ -95,3 +99,63 @@ class TestDiffStats:
 
 
 
+
+
+class TestUntrackedIsNotInvisible:
+    """Prova, com um repo git de verdade, que arquivos novos contam para o
+    triviality gate. Mock não serve aqui: o defeito era exatamente o comando
+    que nunca era chamado."""
+
+    def _repo(self, tmp_path) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        (tmp_path / "README.md").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+
+    def test_new_module_is_not_trivial(self, tmp_path) -> None:
+        """Criar um módulo de 200 linhas aparecia como diff vazio, e o
+        triviality gate mandava pular SIMPLIFY, INTENT e SURGICAL."""
+        self._repo(tmp_path)
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "servico.py").write_text(
+            "\n".join(f"def f{i}(): return {i}" for i in range(200)) + "\n", encoding="utf-8"
+        )
+
+        files, lines = diff_stats(cwd=tmp_path)
+
+        assert files == ["src/servico.py"]
+        assert lines == 200
+        assert is_trivial(files, lines) is False
+
+    def test_untracked_counted_alongside_modified(self, tmp_path) -> None:
+        """Untracked é somado, não usado como fallback: um arquivo modificado
+        não pode fazer os novos desaparecerem."""
+        self._repo(tmp_path)
+        (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
+        (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
+
+        files, lines = diff_stats(cwd=tmp_path)
+
+        assert sorted(files) == ["README.md", "novo.py"]
+        assert lines >= 2
+
+    def test_single_small_new_file_stays_trivial(self, tmp_path) -> None:
+        """O gate não pode passar a recusar tudo: um arquivo novo e curto
+        continua trivial."""
+        self._repo(tmp_path)
+        (tmp_path / "nota.txt").write_text("uma linha\n", encoding="utf-8")
+
+        files, lines = diff_stats(cwd=tmp_path)
+
+        assert is_trivial(files, lines) is True
+
+    def test_binary_file_does_not_break_counting(self, tmp_path) -> None:
+        self._repo(tmp_path)
+        (tmp_path / "blob.bin").write_bytes(b"\xff\xfe\x00binario")
+
+        files, lines = untracked_stats(cwd=tmp_path)
+
+        assert files == ["blob.bin"]
+        assert lines == 0

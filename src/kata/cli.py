@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from kata import __version__
-from kata.fit import diff_stats, is_trivial
+from kata.fit import diff_stats, is_trivial, untracked_stats
 from kata.judge import JudgeResult, is_debris_file, judge_task
 from kata.verify import VerifyResult, run_all, search_pattern
 
@@ -200,18 +200,30 @@ def _run_git(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 def _changed_paths() -> list[str]:
     """Arquivos que a tarefa alterou, segundo o git.
 
-    Unstaged, com fallback para staged e depois para untracked — a mesma
-    ordem que SURGICAL usa para listar arquivos ao usuário.
+    Unstaged, com fallback para staged — e os untracked somados sempre, não
+    como último fallback. Arquivos novos nunca aparecem em `git diff`, então
+    tratá-los como alternativa aos rastreados fazia todo arquivo novo
+    desaparecer assim que houvesse qualquer modificação em arquivo já
+    rastreado.
     """
-    for cmd in (
-        ["git", "diff", "--name-only"],
-        ["git", "diff", "--cached", "--name-only"],
-        ["git", "ls-files", "--others", "--exclude-standard"],
-    ):
-        files = [f for f in _run_git(cmd).stdout.strip().split("\n") if f.strip()]
-        if files:
-            return files
-    return []
+    rastreados = [
+        f for f in _run_git(["git", "diff", "--name-only"]).stdout.strip().split("\n") if f.strip()
+    ]
+    if not rastreados:
+        rastreados = [
+            f
+            for f in _run_git(["git", "diff", "--cached", "--name-only"]).stdout.strip().split("\n")
+            if f.strip()
+        ]
+    novos = [
+        f
+        for f in _run_git(
+            ["git", "ls-files", "--others", "--exclude-standard"]
+        ).stdout.strip().split("\n")
+        if f.strip()
+    ]
+    vistos = set(rastreados)
+    return rastreados + [f for f in novos if f not in vistos]
 
 
 def _confirm(prompt: str, default: bool = True) -> bool:
@@ -432,8 +444,20 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
             print("git diff --cached --stat (staged):")
             print(result.stdout)
             has_changes = True
-        else:
-            print("(nenhuma alteração detectada — pulando confirmações)")
+
+    # Arquivos novos não aparecem em nenhum `git diff`. Sem listá-los, uma
+    # tarefa que só cria arquivos passava por SIMPLIFY sem uma pergunta
+    # sequer, e o YAML registrava o checklist como aprovado.
+    novos, linhas_novas = untracked_stats()
+    if novos:
+        print(f"arquivos novos (untracked) — {linhas_novas} linha(s):")
+        for f in novos:
+            print(f"  {f}")
+        print()
+        has_changes = True
+
+    if not has_changes:
+        print("(nenhuma alteração detectada — pulando confirmações)")
 
     simplify = data.get("simplify", {})
     if has_changes:
@@ -882,14 +906,11 @@ def _detect_scratch_files() -> list[str]:
     Usa is_debris_file (kata.judge) para que CLI e JUDGE apliquem a mesma
     regra. A cópia que existia aqui casava a substring "temp" e marcava
     `templates/`, `temperature.py` e `attempt_parser.py` como detrito.
+
+    A lista vem de _changed_paths, que inclui untracked: detrito recém-criado
+    e ainda não adicionado ao índice é justamente o caso mais comum.
     """
-    diff = _run_git(["git", "diff", "--name-only"])
-    if not diff.stdout.strip():
-        diff = _run_git(["git", "diff", "--cached", "--name-only"])
-    if not diff.stdout.strip():
-        return []
-    files = diff.stdout.strip().split("\n")
-    return [f for f in files if is_debris_file(f)]
+    return [f for f in _changed_paths() if is_debris_file(f)]
 
 
 def _format_intent_line(intent: dict[str, Any]) -> str:

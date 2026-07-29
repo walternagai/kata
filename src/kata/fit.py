@@ -16,10 +16,37 @@ from pathlib import Path
 from kata.verify import _run
 
 
+def untracked_stats(cwd: Path | None = None) -> tuple[list[str], int]:
+    """Arquivos novos ainda não rastreados, e quantas linhas trazem.
+
+    `git diff` — unstaged, staged, contra commit, qualquer forma — é cego a
+    arquivos que nunca entraram no índice. Sem isto, uma tarefa que só cria
+    arquivos aparecia como diff vazio e o triviality gate a classificava
+    como trivial, pulando SIMPLIFY, INTENT e SURGICAL.
+
+    As linhas são contadas sem carregar o arquivo inteiro na memória.
+    """
+    base = cwd or Path.cwd()
+    result = _run(["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd)
+    files = [f for f in result.stdout.strip().split("\n") if f.strip()]
+
+    total = 0
+    for f in files:
+        try:
+            with (base / f).open(encoding="utf-8") as fh:
+                total += sum(1 for _ in fh)
+        except (OSError, UnicodeDecodeError):
+            continue
+    return files, total
+
+
 def diff_stats(cwd: Path | None = None) -> tuple[list[str], int]:
     """Analisa o diff git atual e retorna (lista de arquivos, linhas totais).
 
-    Tenta diff unstaged primeiro; se vazio, tenta staged.
+    Tenta diff unstaged primeiro; se vazio, tenta staged. Arquivos untracked
+    são somados sempre, e não como último fallback: eles nunca aparecem em
+    `git diff`, então tratá-los como alternativa aos rastreados esconderia
+    todo arquivo novo assim que houvesse qualquer modificação.
 
     Args:
         cwd: Diretório de execução. Default: CWD atual.
@@ -45,7 +72,11 @@ def diff_stats(cwd: Path | None = None) -> tuple[list[str], int]:
         if m:
             total_lines += int(m.group(1))
 
-    return files, total_lines
+    novos, linhas_novas = untracked_stats(cwd=cwd)
+    vistos = set(files)
+    files += [f for f in novos if f not in vistos]
+
+    return files, total_lines + linhas_novas
 
 
 def is_trivial(files: list[str], lines: int) -> bool:

@@ -312,11 +312,17 @@ class TestStepThink:
         assert result["status"] == "think-complete"
 
 
+@patch("kata.cli.untracked_stats", return_value=([], 0))
 class TestStepSimplify:
-    """Testa _step_simplify em modos interativo e não-interativo."""
+    """Testa _step_simplify em modos interativo e não-interativo.
+
+    untracked_stats é mockado no nível da classe: sem isso os testes leriam
+    os arquivos untracked reais do repositório e passariam ou falhariam
+    conforme o estado da árvore de quem roda.
+    """
 
     @patch("kata.cli.sys.stdin")
-    def test_step_simplify_non_tty(self, mock_stdin) -> None:
+    def test_step_simplify_non_tty(self, mock_stdin, mock_untracked) -> None:
         mock_stdin.isatty.return_value = False
         data: dict = {}
         result = cli._step_simplify("task", data)
@@ -327,7 +333,9 @@ class TestStepSimplify:
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
-    def test_step_simplify_interactive_with_diff(self, mock_stdin, mock_run, mock_confirm) -> None:
+    def test_step_simplify_interactive_with_diff(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked
+    ) -> None:
         mock_stdin.isatty.return_value = True
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="3 files changed\n", stderr=""
@@ -341,7 +349,9 @@ class TestStepSimplify:
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
-    def test_step_simplify_no_diff_uses_staged(self, mock_stdin, mock_run, mock_confirm) -> None:
+    def test_step_simplify_no_diff_uses_staged(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked
+    ) -> None:
         mock_stdin.isatty.return_value = True
         # Primeiro diff vazio, segundo diff com staged changes
         mock_run.side_effect = [
@@ -359,7 +369,9 @@ class TestStepSimplify:
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
-    def test_step_simplify_no_changes(self, mock_stdin, mock_run, mock_confirm) -> None:
+    def test_step_simplify_no_changes(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked
+    ) -> None:
         mock_stdin.isatty.return_value = True
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
@@ -373,6 +385,32 @@ class TestStepSimplify:
         assert result["simplify"]["no_single_use_abstractions"] is True
         assert result["simplify"]["no_speculative_config"] is True
         assert "notes" not in result["simplify"]
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli._run_git")
+    @patch("kata.cli.sys.stdin")
+    def test_untracked_only_task_still_asks(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked, capsys
+    ) -> None:
+        """Tarefa que só cria arquivos: `git diff` vem vazio, mas SIMPLIFY
+        não pode passar sem pergunta nenhuma registrando o checklist como
+        aprovado."""
+        mock_stdin.isatty.return_value = True
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ]
+        mock_untracked.return_value = (["src/servico.py"], 200)
+        mock_confirm.side_effect = [True, False, True]
+
+        with patch("kata.cli.input", return_value=""):
+            result = cli._step_simplify("task", {})
+
+        out = capsys.readouterr().out
+        assert "src/servico.py" in out
+        assert "200 linha(s)" in out
+        assert "nenhuma alteração detectada" not in out
+        assert result["simplify"]["no_single_use_abstractions"] is False
 
 
 class TestStepSurgical:
@@ -409,6 +447,7 @@ class TestStepSurgical:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="baz.py\n", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         mock_confirm.side_effect = [True, True]
         data: dict = {}
@@ -729,6 +768,45 @@ class TestJsonFallback:
     def test_ext_without_yaml(self, monkeypatch) -> None:
         monkeypatch.setattr("kata.cli._HAS_YAML", False)
         assert cli._ext() == ".json"
+
+
+class TestChangedPathsSeesUntracked:
+    """Repo git de verdade: o defeito era o comando que nunca era chamado."""
+
+    def _repo(self, tmp_path) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        (tmp_path / "README.md").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+
+    def test_untracked_survives_a_modified_file(self, tmp_path, monkeypatch) -> None:
+        """Untracked era o terceiro fallback, então bastava um arquivo
+        modificado para os arquivos novos sumirem da lista."""
+        monkeypatch.chdir(tmp_path)
+        self._repo(tmp_path)
+        (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
+        (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
+
+        assert sorted(cli._changed_paths()) == ["README.md", "novo.py"]
+
+    def test_untracked_debris_is_reported(self, tmp_path, monkeypatch) -> None:
+        """Detrito recém-criado e ainda não adicionado ao índice é o caso
+        mais comum, e era o único invisível."""
+        monkeypatch.chdir(tmp_path)
+        self._repo(tmp_path)
+        (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
+        (tmp_path / "saida.tmp").write_text("lixo\n", encoding="utf-8")
+
+        assert cli._detect_scratch_files() == ["saida.tmp"]
+
+    def test_no_duplicates_when_nothing_is_untracked(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._repo(tmp_path)
+        (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
+
+        assert cli._changed_paths() == ["README.md"]
 
 
 class TestIsInvalidTaskName:

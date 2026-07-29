@@ -893,8 +893,9 @@ class TestStepArtifact:
         assert result["artifact"]["intent_owed"] is True
         assert result["artifact"]["intent_present"] is False
 
+    @patch("kata.cli._changed_paths", return_value=[])
     @patch("kata.cli.sys.stdin")
-    def test_artifact_non_tty_no_intent_needed(self, mock_stdin) -> None:
+    def test_artifact_non_tty_no_intent_needed(self, mock_stdin, mock_changed) -> None:
         """Sem arquivo de código alterado, INTENT não é devida."""
         mock_stdin.isatty.return_value = False
         data: dict = {"intent": {}}
@@ -918,8 +919,9 @@ class TestStepArtifact:
         result = cli._step_artifact("task", data)
         assert result["artifact"]["intent_owed"] is False
 
+    @patch("kata.cli._changed_paths", return_value=[])
     @patch("kata.cli.sys.stdin")
-    def test_artifact_non_tty_empty_data(self, mock_stdin, capsys) -> None:
+    def test_artifact_non_tty_empty_data(self, mock_stdin, mock_changed, capsys) -> None:
         mock_stdin.isatty.return_value = False
         data: dict = {}
         result = cli._step_artifact("task", data)

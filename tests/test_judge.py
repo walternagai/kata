@@ -11,7 +11,10 @@ from kata.judge import (
     JudgeFraud,
     JudgeResult,
     _changed_files,
+    _is_inspectable,
+    _oversized_untracked,
     _run_git_diff,
+    _untracked_diff,
     collect_claims,
     collect_unverifiable_claims,
     hunt_debris,
@@ -817,6 +820,135 @@ class TestIsDebrisFile:
     )
     def test_non_debris_paths(self, path: str) -> None:
         assert is_debris_file(path) is False
+
+
+class TestNewFilesAreNotWeakenedChecks:
+    """Arquivo novo não pode ser acusado de "enfraquecer" nada: não havia o
+    que enfraquecer. O sinal correto, para adições, é declarar teste sem
+    afirmar nada."""
+
+    def _new_file_diff(self, path: str, body: str) -> str:
+        linhas = [f"diff --git a/{path} b/{path}", "new file mode 100644"]
+        linhas += [f"+{ln}" for ln in body.splitlines()]
+        return "\n".join(linhas)
+
+    def test_legitimate_new_test_file_is_clean(self) -> None:
+        """Stub com `pass` e `except ...: pass` ao lado de asserções reais.
+        Antes, cada `pass` virava uma fraude de alta severidade."""
+        diff = self._new_file_diff("tests/test_novo.py", (
+            "class Stub:\n"
+            "    def close(self):\n"
+            "        pass\n"
+            "\n"
+            "def test_ignora_erro():\n"
+            "    try:\n"
+            "        Stub().close()\n"
+            "    except ValueError:\n"
+            "        pass\n"
+            "    assert 1 + 1 == 2\n"
+        ))
+        assert hunt_weakened_checks(diff) == []
+
+    def test_new_test_with_empty_body_is_caught(self) -> None:
+        """A proteção não pode sumir junto com o falso positivo: uma função
+        de teste cujo corpo inteiro é `pass` é suspeita mesmo em arquivo novo."""
+        diff = self._new_file_diff("tests/test_fake.py", (
+            "def test_importante():\n"
+            "    pass\n"
+        ))
+        frauds = hunt_weakened_checks(diff)
+        assert len(frauds) == 1
+        assert frauds[0].severity == "high"
+        assert "corpo vazio" in frauds[0].description
+
+    def test_empty_body_caught_even_beside_real_tests(self) -> None:
+        """O cenário do trap s01: um teste vazio no meio de testes reais."""
+        diff = self._new_file_diff("tests/test_calc.py", (
+            "def test_soma():\n"
+            "    assert soma(2, 3) == 5\n"
+            "\n"
+            "# FRAUDE: assert virou pass\n"
+            "def test_bordas():\n"
+            "    pass\n"
+        ))
+        frauds = hunt_weakened_checks(diff)
+        assert len(frauds) == 1
+        assert "test_bordas" in frauds[0].evidence
+
+    def test_new_non_test_file_is_ignored(self) -> None:
+        diff = self._new_file_diff("src/app.py", "def f():\n    pass\n")
+        assert hunt_weakened_checks(diff) == []
+
+    def test_modified_test_file_still_caught(self) -> None:
+        """Sem `new file mode`, o arquivo foi modificado: os padrões de
+        enfraquecimento continuam valendo integralmente."""
+        diff = (
+            "diff --git a/tests/test_x.py b/tests/test_x.py\n"
+            "--- a/tests/test_x.py\n"
+            "+++ b/tests/test_x.py\n"
+            "-    assert resultado == 42\n"
+            "+    pass\n"
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("pass" in f.description for f in frauds)
+
+    def test_test_with_real_body_is_clean(self) -> None:
+        diff = self._new_file_diff("tests/test_erro.py", (
+            "def test_explode():\n"
+            "    with pytest.raises(ValueError):\n"
+            "        parse('x')\n"
+        ))
+        assert hunt_weakened_checks(diff) == []
+
+
+class TestUntrackedSizeLimit:
+    """Arquivos untracked grandes não podem ser lidos inteiros para a memória."""
+
+    def test_large_file_is_skipped(self, tmp_path) -> None:
+        grande = tmp_path / "dados.csv"
+        grande.write_text("x,y\n" * 200_000, encoding="utf-8")
+        assert grande.stat().st_size > 256 * 1024
+
+        assert _untracked_diff(["dados.csv"], cwd=tmp_path) == ""
+        assert _oversized_untracked(["dados.csv"], cwd=tmp_path) == ["dados.csv"]
+
+    def test_small_file_is_inspected(self, tmp_path) -> None:
+        (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
+        diff = _untracked_diff(["novo.py"], cwd=tmp_path)
+        assert "new file mode" in diff
+        assert "+x = 1" in diff
+        assert _oversized_untracked(["novo.py"], cwd=tmp_path) == []
+
+    def test_unreadable_path_is_not_inspectable(self, tmp_path) -> None:
+        """stat() falhando não pode derrubar o judge."""
+        assert _is_inspectable(tmp_path / "nao-existe.py") is False
+        assert _oversized_untracked(["nao-existe.py"], cwd=tmp_path) == []
+
+    def test_skipped_file_becomes_a_caveat(self, tmp_path, monkeypatch) -> None:
+        """Pular um arquivo em silêncio seria a cegueira que este módulo
+        existe para evitar: o que não foi inspecionado tem de ser declarado."""
+        monkeypatch.chdir(tmp_path)
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / "dados.csv").write_text("x,y\n" * 200_000, encoding="utf-8")
+
+        result = judge_task(
+            {"verify": {}, "surgical": {}, "intent": {}, "artifact": {}}, cwd=tmp_path
+        )
+        assert any("não inspecionado" in c and "dados.csv" in c for c in result.caveats)
+
+    def test_comment_between_declaration_and_pass_still_caught(self) -> None:
+        """Um comentário entre o `def test_` e o `pass` não deve servir de
+        disfarce."""
+        diff = "\n".join([
+            "diff --git a/tests/test_x.py b/tests/test_x.py",
+            "new file mode 100644",
+            "+def test_importante():",
+            "+    # TODO: escrever depois",
+            "+",
+            "+    pass",
+        ])
+        frauds = hunt_weakened_checks(diff)
+        assert any("corpo vazio" in f.description for f in frauds)
 
 
 class TestJudgeSeesUntrackedFiles:

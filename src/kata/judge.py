@@ -41,6 +41,11 @@ _DEBRIS_FILE_PATTERNS = [
     r"(?:^|[/_.\-])temp\d*(?:[/_.\-]|$)",
 ]
 
+# Teto por arquivo untracked que o judge lê inteiro para a memória.
+# 256 KB é ordens de grandeza acima de qualquer arquivo de código e ordens
+# de grandeza abaixo de um dataset ou log.
+_MAX_UNTRACKED_FILE_BYTES = 256 * 1024
+
 _DEBRIS_LINE_PATTERNS: list[tuple[str, str]] = [
     (r"^\+.*print\(.*debug", "debug print statement"),
     (r"^\+.*console\.log\(.*debug", "debug console.log"),
@@ -149,21 +154,48 @@ def _untracked_files(cwd: Path | None = None) -> list[str]:
     return [f for f in result.stdout.strip().split("\n") if f.strip()]
 
 
+def _is_inspectable(path: Path) -> bool:
+    """Arquivo untracked pequeno o bastante para o judge ler inteiro.
+
+    Sem teto, um dataset ou log fora do .gitignore era lido integralmente
+    para a memória. O limite é por arquivo, e não acumulado, porque parar a
+    varredura no meio deixaria arquivos silenciosamente fora da inspeção —
+    a cegueira que este módulo existe para evitar. O que passa do teto é
+    pulado e declarado em caveat por _oversized_untracked.
+    """
+    try:
+        return path.is_file() and path.stat().st_size <= _MAX_UNTRACKED_FILE_BYTES
+    except OSError:
+        return False
+
+
+def _oversized_untracked(files: list[str], cwd: Path | None = None) -> list[str]:
+    """Arquivos untracked grandes demais para inspecionar (viram caveat)."""
+    base = cwd or Path.cwd()
+    return [f for f in files if (base / f).is_file() and not _is_inspectable(base / f)]
+
+
 def _untracked_diff(files: list[str], cwd: Path | None = None) -> str:
     """Sintetiza um diff de adição para arquivos untracked.
 
-    Produz só o que os hunters leem: o cabeçalho `diff --git` (de onde
-    hunt_weakened_checks extrai o arquivo corrente) e o conteúdo como
-    linhas '+'. Arquivos binários ou ilegíveis são ignorados.
+    Produz o que os hunters leem: o cabeçalho `diff --git`, o marcador
+    `new file mode` que o git emite para arquivo novo — e do qual
+    hunt_weakened_checks depende para não acusar código honesto — e o
+    conteúdo como linhas '+'. Binários, ilegíveis e grandes demais ficam
+    de fora.
     """
     base = cwd or Path.cwd()
     chunks: list[str] = []
     for f in files:
+        path = base / f
+        if not _is_inspectable(path):
+            continue
         try:
-            content = (base / f).read_text(encoding="utf-8")
+            content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
         chunks.append(f"diff --git a/{f} b/{f}")
+        chunks.append("new file mode 100644")
         chunks.extend(f"+{line}" for line in content.splitlines())
     return "\n".join(chunks)
 
@@ -229,16 +261,62 @@ def is_debris_file(filepath: str) -> bool:
     return any(re.search(pat, filepath, re.IGNORECASE) for pat in _DEBRIS_FILE_PATTERNS)
 
 
+_TEST_DECLARATION = re.compile(r"^\+\s*(?:async\s+)?def\s+test\w*\s*\(")
+_ONLY_PASS = re.compile(r"^\+\s*pass\s*$")
+_SKIPPABLE = re.compile(r"^\+\s*(?:#.*)?$")
+
+
+def _empty_test_bodies(added_lines: list[str]) -> list[str]:
+    """Funções de teste cujo corpo inteiro é `pass`.
+
+    Substitui, para arquivos novos, os padrões de _WEAKENED_PATTERNS — que
+    pressupõem modificação ("o corpo virou pass" exige que houvesse corpo).
+    Num arquivo novo o que é de fato suspeito é uma função de teste que não
+    faz nada. Discrimina pelo que importa: `pass` como corpo de um `def
+    test_*` é fraude; `pass` num stub de classe ou num `except ...:` é
+    código honesto e não cai aqui.
+    """
+    achados: list[str] = []
+    for i, line in enumerate(added_lines):
+        if not _TEST_DECLARATION.match(line):
+            continue
+        for seguinte in added_lines[i + 1:]:
+            if _SKIPPABLE.match(seguinte):
+                continue
+            if _ONLY_PASS.match(seguinte):
+                achados.append(line.lstrip("+").strip())
+            break
+    return achados
+
+
 def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
-    """Caça 1: verificações enfraquecidas — asserts removidos/relaxados."""
+    """Caça 1: verificações enfraquecidas — asserts removidos/relaxados.
+
+    Arquivos novos são pulados. "Enfraquecer" pressupõe algo que existia
+    antes; num arquivo novo toda linha é '+' por definição, então padrões
+    como "corpo virou pass" perdem o sentido e acusam código honesto — um
+    stub com `pass` ou um `except ...: pass` num teste recém-criado. O
+    marcador é o mesmo que o git emite (`new file mode`), então isto vale
+    tanto para arquivos staged/commitados quanto para o diff sintético de
+    untracked.
+    """
     frauds: list[JudgeFraud] = []
     current_file = ""
+    is_new_file = False
+    new_test_bodies: dict[str, list[str]] = {}
 
     for line in diff.split("\n"):
         if line.startswith("diff --git"):
             parts = line.split()
             current_file = parts[3].replace("b/", "", 1) if len(parts) >= 4 else ""
+            is_new_file = False
+        elif line.startswith("new file mode"):
+            is_new_file = True
         if not current_file or not _is_test_file(current_file):
+            continue
+        if is_new_file:
+            if line.startswith("+"):
+                new_test_bodies.setdefault(current_file, []).append(line)
             continue
         for pattern, desc in _WEAKENED_PATTERNS:
             if re.match(pattern, line):
@@ -248,6 +326,15 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
                     description=f"{current_file}: {desc}",
                     evidence=line.strip(),
                 ))
+
+    for path, added in new_test_bodies.items():
+        for vazio in _empty_test_bodies(added):
+            frauds.append(JudgeFraud(
+                type="weakened_checks",
+                severity="high",
+                description=f"{path}: teste com corpo vazio (só pass)",
+                evidence=vazio,
+            ))
 
     return frauds
 
@@ -420,6 +507,12 @@ def judge_task(
 
     high = [f for f in frauds if f.severity == "high"]
     caveats: list[str] = []
+    oversized = _oversized_untracked(_untracked_files(cwd=cwd), cwd=cwd)
+    if oversized:
+        caveats.append(
+            f"{len(oversized)} arquivo(s) untracked não inspecionado(s) por tamanho: "
+            + ", ".join(oversized[:5])
+        )
     if unverifiable:
         caveats.append(
             f"{len(unverifiable)} claim(s) aceita(s) sem verificação (não re-executáveis)"

@@ -197,6 +197,23 @@ def _run_git(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, **defaults)
 
 
+def _changed_paths() -> list[str]:
+    """Arquivos que a tarefa alterou, segundo o git.
+
+    Unstaged, com fallback para staged e depois para untracked — a mesma
+    ordem que SURGICAL usa para listar arquivos ao usuário.
+    """
+    for cmd in (
+        ["git", "diff", "--name-only"],
+        ["git", "diff", "--cached", "--name-only"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
+    ):
+        files = [f for f in _run_git(cmd).stdout.strip().split("\n") if f.strip()]
+        if files:
+            return files
+    return []
+
+
 def _confirm(prompt: str, default: bool = True) -> bool:
     if not sys.stdin.isatty():
         return default
@@ -500,15 +517,7 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
         data["surgical"] = {"files": [], "removed_imports_clean": True}
         return data
 
-    # Lista arquivos alterados (incluindo untracked)
-    result = _run_git(["git", "diff", "--name-only"])
-    files = [f for f in result.stdout.strip().split("\n") if f.strip()]
-    if not files:
-        result = _run_git(["git", "diff", "--cached", "--name-only"])
-        files = [f for f in result.stdout.strip().split("\n") if f.strip()]
-    if not files:
-        result = _run_git(["git", "ls-files", "--others", "--exclude-standard"])
-        files = [f for f in result.stdout.strip().split("\n") if f.strip()]
+    files = _changed_paths()
 
     surgical = data.get("surgical", {})
     file_checks: list[dict[str, Any]] = []
@@ -713,17 +722,23 @@ _DOC_SUFFIXES = frozenset({".md", ".rst", ".txt"})
 def _detect_intent_owed(data: dict[str, Any]) -> bool:
     """Detecta se INTENT line é devida (comportamento mudou).
 
-    Devida quando SURGICAL declarou pelo menos um arquivo alterado que não
-    é documentação. Antes bastava VERIFY ter rodado, o que tornava INTENT
-    devida em toda tarefa — inclusive numa mudança só de docs, onde não há
-    "o que o código FAZ" a declarar. A fonte é surgical.files, e não o git,
-    porque SURGICAL é a fase que estabelece o que mudou.
+    Devida quando pelo menos um arquivo alterado não é documentação. Antes
+    bastava VERIFY ter rodado, o que tornava INTENT devida em toda tarefa —
+    inclusive numa mudança só de docs, onde não há "o que o código FAZ" a
+    declarar.
+
+    A fonte preferida é surgical.files, porque SURGICAL é a fase que
+    estabelece o que mudou. Mas em modo não-interativo SURGICAL grava uma
+    lista vazia, e olhar só para ela fazia INTENT nunca ser devida em
+    execuções headless — o caveat "INTENT não documentada" sumia
+    justamente onde não há ninguém para notar a ausência. Sem declaração,
+    cai para o git.
     """
-    files = data.get("surgical", {}).get("files", [])
-    return any(
-        path and Path(path).suffix.lower() not in _DOC_SUFFIXES
-        for path in (f.get("path", "") for f in files)
-    )
+    declared = [
+        f.get("path", "") for f in data.get("surgical", {}).get("files", [])
+    ]
+    paths = [p for p in declared if p] or _changed_paths()
+    return any(Path(p).suffix.lower() not in _DOC_SUFFIXES for p in paths)
 
 
 def _detect_auth_owed(data: dict[str, Any]) -> bool:

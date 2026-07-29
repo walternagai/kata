@@ -29,6 +29,28 @@ def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
 
 
+# Teto único para leitura de arquivo untracked. Acima disto, `kata.judge` não
+# consegue inspecionar o conteúdo e `kata.fit` não consegue contar as linhas
+# baratinho. Ordens de grandeza acima de qualquer arquivo de código, ordens de
+# grandeza abaixo de um dataset ou log.
+MAX_UNTRACKED_FILE_BYTES = 256 * 1024
+
+
+def is_inspectable(path: Path) -> bool:
+    """Arquivo pequeno o bastante para ser lido inteiro.
+
+    Compartilhado por fit e judge para que o limite seja um número só. A
+    consequência de estourá-lo é que cada um decide: o judge pula o arquivo e
+    declara em caveat; o fit o trata como grande demais para ser trivial —
+    pular ali reintroduziria a cegueira que o triviality gate acabou de
+    fechar, porque "0 linha contada" viraria "mudança trivial".
+    """
+    try:
+        return path.is_file() and path.stat().st_size <= MAX_UNTRACKED_FILE_BYTES
+    except OSError:
+        return False
+
+
 def untracked_files(cwd: Path | None = None) -> list[str]:
     """Arquivos que o git ainda não rastreia.
 

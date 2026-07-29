@@ -11,7 +11,6 @@ from kata.judge import (
     JudgeFraud,
     JudgeResult,
     _changed_files,
-    _is_inspectable,
     _oversized_untracked,
     _run_git_diff,
     _untracked_diff,
@@ -26,7 +25,7 @@ from kata.judge import (
     is_debris_file,
     judge_task,
 )
-from kata.verify import VerifyResult
+from kata.verify import VerifyResult, is_inspectable
 
 
 class TestJudgeResult:
@@ -937,7 +936,7 @@ class TestUntrackedSizeLimit:
 
     def test_unreadable_path_is_not_inspectable(self, tmp_path) -> None:
         """stat() falhando não pode derrubar o judge."""
-        assert _is_inspectable(tmp_path / "nao-existe.py") is False
+        assert is_inspectable(tmp_path / "nao-existe.py") is False
         assert _oversized_untracked(["nao-existe.py"], cwd=tmp_path) == []
 
     def test_skipped_file_becomes_a_caveat(self, tmp_path, monkeypatch) -> None:

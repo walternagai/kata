@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from kata.verify import (
+    MAX_UNTRACKED_FILE_BYTES,
     VerifyResult,
+    is_inspectable,
     run_all,
     run_coverage,
     run_pytest,
@@ -430,6 +433,38 @@ class TestSearchPattern:
         assert r.pattern == "test"
         assert r.matches == []
         assert r.total_files == 0
+
+
+class TestIsInspectable:
+    """Teto único de leitura, compartilhado por fit e judge."""
+
+    def test_small_file(self, tmp_path) -> None:
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n", encoding="utf-8")
+        assert is_inspectable(f) is True
+
+    def test_oversized_file(self, tmp_path) -> None:
+        f = tmp_path / "grande.csv"
+        f.write_text("x,y\n" * 200_000, encoding="utf-8")
+        assert f.stat().st_size > MAX_UNTRACKED_FILE_BYTES
+        assert is_inspectable(f) is False
+
+    def test_missing_path(self, tmp_path) -> None:
+        assert is_inspectable(tmp_path / "nao-existe.py") is False
+
+    def test_directory(self, tmp_path) -> None:
+        assert is_inspectable(tmp_path) is False
+
+    def test_stat_error_is_not_inspectable(self, tmp_path, monkeypatch) -> None:
+        """stat() falhando (permissão, race) não pode derrubar quem chama."""
+        f = tmp_path / "a.py"
+        f.write_text("x = 1\n", encoding="utf-8")
+
+        def explode(self, *args, **kwargs):
+            raise OSError("permissão negada")
+
+        monkeypatch.setattr(Path, "stat", explode)
+        assert is_inspectable(f) is False
 
 
 class TestUntrackedFiles:

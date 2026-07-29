@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from kata.fit import diff_stats, is_trivial, untracked_stats
+from kata.fit import TRIVIAL_MAX_LINES, diff_stats, is_trivial, untracked_stats
+from kata.verify import MAX_UNTRACKED_FILE_BYTES
 
 
 class TestIsTrivial:
@@ -148,11 +150,44 @@ class TestUntrackedIsNotInvisible:
 
         assert is_trivial(files, lines) is True
 
-    def test_binary_file_does_not_break_counting(self, tmp_path) -> None:
+    def test_binary_file_counts_as_non_trivial(self, tmp_path) -> None:
+        """Antes contava 0 linhas, e com um arquivo só isso virava "trivial".
+        O que não pode ser lido não pode ser declarado trivial."""
         self._repo(tmp_path)
         (tmp_path / "blob.bin").write_bytes(b"\xff\xfe\x00binario")
 
         files, lines = untracked_stats(cwd=tmp_path)
 
         assert files == ["blob.bin"]
-        assert lines == 0
+        assert lines >= TRIVIAL_MAX_LINES
+        assert is_trivial(files, lines) is False
+
+    def test_oversized_file_counts_as_non_trivial(self, tmp_path) -> None:
+        """Grande demais para contar linha por linha, e grande demais para ser
+        trivial. Pular — o que o judge faz, porque precisa do conteúdo — daria
+        0 linha e reabriria a cegueira do triviality gate."""
+        self._repo(tmp_path)
+        grande = tmp_path / "dados.csv"
+        grande.write_text("x,y\n" * 200_000, encoding="utf-8")
+        assert grande.stat().st_size > MAX_UNTRACKED_FILE_BYTES
+
+        files, lines = untracked_stats(cwd=tmp_path)
+
+        assert files == ["dados.csv"]
+        assert lines >= TRIVIAL_MAX_LINES
+        assert is_trivial(files, lines) is False
+
+    def test_oversized_file_is_not_read(self, tmp_path, monkeypatch) -> None:
+        """A contagem tem de vir do tamanho, não da leitura: ler é justamente
+        o que o teto evita."""
+        self._repo(tmp_path)
+        (tmp_path / "dados.csv").write_text("x,y\n" * 200_000, encoding="utf-8")
+
+        def recusa(*args, **kwargs):
+            raise AssertionError("arquivo acima do teto não deve ser aberto")
+
+        monkeypatch.setattr(Path, "open", recusa)
+        files, lines = untracked_stats(cwd=tmp_path)
+
+        assert files == ["dados.csv"]
+        assert lines == TRIVIAL_MAX_LINES

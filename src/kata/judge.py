@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kata.verify import VerifyResult, _run, run_all, untracked_files
+from kata.verify import VerifyResult, _run, is_inspectable, run_all, untracked_files
 
 # ── regex patterns ────────────────────────────────────────────────────────
 
@@ -40,11 +40,6 @@ _DEBRIS_FILE_PATTERNS = [
     # falsos positivos.
     r"(?:^|[/_.\-])temp\d*(?:[/_.\-]|$)",
 ]
-
-# Teto por arquivo untracked que o judge lê inteiro para a memória.
-# 256 KB é ordens de grandeza acima de qualquer arquivo de código e ordens
-# de grandeza abaixo de um dataset ou log.
-_MAX_UNTRACKED_FILE_BYTES = 256 * 1024
 
 _DEBRIS_LINE_PATTERNS: list[tuple[str, str]] = [
     (r"^\+.*print\(.*debug", "debug print statement"),
@@ -142,25 +137,10 @@ def _base_commit_resolves(base_commit: str, cwd: Path | None = None) -> bool:
     return result.returncode == 0
 
 
-def _is_inspectable(path: Path) -> bool:
-    """Arquivo untracked pequeno o bastante para o judge ler inteiro.
-
-    Sem teto, um dataset ou log fora do .gitignore era lido integralmente
-    para a memória. O limite é por arquivo, e não acumulado, porque parar a
-    varredura no meio deixaria arquivos silenciosamente fora da inspeção —
-    a cegueira que este módulo existe para evitar. O que passa do teto é
-    pulado e declarado em caveat por _oversized_untracked.
-    """
-    try:
-        return path.is_file() and path.stat().st_size <= _MAX_UNTRACKED_FILE_BYTES
-    except OSError:
-        return False
-
-
 def _oversized_untracked(files: list[str], cwd: Path | None = None) -> list[str]:
     """Arquivos untracked grandes demais para inspecionar (viram caveat)."""
     base = cwd or Path.cwd()
-    return [f for f in files if (base / f).is_file() and not _is_inspectable(base / f)]
+    return [f for f in files if (base / f).is_file() and not is_inspectable(base / f)]
 
 
 def _untracked_diff(files: list[str], cwd: Path | None = None) -> str:
@@ -176,7 +156,7 @@ def _untracked_diff(files: list[str], cwd: Path | None = None) -> str:
     chunks: list[str] = []
     for f in files:
         path = base / f
-        if not _is_inspectable(path):
+        if not is_inspectable(path):
             continue
         try:
             content = path.read_text(encoding="utf-8")

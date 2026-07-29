@@ -13,7 +13,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from kata.verify import _run, untracked_files
+from kata.verify import _run, is_inspectable, untracked_files
+
+# Limite de linhas do triviality gate. Nomeado porque untracked_stats
+# precisa dele para tratar arquivo ilegível como não-trivial.
+TRIVIAL_MAX_LINES = 10
 
 
 def untracked_stats(cwd: Path | None = None) -> tuple[list[str], int]:
@@ -25,17 +29,28 @@ def untracked_stats(cwd: Path | None = None) -> tuple[list[str], int]:
     como trivial, pulando SIMPLIFY, INTENT e SURGICAL.
 
     As linhas são contadas sem carregar o arquivo inteiro na memória.
+
+    Arquivo que não pode ser lido — grande demais (ver
+    verify.MAX_UNTRACKED_FILE_BYTES) ou binário — conta como TRIVIAL_MAX_LINES,
+    o suficiente para reprovar o triviality gate. Contar zero, que é o que
+    acontecia antes, faria "não consegui olhar" virar "mudança trivial" e o
+    ciclo pularia SIMPLIFY, INTENT e SURGICAL exatamente onde há menos
+    evidência para confiar.
     """
     base = cwd or Path.cwd()
     files = untracked_files(cwd=cwd)
 
     total = 0
     for f in files:
+        caminho = base / f
+        if not is_inspectable(caminho):
+            total += TRIVIAL_MAX_LINES
+            continue
         try:
-            with (base / f).open(encoding="utf-8") as fh:
+            with caminho.open(encoding="utf-8") as fh:
                 total += sum(1 for _ in fh)
         except (OSError, UnicodeDecodeError):
-            continue
+            total += TRIVIAL_MAX_LINES
     return files, total
 
 
@@ -79,8 +94,8 @@ def diff_stats(cwd: Path | None = None) -> tuple[list[str], int]:
 
 
 def is_trivial(files: list[str], lines: int) -> bool:
-    """Retorna True se a tarefa é trivial: <=1 arquivo e <10 linhas.
+    """Retorna True se a tarefa é trivial: <=1 arquivo e menos de 10 linhas.
 
     Corresponde ao triviality gate do fable-method.
     """
-    return len(files) <= 1 and lines < 10
+    return len(files) <= 1 and lines < TRIVIAL_MAX_LINES

@@ -28,7 +28,7 @@ from typing import Any
 
 from kata import __version__
 from kata.fit import diff_stats, is_trivial
-from kata.judge import JudgeResult, judge_task
+from kata.judge import JudgeResult, is_debris_file, judge_task
 from kata.verify import VerifyResult, run_all, search_pattern
 
 try:
@@ -812,15 +812,19 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _detect_scratch_files() -> list[str]:
-    """Detecta arquivos temporários/de lixo no diff."""
+    """Detecta arquivos temporários/de lixo no diff.
+
+    Usa is_debris_file (kata.judge) para que CLI e JUDGE apliquem a mesma
+    regra. A cópia que existia aqui casava a substring "temp" e marcava
+    `templates/`, `temperature.py` e `attempt_parser.py` como detrito.
+    """
     diff = _run(["git", "diff", "--name-only"])
     if not diff.stdout.strip():
         diff = _run(["git", "diff", "--cached", "--name-only"])
     if not diff.stdout.strip():
         return []
-    scratch_patterns = [".tmp", ".bak", "scratch/", "temp"]
     files = diff.stdout.strip().split("\n")
-    return [f for f in files if any(p in f for p in scratch_patterns)]
+    return [f for f in files if is_debris_file(f)]
 
 
 def _format_intent_line(intent: dict[str, Any]) -> str:
@@ -908,7 +912,10 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     if tests is not None:
         checks.append(f"  {'✅' if tests else '❌'} pytest {'passou' if tests else 'falhou'}")
     cov = verify.get("coverage_pass")
-    cov_pct = verify.get("coverage_pct", 0)
+    # `or 0.0` e não `get(..., 0)`: a chave existe com valor None no template
+    # de --init e nos YAMLs escritos à mão pelas skills, então o default do
+    # get nunca entra e o format de None levanta TypeError.
+    cov_pct = verify.get("coverage_pct") or 0.0
     if cov is not None:
         label = f"  {'✅' if cov else '❌'} coverage {cov_pct:.1f}% {'≥' if cov else '<'} gate"
         checks.append(label)

@@ -1695,6 +1695,24 @@ class TestDetectScratch:
         mock_run.return_value.stdout = "src/main.py\ntests/test_foo.py\n"
         assert cli._detect_scratch_files() == []
 
+    @patch("kata.cli._run")
+    def test_temp_substring_is_not_debris(self, mock_run) -> None:
+        """Regressão: a regra do CLI casava a substring "temp" e marcava
+        templates/, temperature.py e attempt_parser.py como detrito. O CLI
+        agora usa a mesma regra do JUDGE (is_debris_file)."""
+        mock_run.return_value.stdout = (
+            "templates/email.html\n"
+            "src/temperature.py\n"
+            "attempt_parser.py\n"
+            "contemporary_utils.py\n"
+        )
+        assert cli._detect_scratch_files() == []
+
+    @patch("kata.cli._run")
+    def test_real_debris_still_detected_alongside_temp_substrings(self, mock_run) -> None:
+        mock_run.return_value.stdout = "templates/email.html\nout.tmp\n"
+        assert cli._detect_scratch_files() == ["out.tmp"]
+
 
 class TestStepReport:
     """Testa _step_report — formato e conteúdo do relatório outcome-first."""
@@ -1721,6 +1739,26 @@ class TestStepReport:
         assert "src/parser.py" in out
         assert "INTENT:" in out
         assert "92.0%" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_survives_null_coverage_pct(self, mock_scratch, capsys) -> None:
+        """Regressão: a chave coverage_pct existe com valor None no template
+        de --init e nos YAMLs escritos à mão pelas skills, então o default do
+        .get() nunca entrava e o format de None levantava TypeError."""
+        data = {
+            "status": "rejected",
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": False,
+                "coverage_pass": False,
+                "coverage_pct": None,
+            },
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "REJEITADO" in out
+        assert "0.0%" in out
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_rejected_report_has_caveats(self, mock_scratch, capsys) -> None:

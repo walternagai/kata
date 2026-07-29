@@ -118,6 +118,37 @@ def _base_commit_resolves(base_commit: str, cwd: Path | None = None) -> bool:
     return result.returncode == 0
 
 
+def _untracked_files(cwd: Path | None = None) -> list[str]:
+    """Arquivos novos que o git ainda não rastreia.
+
+    `git diff`, em qualquer das suas formas — inclusive contra base_commit —
+    é cego a arquivos que nunca entraram no índice. Sem isto, um arquivo
+    novo (por exemplo um teste inteiro escrito com `assert True`) fica
+    literalmente invisível ao JUDGE. cli._step_surgical já os considera.
+    """
+    result = _run(["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd)
+    return [f for f in result.stdout.strip().split("\n") if f.strip()]
+
+
+def _untracked_diff(files: list[str], cwd: Path | None = None) -> str:
+    """Sintetiza um diff de adição para arquivos untracked.
+
+    Produz só o que os hunters leem: o cabeçalho `diff --git` (de onde
+    hunt_weakened_checks extrai o arquivo corrente) e o conteúdo como
+    linhas '+'. Arquivos binários ou ilegíveis são ignorados.
+    """
+    base = cwd or Path.cwd()
+    chunks: list[str] = []
+    for f in files:
+        try:
+            content = (base / f).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        chunks.append(f"diff --git a/{f} b/{f}")
+        chunks.extend(f"+{line}" for line in content.splitlines())
+    return "\n".join(chunks)
+
+
 def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> str:
     """Retorna o diff da tarefa.
 
@@ -129,26 +160,35 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
     Sem base_commit (tarefas antigas, ou geradas fora do ciclo FIT), cai
     no comportamento anterior: unstaged, com fallback para staged — que
     só enxerga mudanças ainda não commitadas.
+
+    Em ambos os casos, o conteúdo dos arquivos untracked é anexado como
+    diff sintético: `git diff` nunca os mostra, e sem isso um arquivo novo
+    ficaria invisível aos hunters.
     """
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
-        return _run(["git", "diff", base_commit], cwd=cwd).stdout
+        diff = _run(["git", "diff", base_commit], cwd=cwd).stdout
+    else:
+        result = _run(["git", "diff"], cwd=cwd)
+        if not result.stdout.strip():
+            result = _run(["git", "diff", "--cached"], cwd=cwd)
+        diff = result.stdout
 
-    result = _run(["git", "diff"], cwd=cwd)
-    if not result.stdout.strip():
-        result = _run(["git", "diff", "--cached"], cwd=cwd)
-    return result.stdout
+    untracked = _untracked_diff(_untracked_files(cwd=cwd), cwd=cwd)
+    return f"{diff}\n{untracked}" if untracked else diff
 
 
 def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> list[str]:
     """Retorna a lista de arquivos alterados pela tarefa (mesma lógica de _run_git_diff)."""
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
         result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
-        return [f for f in result.stdout.strip().split("\n") if f.strip()]
+    else:
+        result = _run(["git", "diff", "--name-only"], cwd=cwd)
+        if not result.stdout.strip():
+            result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
 
-    result = _run(["git", "diff", "--name-only"], cwd=cwd)
-    if not result.stdout.strip():
-        result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
-    return [f for f in result.stdout.strip().split("\n") if f.strip()]
+    tracked = [f for f in result.stdout.strip().split("\n") if f.strip()]
+    seen = set(tracked)
+    return tracked + [f for f in _untracked_files(cwd=cwd) if f not in seen]
 
 
 # ── fraud hunters ─────────────────────────────────────────────────────────
@@ -156,6 +196,18 @@ def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> l
 
 def _is_test_file(filepath: str) -> bool:
     return filepath.startswith("tests/") or "/test_" in filepath or "_test." in filepath
+
+
+def is_debris_file(filepath: str) -> bool:
+    """Retorna True se o path parece detrito (temporário/backup/scratch).
+
+    Fonte única da regra: o JUDGE (hunt_debris) e o CLI
+    (cli._detect_scratch_files) precisam concordar. Enquanto a regra viveu
+    duplicada, a cópia do CLI usava a substring "temp" e marcava
+    `templates/`, `temperature.py` e `attempt_parser.py` como lixo — o
+    mesmo falso-positivo que _DEBRIS_FILE_PATTERNS já resolvia aqui.
+    """
+    return any(re.search(pat, filepath, re.IGNORECASE) for pat in _DEBRIS_FILE_PATTERNS)
 
 
 def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
@@ -264,14 +316,13 @@ def hunt_debris(diff: str, changed: list[str]) -> list[JudgeFraud]:
     frauds: list[JudgeFraud] = []
 
     for f in changed:
-        for pat in _DEBRIS_FILE_PATTERNS:
-            if re.search(pat, f, re.IGNORECASE):
-                frauds.append(JudgeFraud(
-                    type="debris",
-                    severity="low",
-                    description=f"arquivo temporário/de lixo: {f}",
-                    evidence=f"arquivo suspeito: {f}",
-                ))
+        if is_debris_file(f):
+            frauds.append(JudgeFraud(
+                type="debris",
+                severity="low",
+                description=f"arquivo temporário/de lixo: {f}",
+                evidence=f"arquivo suspeito: {f}",
+            ))
 
     found_types: set[str] = set()
     for line in diff.split("\n"):

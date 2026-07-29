@@ -5,10 +5,13 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from kata.judge import (
     JudgeFraud,
     JudgeResult,
     _changed_files,
+    _run_git_diff,
     collect_claims,
     hunt_debris,
     hunt_false_completion,
@@ -16,6 +19,7 @@ from kata.judge import (
     hunt_spec_betrayal,
     hunt_unauthorized_action,
     hunt_weakened_checks,
+    is_debris_file,
     judge_task,
 )
 from kata.verify import VerifyResult
@@ -619,7 +623,7 @@ class TestRunGitDiff:
         )
         diff = _run_git_diff()
         assert "diff --git" in diff
-        assert mock_run.call_args[0][0] == ["git", "diff"]
+        assert mock_run.call_args_list[0][0][0] == ["git", "diff"]
 
     @patch("kata.judge._run")
     def test_git_diff_staged_fallback(self, mock_run: MagicMock) -> None:
@@ -629,10 +633,11 @@ class TestRunGitDiff:
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="diff --git a/staged.py b/staged.py\n", stderr=""
             ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         diff = _run_git_diff()
         assert "staged.py" in diff
-        assert mock_run.call_args[0][0] == ["git", "diff", "--cached"]
+        assert mock_run.call_args_list[1][0][0] == ["git", "diff", "--cached"]
 
     @patch("kata.judge._run")
     def test_base_commit_used_when_it_resolves(self, mock_run: MagicMock) -> None:
@@ -645,6 +650,7 @@ class TestRunGitDiff:
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="diff --git a/f.py b/f.py\n+pass\n", stderr=""
             ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         diff = _run_git_diff(base_commit="deadbeef")
         assert "+pass" in diff
@@ -661,6 +667,7 @@ class TestRunGitDiff:
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="diff --git a/local.py b/local.py\n", stderr=""
             ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         diff = _run_git_diff(base_commit="deadbeef")
         assert "local.py" in diff
@@ -685,6 +692,7 @@ class TestChangedFiles:
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="staged.py\n", stderr=""
             ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files = _changed_files()
         assert files == ["staged.py"]
@@ -702,6 +710,7 @@ class TestChangedFiles:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # cat-file
             subprocess.CompletedProcess(args=[], returncode=0, stdout="committed.py\n", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files = _changed_files(base_commit="deadbeef")
         assert files == ["committed.py"]
@@ -712,6 +721,7 @@ class TestChangedFiles:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad revision"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="local.py\n", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files = _changed_files(base_commit="deadbeef")
         assert files == ["local.py"]
@@ -775,3 +785,83 @@ class TestJudgeTaskDetectsCommittedFraud:
         result = judge_task(task_data, cwd=tmp_path)
         assert any(f.type == "weakened_checks" for f in result.frauds)
         assert result.verdict == "REFUTED"
+
+
+class TestIsDebrisFile:
+    """Regra única de detrito, compartilhada entre JUDGE e CLI."""
+
+    @pytest.mark.parametrize(
+        "path", ["file.tmp", "main.py.bak", "scratch/test.py", "temp.py", "my_temp_file.py"],
+    )
+    def test_debris_paths(self, path: str) -> None:
+        assert is_debris_file(path) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "templates/email.html",
+            "src/temperature.py",
+            "attempt_parser.py",
+            "contemporary_utils.py",
+            "src/main.py",
+        ],
+    )
+    def test_non_debris_paths(self, path: str) -> None:
+        assert is_debris_file(path) is False
+
+
+class TestJudgeSeesUntrackedFiles:
+    """Prova, com um repo git de verdade, que um arquivo novo ainda não
+    rastreado não é invisível ao JUDGE. `git diff` — inclusive contra
+    base_commit — não enxerga untracked, então uma fraude podia entrar
+    inteira num arquivo nunca adicionado ao índice."""
+
+    def _make_repo(self, tmp_path) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        (tmp_path / "README.md").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=tmp_path, check=True)
+
+    def test_untracked_file_listed_as_changed(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._make_repo(tmp_path)
+        (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
+
+        assert _changed_files(cwd=tmp_path) == ["novo.py"]
+
+    def test_untracked_content_reaches_the_diff(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._make_repo(tmp_path)
+        (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
+
+        diff = _run_git_diff(cwd=tmp_path)
+        assert "diff --git a/novo.py b/novo.py" in diff
+        assert "+x = 1" in diff
+
+    def test_untracked_weakened_test_is_caught(self, tmp_path, monkeypatch) -> None:
+        """O caso que motiva a correção: um teste inteiro escrito com o
+        corpo trocado por `pass`, deixado untracked, era invisível."""
+        monkeypatch.chdir(tmp_path)
+        self._make_repo(tmp_path)
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_fake.py").write_text(
+            "def test_importante():\n    pass\n", encoding="utf-8"
+        )
+
+        task_data = {"verify": {}, "surgical": {}, "intent": {}, "artifact": {}}
+        result = judge_task(task_data, cwd=tmp_path)
+
+        assert any(f.type == "weakened_checks" for f in result.frauds)
+        assert result.verdict == "REFUTED"
+
+    def test_untracked_binary_file_does_not_break_the_diff(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._make_repo(tmp_path)
+        (tmp_path / "blob.bin").write_bytes(b"\xff\xfe\x00binary")
+
+        diff = _run_git_diff(cwd=tmp_path)
+        assert "blob.bin" not in diff
+        assert _changed_files(cwd=tmp_path) == ["blob.bin"]

@@ -23,6 +23,23 @@ import yaml
 SCENARIOS_DIR = Path(__file__).parent / "scenarios"
 KATA_CLI = [sys.executable, "-m", "kata"]
 
+# Config escrita em cada fixture, git-ignorada como .kata/, para fixar as
+# regras que o ruff do judge aplica lá dentro.
+#
+# Sem isto o veredito do cenário dependia das regras-padrão do ruff instalado:
+# a 0.16 passou a habilitar I001 por padrão, o fixture do s01 deixou de ser
+# lint-clean, e o judge — corretamente — acusou false_completion contra a claim
+# `ruff_clean: true`. Como `ruff>=0.1.0` no pyproject não tem teto, o CI
+# instala o mais novo e local não. Um cenário de trap não pode mudar de
+# veredito por causa disso.
+_FIXTURE_CONFIG = """\
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F"]
+"""
+
 
 def task_name(fixture_dir: Path) -> str:
     """Descobre o nome da tarefa a partir do próprio fixture.
@@ -57,7 +74,10 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
         subprocess.run(["git", *args], cwd=path, capture_output=True, check=True)
 
     git("init", "-q")
-    (path / ".git" / "info" / "exclude").write_text(".kata/\n", encoding="utf-8")
+    (path / ".git" / "info" / "exclude").write_text(
+        ".kata/\npyproject.toml\n", encoding="utf-8"
+    )
+    (path / "pyproject.toml").write_text(_FIXTURE_CONFIG, encoding="utf-8")
     git("config", "user.email", "eval@kata.local")
     git("config", "user.name", "kata-eval")
     git("add", "-A")

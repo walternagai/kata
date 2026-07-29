@@ -399,7 +399,9 @@ reused independently.
 
 ```python
 diff_stats(cwd: Path | None = None) -> tuple[list[str], int]
+untracked_stats(cwd: Path | None = None) -> tuple[list[str], int]
 is_trivial(files: list[str], lines: int) -> bool
+TRIVIAL_MAX_LINES: int
 ```
 
 ### `kata.verify`
@@ -410,7 +412,20 @@ run_pytest(testpaths=None, ignore=None, cwd=None, extra_args=None) -> VerifyResu
 run_coverage(source="src", testpaths=None, ignore=None, gate=70.0, cwd=None)
 search_pattern(pattern, paths=None, cwd=None) -> SearchResult
 run_all(ruff_paths=None, test_paths=None, ignore=None, cov_source="src", gate=70.0, cwd=None)
+
+untracked_files(cwd=None) -> list[str]
+is_inspectable(path: Path) -> bool
+MAX_UNTRACKED_FILE_BYTES: int
 ```
+
+`untracked_files` and `is_inspectable` are shared Git helpers rather than
+checks. `git diff` in any form is blind to files that never entered the index,
+so both `kata.fit` and `kata.judge` need the first; the second is the single
+size limit above which a file cannot be read whole. What each does when the
+limit is exceeded differs on purpose: the judge skips the file and reports a
+caveat, while fit counts it as exceeding the triviality threshold, because
+treating "could not read" as "no lines changed" is what made the triviality
+gate call a new 200-line module trivial.
 
 `VerifyResult` contains `ok`, captured `output`, and a `details` dictionary.
 `SearchResult` contains the searched pattern, `SearchMatch` objects, and the

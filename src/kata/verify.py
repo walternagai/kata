@@ -2,6 +2,11 @@
 
 Modularizada para que possa ser testada independentemente e reutilizada
 tanto pelo CLI quanto por outros ferramentais.
+
+Abriga também as consultas ao git que fit, judge e cli compartilham
+(`untracked_files`, `is_inspectable`), porque é onde já vive o wrapper de
+subprocess que os três importam. Cada uma dessas chegou aqui depois de existir
+em duas ou três cópias.
 """
 
 from __future__ import annotations

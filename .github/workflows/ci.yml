@@ -8,9 +8,18 @@ on:
 permissions:
   contents: read
 
+# Push repetido num PR cancela o run anterior; em `main` não, porque o status
+# de cada commit importa por si.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # A suíte roda em ~25s; dez minutos é margem larga e ainda corta um job
+    # travado bem antes do limite padrão de seis horas.
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:

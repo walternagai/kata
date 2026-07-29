@@ -831,10 +831,20 @@ class TestIsInvalidTaskName:
             "my task",              # viraria ".kata/my task.yaml"
             "tab\tname",
             "foo.yaml",             # viraria ".kata/foo.yaml.yaml"
+            "foo.json",             # idem quando PyYAML está ausente
         ],
     )
     def test_rejected(self, name: str) -> None:
         assert cli._is_invalid_task_name(name) is True
+
+    @pytest.mark.parametrize("name", ["foo.yaml", "foo.json"])
+    def test_extension_rejected_regardless_of_pyyaml(self, name: str, monkeypatch) -> None:
+        """A regra amarrada a _ext() deixava `--init foo.yaml` passar sem
+        PyYAML, criando `.kata/foo.yaml.json`. Nome de tarefa não pode depender
+        de qual biblioteca está instalada."""
+        for has_yaml in (True, False):
+            monkeypatch.setattr(cli, "_HAS_YAML", has_yaml)
+            assert cli._is_invalid_task_name(name) is True
 
     @pytest.mark.parametrize(
         "name",

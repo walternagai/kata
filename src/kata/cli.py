@@ -43,6 +43,10 @@ except ImportError:
 
 _TASK_WHITESPACE = re.compile(r"\s")
 
+# Extensões que _task_path pode concatenar, conforme PyYAML esteja
+# presente ou não. A validação rejeita as duas independentemente.
+_SERIALIZATION_EXTS = (".yaml", ".json")
+
 
 def _cwd() -> Path:
     """Retorna o diretório de trabalho atual."""
@@ -105,6 +109,11 @@ def _is_invalid_task_name(task: str) -> bool:
     cobre "." e "..") e nomes que já trazem a extensão de serialização
     (`--init foo.yaml` produziria `.kata/foo.yaml.yaml`, porque _task_path
     concatena a extensão).
+
+    Ambas as extensões são rejeitadas sempre, e não só a de _ext(): amarrar a
+    regra ao formato ativo fazia `--init foo.yaml` passar quando PyYAML está
+    ausente, criando `.kata/foo.yaml.json`. Nome de tarefa é escolha do
+    usuário e não deve depender de qual biblioteca está instalada.
     """
     if not task or not task.strip():
         return True
@@ -112,7 +121,7 @@ def _is_invalid_task_name(task: str) -> bool:
         return True
     if task.startswith("."):
         return True
-    if task.endswith(_ext()):
+    if task.endswith(_SERIALIZATION_EXTS):
         return True
     return "/" in task or "\\" in task or ".." in task
 
@@ -127,7 +136,8 @@ def _validate_task_name(task: str) -> None:
         print(
             f"⚠  Nome de tarefa inválido: '{task}'. "
             "Não pode ser vazio, conter espaços, começar com '.', "
-            f"terminar em '{_ext()}', nem conter '/', '\\' ou '..'."
+            f"terminar em {' ou '.join(_SERIALIZATION_EXTS)}, "
+            "nem conter '/', '\\' ou '..'."
         )
         sys.exit(1)
 

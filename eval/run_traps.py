@@ -23,6 +23,10 @@ import yaml
 SCENARIOS_DIR = Path(__file__).parent / "scenarios"
 KATA_CLI = [sys.executable, "-m", "kata"]
 
+# Folgado para o cenário mais lento (s03 roda ruff e pytest de verdade no
+# fixture), apertado o bastante para não pendurar o CI.
+JUDGE_TIMEOUT_S = 180
+
 # Config escrita em cada fixture, git-ignorada como .kata/, para fixar as
 # regras que o ruff do judge aplica lá dentro.
 #
@@ -41,6 +45,14 @@ select = ["E", "F"]
 """
 
 
+class ScenarioError(Exception):
+    """Falha ao preparar ou executar um cenário.
+
+    Distinta de SystemExit de propósito: o problema é de um cenário, e derrubar
+    a suíte inteira por causa dele esconderia o resultado dos outros sete.
+    """
+
+
 def task_name(fixture_dir: Path) -> str:
     """Descobre o nome da tarefa a partir do próprio fixture.
 
@@ -49,8 +61,8 @@ def task_name(fixture_dir: Path) -> str:
     """
     tarefas = sorted(p.stem for p in (fixture_dir / ".kata").glob("*.yaml"))
     if len(tarefas) != 1:
-        raise SystemExit(
-            f"{fixture_dir}: esperado exatamente 1 task em .kata/, encontrado {tarefas}"
+        raise ScenarioError(
+            f"esperado exatamente 1 task em .kata/, encontrado {tarefas}"
         )
     return tarefas[0]
 
@@ -86,13 +98,22 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
 
 
 def run_judge(path: Path, task: str) -> dict:
-    """Executa kata --judge no diretório do fixture e retorna o resultado."""
-    result = subprocess.run(
-        [*KATA_CLI, "--judge", "--task", task],
-        cwd=path,
-        capture_output=True,
-        text=True,
-    )
+    """Executa kata --judge no diretório do fixture e retorna o resultado.
+
+    Com timeout: o judge roda ruff e pytest dentro do fixture quando a tarefa
+    afirma que passaram, e um teste que trava lá pendura a suíte inteira —
+    no CI, até o limite do job.
+    """
+    try:
+        result = subprocess.run(
+            [*KATA_CLI, "--judge", "--task", task],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=JUDGE_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ScenarioError(f"judge não terminou em {JUDGE_TIMEOUT_S}s") from exc
     return {
         "returncode": result.returncode,
         "stdout": result.stdout,
@@ -218,14 +239,17 @@ def main() -> None:
         print(f"  [{name}] Setup...", end=" ")
 
         with tempfile.TemporaryDirectory(prefix=f"kata-eval-{name}-") as tmpdir:
-            fixture_dir = scenario / "fixture"
-            work_dir = Path(tmpdir) / "work"
-            shutil.copytree(fixture_dir, work_dir)
+            try:
+                fixture_dir = scenario / "fixture"
+                work_dir = Path(tmpdir) / "work"
+                shutil.copytree(fixture_dir, work_dir)
 
-            init_git_repo(work_dir, gt.get("leave_untracked"))
+                init_git_repo(work_dir, gt.get("leave_untracked"))
 
-            judge_output = run_judge(work_dir, task_name(work_dir))
-            passed, messages = evaluate(scenario, gt, judge_output)
+                judge_output = run_judge(work_dir, task_name(work_dir))
+                passed, messages = evaluate(scenario, gt, judge_output)
+            except (ScenarioError, OSError, subprocess.SubprocessError) as exc:
+                passed, messages = False, [f"  ❌ {type(exc).__name__}: {exc}"]
 
             results[name] = passed
             status = "✅" if passed else "❌"

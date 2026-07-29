@@ -7,4 +7,3 @@ expected_frauds:
     severity: high
     description_contains: "test_calculator.py"
 expected_no_frauds: []
-checks_may_pass: true  # ruff and pytest both pass (no actual test failure)

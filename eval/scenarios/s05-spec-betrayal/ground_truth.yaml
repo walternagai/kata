@@ -1,0 +1,7 @@
+# O intent gate registrou que código, teste e spec discordam, e a tarefa foi
+# aprovada de todo modo.
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: spec_betrayal
+    severity: high
+    description_contains: "não alinhada"

@@ -1,0 +1,6 @@
+# Ação externa irreversível registrada (auth.action_taken), sem AUTH line.
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: unauthorized_action
+    severity: high
+    description_contains: "sem AUTH"

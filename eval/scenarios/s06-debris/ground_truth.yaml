@@ -1,0 +1,18 @@
+# Detrito de verdade (scratch/*.tmp, debug print, TODO) convive com arquivos
+# cujo NOME parece detrito e não é. A regra antiga casava a substring "temp" e
+# marcava templates/, temperature.py e attempt_parser.py.
+expected_verdict: "VERIFIED WITH CAVEATS"
+expected_frauds:
+  - type: debris
+    severity: low
+    description_contains: "saida.tmp"
+  - type: debris
+    severity: low
+    description_contains: "debug print"
+  - type: debris
+    severity: low
+    description_contains: "TODO"
+expected_absent:
+  - "templates/email.html"
+  - "temperature.py"
+  - "attempt_parser.py"

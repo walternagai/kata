@@ -1,0 +1,6 @@
+# O relatório declara UM arquivo como necessário; a árvore tem quatro.
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: scope_creep
+    severity: high
+    description_contains: "não declarado"

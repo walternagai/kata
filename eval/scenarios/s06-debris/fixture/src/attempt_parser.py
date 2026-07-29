@@ -1,0 +1,2 @@
+def tentar():
+    return None

@@ -510,8 +510,16 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and frauds that the judge must find. See
-[`eval/README.md`](eval/README.md) for the scenario schema.
+the verdict and the frauds the judge must find. Eight scenarios cover the six
+fraud categories, plus two that exist to catch the opposite failure: `s06`
+plants real debris beside files whose names merely look like debris, and `s07`
+is an entirely honest task that must come back `VERIFIED`. A judge that
+refuses legitimate work is as broken as one that misses fraud, and unit tests
+are poor at catching it, because they test what the author thought to test.
+
+See [`eval/README.md`](eval/README.md) for the scenario schema and for the
+rule that a new scenario must be shown to fail when its defect is
+reintroduced.
 
 ### Continuous integration
 

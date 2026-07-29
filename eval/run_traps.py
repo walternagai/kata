@@ -23,8 +23,22 @@ SCENARIOS_DIR = Path(__file__).parent / "scenarios"
 KATA_CLI = [sys.executable, "-m", "kata"]
 
 
-def init_git_repo(path: Path) -> None:
-    """Inicializa um repositório git com o fixture inteiro staged, sem commit.
+def task_name(fixture_dir: Path) -> str:
+    """Descobre o nome da tarefa a partir do próprio fixture.
+
+    Antes era fixo ("fix-divide-by-zero"), o que obrigava todo cenário novo a
+    reusar o nome do primeiro.
+    """
+    tarefas = sorted(p.stem for p in (fixture_dir / ".kata").glob("*.yaml"))
+    if len(tarefas) != 1:
+        raise SystemExit(
+            f"{fixture_dir}: esperado exatamente 1 task em .kata/, encontrado {tarefas}"
+        )
+    return tarefas[0]
+
+
+def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
+    """Inicializa um repositório git com o fixture staged, sem commit.
 
     O fixture já vem com a fraude plantada (ex: corpo de teste virado
     `pass`). O judge detecta fraudes inspecionando `git diff`/`git diff
@@ -33,28 +47,27 @@ def init_git_repo(path: Path) -> None:
     `.kata/` é git-ignorado localmente (via .git/info/exclude, não um
     .gitignore rastreado) como no projeto real, para não aparecer como
     scope creep no diff nem no diff em si.
+
+    `leave_untracked` remove caminhos do índice depois do `git add -A`, para
+    que fiquem só na árvore de trabalho. É o estado que o judge era cego a
+    enxergar, e o único jeito de exercitá-lo aqui.
     """
-    subprocess.run(["git", "init", "-q"], cwd=path, capture_output=True, check=True)
+    git = lambda *args: subprocess.run(  # noqa: E731
+        ["git", *args], cwd=path, capture_output=True, check=True
+    )
+    git("init", "-q")
     (path / ".git" / "info" / "exclude").write_text(".kata/\n", encoding="utf-8")
-    subprocess.run(
-        ["git", "config", "user.email", "eval@kata.local"],
-        cwd=path,
-        capture_output=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "kata-eval"],
-        cwd=path,
-        capture_output=True,
-        check=True,
-    )
-    subprocess.run(["git", "add", "-A"], cwd=path, capture_output=True, check=True)
+    git("config", "user.email", "eval@kata.local")
+    git("config", "user.name", "kata-eval")
+    git("add", "-A")
+    for caminho in leave_untracked or []:
+        git("rm", "--cached", "-q", caminho)
 
 
-def run_judge(path: Path) -> dict:
+def run_judge(path: Path, task: str) -> dict:
     """Executa kata --judge no diretório do fixture e retorna o resultado."""
     result = subprocess.run(
-        [*KATA_CLI, "--judge", "--task", "fix-divide-by-zero"],
+        [*KATA_CLI, "--judge", "--task", task],
         cwd=path,
         capture_output=True,
         text=True,
@@ -105,6 +118,13 @@ def evaluate(scenario_dir: Path, ground_truth: dict, judge_output: dict) -> tupl
                 f"  ❌ Fraude '{no_fraud_type}' detectada mas não deveria (falso positivo)"
             )
 
+    # Falso positivo em arquivo específico: o tipo de fraude pode ser esperado
+    # no cenário e ainda assim um arquivo honesto não deve aparecer nele.
+    for texto in ground_truth.get("expected_absent", []):
+        if texto in stdout:
+            passed = False
+            messages.append(f"  ❌ '{texto}' apareceu no output — falso positivo")
+
     return passed, messages
 
 
@@ -133,9 +153,9 @@ def main() -> None:
             work_dir = Path(tmpdir) / "work"
             shutil.copytree(fixture_dir, work_dir)
 
-            init_git_repo(work_dir)
+            init_git_repo(work_dir, gt.get("leave_untracked"))
 
-            judge_output = run_judge(work_dir)
+            judge_output = run_judge(work_dir, task_name(work_dir))
             passed, messages = evaluate(scenario, gt, judge_output)
 
             results[name] = passed

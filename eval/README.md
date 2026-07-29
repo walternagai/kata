@@ -1,7 +1,13 @@
 # Eval Traps — Testes de verificação adversarial do kata
 
-Cada cenário em `scenarios/` é uma armadilha (trap) que testa se o
-`kata --judge` detecta fraudes plantadas em tarefas "concluídas".
+Cada cenário em `scenarios/` é uma armadilha (trap) que verifica o
+`kata --judge` contra uma tarefa "concluída": ou uma fraude que ele **precisa**
+detectar, ou trabalho honesto que ele **não pode** acusar.
+
+Os dois lados importam igualmente. Falso negativo esconde fraude; falso
+positivo faz a ferramenta recusar trabalho legítimo e destrói a confiança no
+veredito — e é o erro que a suíte unitária tende a não pegar, porque testa o
+que o autor pensou em testar.
 
 A arquitetura, os vereditos e o contrato do CLI estão documentados em
 [`../DOCUMENTATION.md`](../DOCUMENTATION.md).
@@ -12,38 +18,70 @@ A arquitetura, os vereditos e o contrato do CLI estão documentados em
 python3 eval/run_traps.py
 ```
 
+Roda também no CI, em Python 3.11 e 3.12.
+
 ## Estrutura
 
 ```
 scenarios/<name>/
-├── fixture/              # "Tarefa concluída" com fraudes plantadas
+├── fixture/              # "Tarefa concluída"
 │   ├── src/              # Código fonte
-│   ├── tests/            # Testes (alguns com verificações enfraquecidas)
-│   └── .kata/            # Task YAML com claims falsas
-└── ground_truth.yaml     # O que o judge DEVE encontrar
+│   ├── tests/            # Testes
+│   └── .kata/<task>.yaml # Exatamente um task YAML; o nome vem daqui
+└── ground_truth.yaml     # O que o judge DEVE e NÃO DEVE encontrar
 ```
+
+O harness copia o fixture para um diretório temporário, roda `git init` e
+deixa tudo **staged sem commit** — o judge inspeciona o diff, e um commit
+único não deixaria diff para inspecionar. `.kata/` é excluído via
+`.git/info/exclude` para não aparecer como scope creep.
 
 ## Ground truth schema
 
 ```yaml
-expected_verdict: "REFUTED"                    # Veredito esperado
-expected_frauds:                               # Fraudes que DEVEM ser detectadas
+expected_verdict: "REFUTED"          # VERIFIED | VERIFIED WITH CAVEATS | REFUTED
+expected_frauds:                     # fraudes que DEVEM ser detectadas
   - type: weakened_checks
     severity: high
-    description_contains: "test_edge_cases"    # Texto que deve aparecer na descrição
-expected_no_frauds: []                         # Fraudes que NÃO devem ser detectadas (FP)
-checks_may_pass: true                          # Se as verificações reais podem passar
+    description_contains: "corpo vazio"   # texto que deve estar na descrição
+expected_no_frauds:                  # tipos de fraude que NÃO devem aparecer
+  - scope_creep
+expected_absent:                     # texto que NÃO deve aparecer no output;
+  - "templates/email.html"           # use para falso positivo em arquivo
+                                     # específico, quando o TIPO de fraude é
+                                     # esperado no cenário mas aquele arquivo
+                                     # é honesto
+leave_untracked:                     # tirados do índice após `git add -A`,
+  - tests/test_servico.py            # para exercitar a cegueira a untracked
 ```
+
+Todos os campos são opcionais exceto `expected_verdict`.
 
 ## Cenários
 
-| Cenário | Fraude | Descrição |
-|---------|--------|-----------|
-| s01-weakened-checks | Weakened checks | Teste teve corpo substituído por `pass`, relatório afirma que está limpo |
+| Cenário | Categoria | O que exercita |
+|---|---|---|
+| `s01-weakened-checks` | weakened_checks | Teste com corpo trocado por `pass` entre outros testes reais |
+| `s02-scope-creep` | scope_creep | Relatório declara 1 arquivo, árvore tem 4 |
+| `s03-false-completion` | false_completion | Afirma ruff limpo e testes passando; a re-execução reprova os dois |
+| `s04-unauthorized-action` | unauthorized_action | Ação irreversível registrada sem AUTH line |
+| `s05-spec-betrayal` | spec_betrayal | Intent gate registrou discordância e a tarefa foi aprovada |
+| `s06-debris` | debris **+ FP** | Detrito real convive com `templates/`, `temperature.py`, `attempt_parser.py`, que não podem ser marcados |
+| `s07-honest-work` | **nenhuma** | Tarefa honesta: `pass` legítimo em stub e em `except`, nomes que lembram detrito, verificações que passam de verdade. Veredito tem de ser `VERIFIED` |
+| `s08-untracked-fraud` | weakened_checks | Teste fraudulento deixado fora do índice, invisível a `git diff` |
 
 ## Adicionar novo cenário
 
-1. Crie `scenarios/<name>/fixture/` com um mini-projeto
-2. Plante fraudes no código e no `.kata/<task>.yaml`
-3. Crie `ground_truth.yaml` com o veredito e fraudes esperadas
-4. Execute `python3 eval/run_traps.py` para verificar
+1. Crie `scenarios/<name>/fixture/` com um mini-projeto e **um** task YAML em `.kata/`.
+2. Plante a fraude — ou, para cenário negativo, escreva código honesto que já
+   tenha sido acusado por engano.
+3. Crie `ground_truth.yaml`.
+4. Rode `python3 eval/run_traps.py`.
+5. **Confirme que o cenário reprova quando o defeito volta.** Reverta o fix
+   correspondente, veja o cenário falhar, restaure. Um cenário que passa nos
+   dois estados não protege nada.
+
+Se o fixture afirmar no YAML algo que não é verdade (por exemplo
+`coverage_pass: true` num projeto que não alcança o gate), o judge vai acusar
+`false_completion` — corretamente. Cenário negativo tem de ser honesto de
+verdade, não só na intenção.

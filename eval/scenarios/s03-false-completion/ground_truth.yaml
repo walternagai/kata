@@ -1,5 +1,6 @@
-# O relatório afirma ruff limpo e testes passando. A re-execução do judge
-# encontra um F401 e um teste falhando.
+# O relatório afirma ruff limpo, testes passando e coverage no gate. A
+# re-execução do judge reprova os três: F401 no src/, teste falhando, e
+# coverage pulado porque o pytest falhou.
 expected_verdict: "REFUTED"
 expected_frauds:
   - type: false_completion
@@ -8,3 +9,6 @@ expected_frauds:
   - type: false_completion
     severity: high
     description_contains: "pytest"
+  - type: false_completion
+    severity: high
+    description_contains: "coverage"

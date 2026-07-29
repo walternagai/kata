@@ -6,6 +6,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Posse de caminho — tabela de decisão de Test-ManagedPath:
+#
+#   estado do destino                     instalar        desinstalar
+#   ------------------------------------  --------------  ----------------
+#   não existe                            cria            nada a fazer
+#   link/junction (nosso)                 substitui       remove
+#   cópia nossa (está no manifesto)       recopia         remove
+#   diretório com marcador legado         recopia         remove
+#   qualquer outra coisa (do usuário)     throw           avisa e preserva
+#
+# Verificação: este script não foi executado — não há PowerShell no ambiente
+# em que foi escrito. A tabela acima é o contrato a conferir.
+
+
 $kataRoot = Split-Path -Parent $PSScriptRoot
 $configRoot = if ($env:OPENCODE_CONFIG_DIR) {
     $env:OPENCODE_CONFIG_DIR
@@ -20,17 +34,36 @@ $skillsRoot = Join-Path $kataRoot "opencode/skills"
 $skills = Get-ChildItem -Directory -Path $skillsRoot | Select-Object -ExpandProperty Name | Sort-Object
 if ($skills.Count -eq 0) { throw "Nenhuma skill encontrada em $skillsRoot" }
 
-# Marcador gravado dentro de cada diretório que o modo -Copy cria, para que a
-# desinstalação saiba o que é dela. Sem isso não há como distinguir uma cópia
-# nossa de um diretório do próprio usuário com o mesmo nome.
-$managedMarker = ".kata-managed"
+# O instalador REGISTRA o que criou, em vez de tentar inferir do filesystem.
+# Inferir não funcionava para arquivo: o marcador só podia ser gravado dentro
+# de um diretório, então a cópia do agente não era reconhecida pelo próprio
+# instalador — não se conseguia desinstalar (avisava "Preservado") nem
+# reinstalar (`throw`), travando o modo -Copy após a primeira instalação.
+$managedMarker = ".kata-managed"   # legado: instalações antigas marcavam por dentro
+$manifestPath = Join-Path $configRoot ".kata-manifest"
+
+function Get-Manifest() {
+    if (Test-Path -LiteralPath $manifestPath) {
+        return @(Get-Content -LiteralPath $manifestPath | Where-Object { $_ -ne "" })
+    }
+    return @()
+}
+
+function Add-ToManifest([string]$Path) {
+    $atual = Get-Manifest
+    if ($atual -notcontains $Path) {
+        Set-Content -LiteralPath $manifestPath -Value (@($atual) + $Path)
+    }
+}
 
 function Test-ManagedPath([string]$Path) {
     $item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
     if ($null -eq $item) { return $true }                                    # não existe: livre
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $true }  # link nosso
-    if ($item -isnot [IO.DirectoryInfo]) { return $false }                   # arquivo do usuário
-    return Test-Path -LiteralPath (Join-Path $Path $managedMarker)           # cópia nossa
+    if ((Get-Manifest) -contains $Path) { return $true }                     # cópia nossa
+    # Compatibilidade com instalações anteriores, que marcavam o diretório.
+    return ($item -is [IO.DirectoryInfo]) -and
+           (Test-Path -LiteralPath (Join-Path $Path $managedMarker))
 }
 
 # Remove apenas o que o instalador criou. A versão anterior fazia
@@ -70,10 +103,10 @@ function Install-Entry([string]$Source, [string]$Target, [bool]$IsDirectory) {
 
     if ($IsDirectory) {
         Copy-Item -Recurse -Force -Path $Source -Destination $Target
-        New-Item -ItemType File -Force -Path (Join-Path $Target $managedMarker) | Out-Null
     } else {
         Copy-Item -Force -Path $Source -Destination $Target
     }
+    Add-ToManifest $Target
     return "copy"
 }
 
@@ -83,6 +116,9 @@ if ($Uninstall) {
     foreach ($skill in $skills) {
         Remove-ManagedPath (Join-Path $configRoot "skills/$skill")
     }
+    # O manifesto registra cópias; depois de removê-las ele não deve
+    # sobreviver apontando para caminhos que já não existem.
+    if (Test-Path -LiteralPath $manifestPath) { Remove-Item -Force -LiteralPath $manifestPath }
     Write-Host "Kata removido. Reinicie o OpenCode se ele estiver em execução."
     exit 0
 }

@@ -5,10 +5,3 @@
 # esconde fraude.
 expected_verdict: "VERIFIED"
 expected_frauds: []
-expected_no_frauds:
-  - weakened_checks
-  - scope_creep
-  - debris
-  - spec_betrayal
-  - unauthorized_action
-  - false_completion

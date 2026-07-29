@@ -11,6 +11,7 @@ Para cada cenário em eval/scenarios/:
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -52,9 +53,9 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     que fiquem só na árvore de trabalho. É o estado que o judge era cego a
     enxergar, e o único jeito de exercitá-lo aqui.
     """
-    git = lambda *args: subprocess.run(  # noqa: E731
-        ["git", *args], cwd=path, capture_output=True, check=True
-    )
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=path, capture_output=True, check=True)
+
     git("init", "-q")
     (path / ".git" / "info" / "exclude").write_text(".kata/\n", encoding="utf-8")
     git("config", "user.email", "eval@kata.local")
@@ -85,6 +86,68 @@ def load_ground_truth(scenario_dir: Path) -> dict:
         return yaml.safe_load(f)
 
 
+_LINHA_FRAUDE = re.compile(r"^\s*\S*\s*\[(high|medium|low)\]\s+(\w+)\s*$")
+
+
+def parse_frauds(stdout: str) -> list[dict]:
+    """Extrai a lista de fraudes que o judge relatou.
+
+    O formato é estável (cli._print_judge_verdict): uma linha
+    `<ícone> [severidade] tipo` seguida da descrição indentada. Parsear em
+    vez de buscar substring é o que permite exigir correspondência exata —
+    sem isso o ground truth só sabia dizer "contém pelo menos", e um cenário
+    passava mesmo quando o judge relatava fraudes que ninguém previu.
+    """
+    frauds: list[dict] = []
+    linhas = stdout.split("\n")
+    for i, linha in enumerate(linhas):
+        m = _LINHA_FRAUDE.match(linha)
+        if not m:
+            continue
+        descricao = linhas[i + 1].strip() if i + 1 < len(linhas) else ""
+        frauds.append({"severity": m.group(1), "type": m.group(2), "description": descricao})
+    return frauds
+
+
+def _match_frauds(esperadas: list[dict], obtidas: list[dict]) -> list[str]:
+    """Casa esperadas contra obtidas, cada uma consumida uma única vez.
+
+    Sobra em qualquer um dos lados é falha: faltar é falso negativo, exceder
+    é falso positivo, e a suíte existe para pegar os dois.
+    """
+    messages: list[str] = []
+    restantes = list(obtidas)
+
+    for esperada in esperadas:
+        tipo = esperada.get("type", "")
+        sev = esperada.get("severity", "")
+        desc = esperada.get("description_contains", "")
+        achada = next(
+            (
+                f
+                for f in restantes
+                if (not tipo or f["type"] == tipo)
+                and (not sev or f["severity"] == sev)
+                and (not desc or desc in f["description"])
+            ),
+            None,
+        )
+        if achada is None:
+            messages.append(
+                f"  ❌ Fraude esperada não encontrada: [{sev}] {tipo}"
+                + (f" contendo '{desc}'" if desc else "")
+            )
+        else:
+            restantes.remove(achada)
+
+    for extra in restantes:
+        messages.append(
+            f"  ❌ Fraude NÃO prevista: [{extra['severity']}] {extra['type']} "
+            f"— {extra['description']}"
+        )
+    return messages
+
+
 def evaluate(scenario_dir: Path, ground_truth: dict, judge_output: dict) -> tuple[bool, list[str]]:
     """Compara o output do judge com o ground truth."""
     passed = True
@@ -99,24 +162,10 @@ def evaluate(scenario_dir: Path, ground_truth: dict, judge_output: dict) -> tupl
             f"  ❌ Veredito esperado '{expected_verdict}' não encontrado no output"
         )
 
-    for expected_fraud in ground_truth.get("expected_frauds", []):
-        fraud_type = expected_fraud.get("type", "")
-        desc_contains = expected_fraud.get("description_contains", "")
-        if fraud_type and fraud_type not in stdout:
-            passed = False
-            messages.append(f"  ❌ Fraude esperada '{fraud_type}' não encontrada")
-        elif desc_contains and desc_contains not in stdout:
-            passed = False
-            messages.append(
-                f"  ❌ Descrição contendo '{desc_contains}' não encontrada na fraude"
-            )
-
-    for no_fraud_type in ground_truth.get("expected_no_frauds", []):
-        if no_fraud_type in stdout:
-            passed = False
-            messages.append(
-                f"  ❌ Fraude '{no_fraud_type}' detectada mas não deveria (falso positivo)"
-            )
+    problemas = _match_frauds(ground_truth.get("expected_frauds", []), parse_frauds(stdout))
+    if problemas:
+        passed = False
+        messages.extend(problemas)
 
     # Falso positivo em arquivo específico: o tipo de fraude pode ser esperado
     # no cenário e ainda assim um arquivo honesto não deve aparecer nele.

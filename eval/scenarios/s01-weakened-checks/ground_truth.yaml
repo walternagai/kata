@@ -6,4 +6,3 @@ expected_frauds:
   - type: weakened_checks
     severity: high
     description_contains: "test_calculator.py"
-expected_no_frauds: []

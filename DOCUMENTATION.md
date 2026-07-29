@@ -486,6 +486,15 @@ Each scenario contains a fixture project and a `ground_truth.yaml` describing
 the verdict and frauds that the judge must find. See
 [`eval/README.md`](eval/README.md) for the scenario schema.
 
+### Continuous integration
+
+`.github/workflows/ci.yml` runs `make lint`, `make test` and the trap runner
+on Python 3.11 and 3.12, for every push to `main` and every pull request. It
+invokes the Makefile rather than restating the commands, so what is verified
+locally and what is verified remotely cannot drift apart. The coverage gate
+comes from `[tool.coverage.report] fail_under` in `pyproject.toml`, so
+`make test` enforces it without the workflow having to repeat the threshold.
+
 ## Compatibility and limitations
 
 - The `.kata/<task>.yaml` schema is compatible with the `.karpathy/` schema used

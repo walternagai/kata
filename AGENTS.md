@@ -75,6 +75,11 @@ Rodar um único teste: `python3 -m pytest tests/test_verify.py::TestRunRuff -v`
 
 Ordem recomendada: `make lint && make test`.
 
+`.github/workflows/ci.yml` roda exatamente esses dois alvos mais
+`python3 eval/run_traps.py`, em Python 3.11 e 3.12, a cada push na `main` e
+em todo PR. O CI chama o Makefile de propósito: o que é verificado local e
+o que é verificado remoto não devem poder divergir.
+
 ## Instalação — symlinks, não cópias
 
 `scripts/install.sh` cria **symlinks** de `opencode/` para `~/.config/opencode/`;

@@ -1,5 +1,7 @@
 # Kata (型)
 
+[![CI](https://github.com/walternagai/kata/actions/workflows/ci.yml/badge.svg)](https://github.com/walternagai/kata/actions/workflows/ci.yml)
+
 > Python 3.11+ | CLI + OpenCode Agent + Claude Code Skills | Karpathy Development Cycle + Fable Method
 
 Kata (型, "forma/padrão") é um agente OpenCode, um conjunto de skills para

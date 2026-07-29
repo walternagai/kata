@@ -413,11 +413,12 @@ class TestStepSimplify:
         assert result["simplify"]["no_single_use_abstractions"] is False
 
 
+@patch("kata.cli.untracked_files", return_value=[])
 class TestStepSurgical:
     """Testa _step_surgical em modos interativo e não-interativo."""
 
     @patch("kata.cli.sys.stdin")
-    def test_step_surgical_non_tty(self, mock_stdin) -> None:
+    def test_step_surgical_non_tty(self, mock_stdin, mock_untracked) -> None:
         mock_stdin.isatty.return_value = False
         data: dict = {}
         result = cli._step_surgical("task", data)
@@ -427,7 +428,9 @@ class TestStepSurgical:
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
-    def test_step_surgical_interactive_with_files(self, mock_stdin, mock_run, mock_confirm) -> None:
+    def test_step_surgical_interactive_with_files(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked
+    ) -> None:
         mock_stdin.isatty.return_value = True
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="src/foo.py\nsrc/bar.py\n", stderr=""
@@ -442,12 +445,13 @@ class TestStepSurgical:
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
-    def test_step_surgical_no_diff_uses_staged(self, mock_stdin, mock_run, mock_confirm) -> None:
+    def test_step_surgical_no_diff_uses_staged(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked
+    ) -> None:
         mock_stdin.isatty.return_value = True
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="baz.py\n", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         mock_confirm.side_effect = [True, True]
         data: dict = {}
@@ -884,13 +888,16 @@ class TestRunHelper:
         assert call_kwargs.get("cwd") == custom_cwd
 
 
+@patch("kata.cli.untracked_files", return_value=[])
 class TestStepSurgicalNoFiles:
     """Testa _step_surgical sem arquivos alterados."""
 
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
-    def test_surgical_no_files_no_staged(self, mock_stdin, mock_run, mock_confirm) -> None:
+    def test_surgical_no_files_no_staged(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked
+    ) -> None:
         mock_stdin.isatty.return_value = True
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
@@ -1881,27 +1888,34 @@ class TestFormatLines:
         assert "occurrence(s)" not in line
 
 
+@patch("kata.cli.untracked_files", return_value=[])
 class TestDetectScratch:
-    """Testa _detect_scratch_files."""
+    """Testa _detect_scratch_files.
+
+    untracked_files é mockado no nível da classe: _detect_scratch_files passa
+    por _changed_paths, que consulta o git de verdade. Sem isso os testes
+    passariam ou falhariam conforme o que houvesse untracked na árvore de
+    quem roda.
+    """
 
     @patch("kata.cli._run_git")
-    def test_no_diff(self, mock_run) -> None:
+    def test_no_diff(self, mock_run, mock_untracked) -> None:
         mock_run.return_value.stdout = ""
         assert cli._detect_scratch_files() == []
 
     @patch("kata.cli._run_git")
-    def test_scratch_file_detected(self, mock_run) -> None:
+    def test_scratch_file_detected(self, mock_run, mock_untracked) -> None:
         mock_run.return_value.stdout = "file.tmp\nscratch/data.txt\n"
         files = cli._detect_scratch_files()
         assert len(files) == 2
 
     @patch("kata.cli._run_git")
-    def test_normal_files_ignored(self, mock_run) -> None:
+    def test_normal_files_ignored(self, mock_run, mock_untracked) -> None:
         mock_run.return_value.stdout = "src/main.py\ntests/test_foo.py\n"
         assert cli._detect_scratch_files() == []
 
     @patch("kata.cli._run_git")
-    def test_temp_substring_is_not_debris(self, mock_run) -> None:
+    def test_temp_substring_is_not_debris(self, mock_run, mock_untracked) -> None:
         """Regressão: a regra do CLI casava a substring "temp" e marcava
         templates/, temperature.py e attempt_parser.py como detrito. O CLI
         agora usa a mesma regra do JUDGE (is_debris_file)."""
@@ -1914,7 +1928,9 @@ class TestDetectScratch:
         assert cli._detect_scratch_files() == []
 
     @patch("kata.cli._run_git")
-    def test_real_debris_still_detected_alongside_temp_substrings(self, mock_run) -> None:
+    def test_real_debris_still_detected_alongside_temp_substrings(
+        self, mock_run, mock_untracked
+    ) -> None:
         mock_run.return_value.stdout = "templates/email.html\nout.tmp\n"
         assert cli._detect_scratch_files() == ["out.tmp"]
 

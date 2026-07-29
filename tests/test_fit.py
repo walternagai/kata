@@ -33,11 +33,12 @@ class TestIsTrivial:
         assert is_trivial(["src/foo.py"], 10) is False
 
 
+@patch("kata.fit.untracked_files", return_value=[])
 class TestDiffStats:
     """Testa diff_stats — análise do diff git."""
 
     @patch("kata.fit._run")
-    def test_unstaged_changes(self, mock_run: MagicMock) -> None:
+    def test_unstaged_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
                 args=[], returncode=0,
@@ -48,14 +49,13 @@ class TestDiffStats:
                 stdout=" src/foo.py | 3 +--\n src/bar.py | 2 ++\n",
                 stderr="",
             ),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == ["src/foo.py", "src/bar.py"]
         assert lines == 5
 
     @patch("kata.fit._run")
-    def test_staged_changes(self, mock_run: MagicMock) -> None:
+    def test_staged_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="", stderr="",
@@ -67,31 +67,28 @@ class TestDiffStats:
                 args=[], returncode=0,
                 stdout=" baz.py | 7 ++++++-\n", stderr="",
             ),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == ["baz.py"]
         assert lines == 7
 
     @patch("kata.fit._run")
-    def test_no_changes(self, mock_run: MagicMock) -> None:
+    def test_no_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == []
         assert lines == 0
 
     @patch("kata.fit._run")
-    def test_empty_stat_no_lines(self, mock_run: MagicMock) -> None:
+    def test_empty_stat_no_lines(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         """diff --stat sem alterações não deve quebrar."""
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="file.py\n", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files, lines = diff_stats()
         assert files == ["file.py"]

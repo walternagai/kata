@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from kata.verify import _run
+from kata.verify import _run, untracked_files
 
 
 def untracked_stats(cwd: Path | None = None) -> tuple[list[str], int]:
@@ -27,8 +27,7 @@ def untracked_stats(cwd: Path | None = None) -> tuple[list[str], int]:
     As linhas são contadas sem carregar o arquivo inteiro na memória.
     """
     base = cwd or Path.cwd()
-    result = _run(["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd)
-    files = [f for f in result.stdout.strip().split("\n") if f.strip()]
+    files = untracked_files(cwd=cwd)
 
     total = 0
     for f in files:

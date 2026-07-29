@@ -12,6 +12,7 @@ from kata.verify import (
     run_pytest,
     run_ruff,
     search_pattern,
+    untracked_files,
 )
 
 
@@ -429,3 +430,36 @@ class TestSearchPattern:
         assert r.pattern == "test"
         assert r.matches == []
         assert r.total_files == 0
+
+
+class TestUntrackedFiles:
+    """Fonte única de "arquivos que o git não rastreia", usada por fit, judge e
+    cli. Antes cada um tinha sua própria cópia do comando."""
+
+    def _repo(self, tmp_path) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        (tmp_path / "rastreado.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+
+    def test_lists_only_untracked(self, tmp_path) -> None:
+        self._repo(tmp_path)
+        (tmp_path / "rastreado.py").write_text("x = 2\n", encoding="utf-8")  # modificado
+        (tmp_path / "novo.py").write_text("y = 1\n", encoding="utf-8")
+
+        assert untracked_files(cwd=tmp_path) == ["novo.py"]
+
+    def test_empty_when_nothing_new(self, tmp_path) -> None:
+        self._repo(tmp_path)
+        assert untracked_files(cwd=tmp_path) == []
+
+    def test_respects_gitignore(self, tmp_path) -> None:
+        """--exclude-standard: o que o projeto ignora não é "arquivo novo"."""
+        self._repo(tmp_path)
+        (tmp_path / ".gitignore").write_text("ignorado/\n", encoding="utf-8")
+        (tmp_path / "ignorado").mkdir()
+        (tmp_path / "ignorado" / "x.py").write_text("z = 1\n", encoding="utf-8")
+
+        assert untracked_files(cwd=tmp_path) == [".gitignore"]

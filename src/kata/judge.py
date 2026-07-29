@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kata.verify import VerifyResult, _run, run_all
+from kata.verify import VerifyResult, _run, run_all, untracked_files
 
 # ── regex patterns ────────────────────────────────────────────────────────
 
@@ -142,18 +142,6 @@ def _base_commit_resolves(base_commit: str, cwd: Path | None = None) -> bool:
     return result.returncode == 0
 
 
-def _untracked_files(cwd: Path | None = None) -> list[str]:
-    """Arquivos novos que o git ainda não rastreia.
-
-    `git diff`, em qualquer das suas formas — inclusive contra base_commit —
-    é cego a arquivos que nunca entraram no índice. Sem isto, um arquivo
-    novo (por exemplo um teste inteiro escrito com `assert True`) fica
-    literalmente invisível ao JUDGE. cli._step_surgical já os considera.
-    """
-    result = _run(["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd)
-    return [f for f in result.stdout.strip().split("\n") if f.strip()]
-
-
 def _is_inspectable(path: Path) -> bool:
     """Arquivo untracked pequeno o bastante para o judge ler inteiro.
 
@@ -224,7 +212,7 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
             result = _run(["git", "diff", "--cached"], cwd=cwd)
         diff = result.stdout
 
-    untracked = _untracked_diff(_untracked_files(cwd=cwd), cwd=cwd)
+    untracked = _untracked_diff(untracked_files(cwd=cwd), cwd=cwd)
     return f"{diff}\n{untracked}" if untracked else diff
 
 
@@ -239,7 +227,7 @@ def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> l
 
     tracked = [f for f in result.stdout.strip().split("\n") if f.strip()]
     seen = set(tracked)
-    return tracked + [f for f in _untracked_files(cwd=cwd) if f not in seen]
+    return tracked + [f for f in untracked_files(cwd=cwd) if f not in seen]
 
 
 # ── fraud hunters ─────────────────────────────────────────────────────────
@@ -507,7 +495,7 @@ def judge_task(
 
     high = [f for f in frauds if f.severity == "high"]
     caveats: list[str] = []
-    oversized = _oversized_untracked(_untracked_files(cwd=cwd), cwd=cwd)
+    oversized = _oversized_untracked(untracked_files(cwd=cwd), cwd=cwd)
     if oversized:
         caveats.append(
             f"{len(oversized)} arquivo(s) untracked não inspecionado(s) por tamanho: "

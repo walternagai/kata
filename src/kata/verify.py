@@ -29,6 +29,22 @@ def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
 
 
+def untracked_files(cwd: Path | None = None) -> list[str]:
+    """Arquivos que o git ainda não rastreia.
+
+    Fonte única: `kata.fit` (triviality gate), `kata.judge` (caça a fraude) e
+    `kata.cli` (SIMPLIFY, SURGICAL, detrito) todos precisam desta lista, e
+    cada um tinha sua própria cópia do comando. Mora aqui porque este módulo
+    já é onde vive o wrapper de subprocess que fit e judge importam.
+
+    `git diff` — unstaged, staged, contra commit, qualquer forma — é cego a
+    arquivos que nunca entraram no índice, então esta consulta é a única
+    maneira de enxergá-los.
+    """
+    result = _run(["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd)
+    return [f for f in result.stdout.strip().split("\n") if f.strip()]
+
+
 def run_ruff(
     paths: list[str] | None = None,
     cwd: Path | None = None,

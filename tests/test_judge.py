@@ -458,6 +458,7 @@ class TestHuntDebris:
         assert frauds == []
 
 
+@patch("kata.judge.untracked_files", return_value=[])
 @patch("kata.judge._changed_files")
 @patch("kata.judge._run_git_diff")
 @patch("kata.judge.run_all")
@@ -465,7 +466,8 @@ class TestJudgeTask:
     """Testa judge_task end-to-end."""
 
     def test_verified_no_claims(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -474,7 +476,8 @@ class TestJudgeTask:
         assert result.frauds == []
 
     def test_verified_all_checks_pass(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -495,7 +498,8 @@ class TestJudgeTask:
         assert len(result.claims) >= 2
 
     def test_false_completion_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -508,7 +512,8 @@ class TestJudgeTask:
         assert any(f.type == "false_completion" for f in result.frauds)
 
     def test_weakened_checks_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = """
 diff --git a/tests/test_foo.py b/tests/test_foo.py
@@ -525,7 +530,8 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "weakened_checks" for f in result.frauds)
 
     def test_scope_creep_caveats(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = ["unexpected.py"]
@@ -536,7 +542,8 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "scope_creep" for f in result.frauds)
 
     def test_debris_combined_with_pass(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = '+    print("debug")\n'
         mock_files.return_value = ["scratch/out.txt"]
@@ -546,7 +553,8 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "debris" for f in result.frauds)
 
     def test_unauthorized_action_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -557,7 +565,8 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "unauthorized_action" for f in result.frauds)
 
     def test_spec_betrayal_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -568,7 +577,8 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "spec_betrayal" for f in result.frauds)
 
     def test_claims_collected(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -587,7 +597,8 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any("sem verificação" in c for c in result.caveats)
 
     def test_re_ran_checks_populated(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -601,7 +612,8 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert result.re_ran_checks.get("pytest") is True
 
     def test_custom_paths_passed_to_run_all(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
         mock_files.return_value = []
@@ -624,11 +636,12 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         )
 
 
+@patch("kata.judge.untracked_files", return_value=[])
 class TestRunGitDiff:
     """Testa o helper _run_git_diff."""
 
     @patch("kata.judge._run")
-    def test_git_diff_unstaged(self, mock_run: MagicMock) -> None:
+    def test_git_diff_unstaged(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         from kata.judge import _run_git_diff
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="diff --git a/a.py b/a.py\n", stderr="",
@@ -638,21 +651,22 @@ class TestRunGitDiff:
         assert mock_run.call_args_list[0][0][0] == ["git", "diff"]
 
     @patch("kata.judge._run")
-    def test_git_diff_staged_fallback(self, mock_run: MagicMock) -> None:
+    def test_git_diff_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         from kata.judge import _run_git_diff
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="diff --git a/staged.py b/staged.py\n", stderr=""
             ),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         diff = _run_git_diff()
         assert "staged.py" in diff
         assert mock_run.call_args_list[1][0][0] == ["git", "diff", "--cached"]
 
     @patch("kata.judge._run")
-    def test_base_commit_used_when_it_resolves(self, mock_run: MagicMock) -> None:
+    def test_base_commit_used_when_it_resolves(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
         """Com base_commit válido, compara direto contra ele — mesmo se
         não houver diff local (unstaged/staged), o que é o caso de uma
         tarefa já commitada."""
@@ -662,7 +676,6 @@ class TestRunGitDiff:
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="diff --git a/f.py b/f.py\n+pass\n", stderr=""
             ),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         diff = _run_git_diff(base_commit="deadbeef")
         assert "+pass" in diff
@@ -670,7 +683,9 @@ class TestRunGitDiff:
         assert mock_run.call_args_list[1][0][0] == ["git", "diff", "deadbeef"]
 
     @patch("kata.judge._run")
-    def test_base_commit_falls_back_when_it_does_not_resolve(self, mock_run: MagicMock) -> None:
+    def test_base_commit_falls_back_when_it_does_not_resolve(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
         """base_commit inválido (ex: histórico reescrito) não deve travar
         o judge — cai de volta no diff local."""
         from kata.judge import _run_git_diff
@@ -679,18 +694,18 @@ class TestRunGitDiff:
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="diff --git a/local.py b/local.py\n", stderr=""
             ),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         diff = _run_git_diff(base_commit="deadbeef")
         assert "local.py" in diff
         assert mock_run.call_args_list[1][0][0] == ["git", "diff"]
 
 
+@patch("kata.judge.untracked_files", return_value=[])
 class TestChangedFiles:
     """Testa o helper _changed_files."""
 
     @patch("kata.judge._run")
-    def test_unstaged_changes(self, mock_run: MagicMock) -> None:
+    def test_unstaged_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="a.py\nb.py\n", stderr="",
         )
@@ -698,19 +713,18 @@ class TestChangedFiles:
         assert files == ["a.py", "b.py"]
 
     @patch("kata.judge._run")
-    def test_staged_fallback(self, mock_run: MagicMock) -> None:
+    def test_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="staged.py\n", stderr=""
             ),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files = _changed_files()
         assert files == ["staged.py"]
 
     @patch("kata.judge._run")
-    def test_no_changes(self, mock_run: MagicMock) -> None:
+    def test_no_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="", stderr=""
         )
@@ -718,22 +732,24 @@ class TestChangedFiles:
         assert files == []
 
     @patch("kata.judge._run")
-    def test_base_commit_used_when_it_resolves(self, mock_run: MagicMock) -> None:
+    def test_base_commit_used_when_it_resolves(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # cat-file
             subprocess.CompletedProcess(args=[], returncode=0, stdout="committed.py\n", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files = _changed_files(base_commit="deadbeef")
         assert files == ["committed.py"]
         assert mock_run.call_args_list[1][0][0] == ["git", "diff", "--name-only", "deadbeef"]
 
     @patch("kata.judge._run")
-    def test_base_commit_falls_back_when_it_does_not_resolve(self, mock_run: MagicMock) -> None:
+    def test_base_commit_falls_back_when_it_does_not_resolve(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad revision"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="local.py\n", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # untracked
         ]
         files = _changed_files(base_commit="deadbeef")
         assert files == ["local.py"]

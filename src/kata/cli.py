@@ -30,7 +30,7 @@ from typing import Any
 from kata import __version__
 from kata.fit import diff_stats, is_trivial, untracked_stats
 from kata.judge import JudgeResult, is_debris_file, judge_task
-from kata.verify import VerifyResult, run_all, search_pattern
+from kata.verify import VerifyResult, run_all, search_pattern, untracked_files
 
 try:
     import yaml
@@ -215,13 +215,7 @@ def _changed_paths() -> list[str]:
             for f in _run_git(["git", "diff", "--cached", "--name-only"]).stdout.strip().split("\n")
             if f.strip()
         ]
-    novos = [
-        f
-        for f in _run_git(
-            ["git", "ls-files", "--others", "--exclude-standard"]
-        ).stdout.strip().split("\n")
-        if f.strip()
-    ]
+    novos = untracked_files()
     vistos = set(rastreados)
     return rastreados + [f for f in novos if f not in vistos]
 

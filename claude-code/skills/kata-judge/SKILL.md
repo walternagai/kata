@@ -66,6 +66,9 @@ python -m kata --judge
     • todos os testes passam
     • coverage ≥ gate (95.0%)
 
+  Claims aceitas sem verificação (não re-executáveis):
+    • critério de sucesso satisfeito
+
   Fraudes encontradas:
     🔴 [high] false_completion
        ruff re-executado falhou, mas relatório afirma que passou

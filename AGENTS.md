@@ -24,13 +24,15 @@ O ciclo é inspirado em duas fontes complementares:
 
 ```
 src/kata/       código Python (cli.py, fit.py, verify.py, judge.py, __init__.py, __main__.py)
-tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_judge.py)
+tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_judge.py,
+                test_install.py — este roda os instaladores .sh de verdade)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
   skills/kata-*/SKILL.md 10 skills (8 fases + JUDGE + QUESTION)
 claude-code/    skills para o Claude Code
   skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
-  skills/kata-*/SKILL.md as mesmas 10 skills de fase, portadas 1:1
+  skills/kata-*/SKILL.md as mesmas 10 skills de fase (mesmo procedimento,
+                         nomes de ferramenta do host — não são texto idêntico)
 eval/           cenários de trap adversarial (python3 eval/run_traps.py)
 scripts/install.sh                instala via symlinks em ~/.config/opencode/
 scripts/install-claude-code.sh    instala via symlinks em ~/.claude/
@@ -62,8 +64,8 @@ sincronize os três lugares: `opencode/skills/kata-<fase>/SKILL.md`,
 
 ```bash
 make test      # pytest + coverage (gate 70%)
-make lint      # ruff check src/ tests/
-make format    # ruff format src/ tests/
+make lint      # ruff check src/ tests/ eval/
+make format    # ruff format src/ tests/ eval/
 
 make install                 # symlinks do agente + skills em ~/.config/opencode/
 make uninstall               # remove os symlinks

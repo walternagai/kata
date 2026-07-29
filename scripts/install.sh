@@ -17,18 +17,17 @@ KATA_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 
 AGENT_FILE="kata.md"
-SKILLS=(
-    kata-fit
-    kata-question
-    kata-think
-    kata-simplify
-    kata-intent
-    kata-surgical
-    kata-verify
-    kata-artifact
-    kata-report
-    kata-judge
-)
+# A lista vem do filesystem. Mantê-la escrita à mão aqui significava que
+# criar uma skill exigia lembrar de editar 4 instaladores; nada verificava.
+SKILLS=()
+for _dir in "$KATA_DIR/opencode/skills"/*/; do
+    [[ -d "$_dir" ]] || continue
+    SKILLS+=("$(basename "$_dir")")
+done
+if (( ${#SKILLS[@]} == 0 )); then
+    echo "Erro: nenhuma skill encontrada em $KATA_DIR/opencode/skills" >&2
+    exit 1
+fi
 
 ACTION="${1:-install}"
 

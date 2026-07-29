@@ -13,10 +13,10 @@ $configRoot = if ($env:CLAUDE_CONFIG_DIR) {
     Join-Path $HOME ".claude"
 }
 
-$skills = @(
-    "kata", "kata-fit", "kata-question", "kata-think", "kata-simplify", "kata-intent",
-    "kata-surgical", "kata-verify", "kata-artifact", "kata-report", "kata-judge"
-)
+# A lista vem do filesystem — ver comentário equivalente nos scripts .sh.
+$skillsRoot = Join-Path $kataRoot "claude-code/skills"
+$skills = Get-ChildItem -Directory -Path $skillsRoot | Select-Object -ExpandProperty Name | Sort-Object
+if ($skills.Count -eq 0) { throw "Nenhuma skill encontrada em $skillsRoot" }
 
 # Marcador gravado dentro de cada diretório que o modo -Copy cria, para que a
 # desinstalação saiba o que é dela. Sem isso não há como distinguir uma cópia

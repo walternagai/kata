@@ -462,10 +462,17 @@ set instead of OpenCode's:
 - `Bash` for Git and verification commands;
 - `Edit` or `Write` for surgical changes and task persistence.
 
-The repository contains the same 10 phase skills as the OpenCode side,
-ported 1:1 (`claude-code/skills/kata-*/SKILL.md`), plus the `kata` skill
-itself. `scripts/install-claude-code.sh` symlinks all 11 under
-`$CLAUDE_CONFIG_DIR/skills/`.
+The repository contains the same 10 phase skills as the OpenCode side
+(`claude-code/skills/kata-*/SKILL.md`), plus the `kata` skill itself.
+`scripts/install-claude-code.sh` symlinks every directory it finds under
+`claude-code/skills/` into `$CLAUDE_CONFIG_DIR/skills/`.
+
+The two ports carry the same procedure, not the same text. Each phase names
+the tools of its own host — `question` against `AskUserQuestion`, `read`
+against `Read`, `bash` against `Bash` — so the files differ by roughly one
+to seventy lines depending on how much of the phase is tool-driven. When a
+phase's behaviour changes, both files and, for phases with objective logic,
+`src/kata/` have to change together.
 
 ## Testing and evaluation
 

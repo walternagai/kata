@@ -548,6 +548,18 @@ class TestMainVersion:
         captured = capsys.readouterr()
         assert __version__ in captured.out
 
+    def test_version_matches_pyproject(self) -> None:
+        """A versão vive em pyproject.toml e em __init__.py. Nada travava as
+        duas, então bastava bumpar uma para `--version` passar a mentir."""
+        import tomllib
+        from pathlib import Path
+
+        from kata import __version__
+
+        pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        declarada = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+        assert __version__ == declarada
+
 
 class TestMainCheckOnly:
     """Testa o modo --check-only via main()."""
@@ -1994,6 +2006,33 @@ class TestMainReport:
                 cli.main()
         assert exc.value.code == 0
         mock_report.assert_called_once()
+
+    @patch("kata.cli._step_report")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    @pytest.mark.parametrize("status,esperado", [
+        ("think-complete", 0),   # modo --plan: em andamento, não é falha
+        ("draft", 0),
+        ("approved", 0),
+        ("rejected", 1),         # só isto é falha
+    ])
+    def test_report_exit_code_by_status(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_report,
+        status, esperado, tmp_path,
+    ) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "t.yaml"
+        task_file.write_text(f"task: t\nstatus: {status}\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {"task": "t", "status": status}
+
+        with patch("sys.argv", ["kata", "--task", "t", "--report"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == esperado
 
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")

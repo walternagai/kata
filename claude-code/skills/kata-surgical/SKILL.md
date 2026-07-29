@@ -40,9 +40,9 @@ git diff --cached --name-only
 
 Você terá uma lista de arquivos. Exemplo:
 ```
-mushin/api/app.py
-mushin/api/dependencies.py
-mushin/api/routers/run.py
+app/api/main.py
+app/api/dependencies.py
+app/api/routers/run.py
 tests/unit/test_orchestrator.py
 ```
 
@@ -115,13 +115,13 @@ colateral desnecessário — questione.
 ```yaml
 surgical:
   files:
-    - path: mushin/api/app.py
+    - path: app/api/main.py
       necessary: true
-    - path: mushin/api/dependencies.py
+    - path: app/api/dependencies.py
       necessary: true
     - path: tests/unit/test_orchestrator.py
       necessary: true
-    - path: mushin/dashboard/pages/Overview.py
+    - path: app/dashboard/pages/Overview.py
       necessary: false  # refactoring não pedido
   removed_imports_clean: true
   notes: |

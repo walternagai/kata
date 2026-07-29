@@ -1182,7 +1182,11 @@ def main() -> None:
             sys.exit(1)
         data = _deserialize(path.read_text(encoding="utf-8"))
         _step_report(task, data)
-        sys.exit(0 if data.get("status") == "approved" else 1)
+        # Só `rejected` é falha. Uma tarefa em andamento (draft,
+        # think-complete — o estado normal de `--plan`) está funcionando como
+        # esperado; sair 1 ao consultar seu relatório equipara planejar a
+        # falhar.
+        sys.exit(1 if data.get("status") == "rejected" else 0)
 
     # Modo --judge (adversarial verification)
     if args.judge:

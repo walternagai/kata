@@ -85,7 +85,7 @@ question:
 > *(aguarda a próxima mensagem do usuário)*
 
 ✅ Good (pergunta fechada, via `AskUserQuestion`):
-> Pergunta: "O arquivo `mushin/dashboard/pages/Overview.py` é necessário para esta tarefa?"
+> Pergunta: "O arquivo `app/dashboard/pages/Overview.py` é necessário para esta tarefa?"
 > Opções: ["Sim, necessário (recomendado)", "Não, é refactoring fora do escopo"]
 
 ### Quando perguntar

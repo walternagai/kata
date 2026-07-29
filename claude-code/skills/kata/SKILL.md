@@ -251,7 +251,7 @@ Se nenhum `--task` for fornecido:
 
 1. Carregue a skill `kata-verify` com `Skill` (`skill: "kata-verify"`).
 2. **Ruff**: `python -m ruff check <paths>` via `Bash` (ou `py -m ruff` no Windows)
-   - Paths padrão: `src/ tests/`. Adapte ao projeto (ex: `mushin/ services/ tests/`)
+   - Paths padrão: `src/ tests/`. Adapte ao projeto (ex: `app/ services/ tests/`)
    - OK se returncode == 0
    - Se falhou, mostre o output completo
 
@@ -262,7 +262,7 @@ Se nenhum `--task` for fornecido:
    - Se falhou, mostre o output completo
 
 4. **Coverage**: `python -m pytest <test_paths> --cov=<source> --cov-report=term-missing --cov-fail-under=70 -q` (ou `py -m pytest` no Windows)
-   - Source padrão: `src`. Adapte ao projeto (ex: `mushin`)
+   - Source padrão: `src`. Adapte ao projeto (ex: `app`)
    - O `--cov-fail-under` já garante que o gate seja verificado pelo pytest-cov
    - Extraia o percentual do output para exibição (regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`)
    - Gate: 70%. OK se returncode == 0 (já inclui o gate)
@@ -343,7 +343,7 @@ verificações corretas. Detecte automaticamente:
 | Se existir... | Use para ruff | Use para pytest | Use para coverage |
 |---------------|---------------|-----------------|-------------------|
 | `src/` | `src/ tests/` | `tests/` | `--cov=src` |
-| `mushin/` | `mushin/ services/ tests/` | `tests/unit/` | `--cov=mushin` |
+| `app/` + `services/` | `app/ services/ tests/` | `tests/unit/` | `--cov=app` |
 | `app/` | `app/ tests/` | `tests/` | `--cov=app` |
 
 Se houver `pyproject.toml` ou `setup.cfg`, leia-o (`Read`) para identificar:

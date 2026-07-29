@@ -31,9 +31,9 @@ Para esta fase, use:
 python -m ruff check src/ tests/
 ```
 
-Para projetos com estrutura diferente (ex: mushin):
+Para projetos com estrutura diferente:
 ```bash
-python -m ruff check mushin/ services/ tests/
+python -m ruff check app/ services/ tests/
 ```
 
 **Interpretando resultado:**
@@ -51,7 +51,7 @@ python -m ruff check mushin/ services/ tests/
 python -m pytest tests/ --tb=short -q
 ```
 
-Para projetos com testes que precisam de ignore (ex: mushin com faiss):
+Para projetos com testes que precisam de ignore (ex: um que exija GPU):
 ```bash
 python -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=short -q
 ```
@@ -72,9 +72,9 @@ python -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --tb=sho
 python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=70 -q
 ```
 
-Para mushin:
+Exemplo:
 ```bash
-python -m pytest tests/unit/ --ignore=tests/unit/test_memory_service.py --cov=mushin --cov-report=term-missing --cov-fail-under=70 -q
+python -m pytest tests/unit/ --ignore=tests/unit/test_pesado.py --cov=app --cov-report=term-missing --cov-fail-under=70 -q
 ```
 
 O `--cov-fail-under` faz o pytest-cov verificar o gate automaticamente:

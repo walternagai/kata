@@ -26,10 +26,10 @@ test:
 	python3 -m pytest tests/ -v --cov=kata --cov-report=term-missing
 
 lint:
-	python3 -m ruff check src/ tests/
+	python3 -m ruff check src/ tests/ eval/
 
 format:
-	ruff format src/ tests/
+	ruff format src/ tests/ eval/
 
 clean:
 	rm -rf build/ dist/ *.egg-info src/*.egg-info

@@ -4,7 +4,7 @@
 
 ## O que é este repo
 
-Kata é a ferramenta que implementa o ciclo FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT, com JUDGE adversarial opcional.
+Kata é a ferramenta que implementa o ciclo FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT, com AUDIT e JUDGE adversarial.
 Este repositório contém o **código da ferramenta** (CLI + agente OpenCode +
 skills do Claude Code), não um projeto onde o kata é aplicado.
 
@@ -28,10 +28,12 @@ tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_ju
                 test_install.py — este roda os instaladores .sh de verdade)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
-  skills/kata-*/SKILL.md 10 skills (8 fases + JUDGE + QUESTION)
+  skills/kata-*/SKILL.md 10 skills (fit, think, simplify, intent, surgical,
+                         verify, artifact, report, question, judge; TWIN CHECK
+                         vive no orquestrador)
 claude-code/    skills para o Claude Code
   skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
-  skills/kata-*/SKILL.md as mesmas 10 skills de fase (mesmo procedimento,
+  skills/kata-*/SKILL.md as mesmas 10 skills (mesmo procedimento,
                          nomes de ferramenta do host — não são texto idêntico)
 eval/           cenários de trap adversarial (python3 eval/run_traps.py)
 scripts/install.sh                instala via symlinks em ~/.config/opencode/
@@ -56,8 +58,8 @@ sincronize os três lugares: `opencode/skills/kata-<fase>/SKILL.md`,
 - `verify.py` é a lógica de verificação (ruff/pytest/coverage via
   `--cov-fail-under`) modularizada para testes independentes.
 - `judge.py` é a lógica adversarial que verifica fraudes e inconsistências.
-- O CLI (`cli.py`) orquestra as 8 fases + judge opcional e chama `fit.py`,
-  `verify.py`, `judge.py`.
+- O CLI (`cli.py`) orquestra as 9 fases + audit + judge opcional e chama
+  `fit.py`, `verify.py`, `judge.py`.
 - Entry point do CLI: `kata.cli:main` (declarado em `pyproject.toml`).
 
 ## Desenvolvimento

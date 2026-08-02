@@ -6,8 +6,8 @@
 
 Kata (型, "forma/padrão") é um agente OpenCode, um conjunto de skills para
 Claude Code e um CLI Python que implementam o ciclo
-FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT,
-com JUDGE adversarial opcional, inspirado em:
+FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT,
+com AUDIT e JUDGE adversarial, inspirado em:
 
 1. **Karpathy Development Cycle** (Andrej Karpathy): pensar antes de codar,
    manter o código mínimo, mudanças cirúrgicas e verificação objetiva.
@@ -19,10 +19,13 @@ Para a referência técnica completa, consulte [`DOCUMENTATION.md`](DOCUMENTATIO
 
 O ciclo completo:
 ```
-FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT
-                                                                  ↓ (opcional)
-                                                                JUDGE
+FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT
+                                                                           ↓ (opcional)
+                                                                         JUDGE
 ```
+
+Modos adicionais do CLI: `--audit` (gradua as fases da tarefa como
+followed / skipped / faked) e `--check-only` (só verificação, para CI).
 
 Como um kata marcial, é uma sequência disciplinada e repetível de movimentos:
 classificar a tarefa, pensar antes de codar, manter o código mínimo, verificar
@@ -102,6 +105,7 @@ pip install -e .
 | `@kata --task nome` | Retoma tarefa existente |
 | `@kata --task nome --judge` | Verificação adversarial (caça fraudes) |
 | `@kata --task nome --report` | Relatório outcome-first |
+| `@kata --task nome --audit` | Gradua as fases: followed / skipped / faked |
 
 ### No Claude Code
 
@@ -117,6 +121,7 @@ como texto após o nome (ex: `/kata --init nome-da-tarefa`):
 | `/kata --task nome` | Retoma tarefa existente |
 | `/kata --task nome --judge` | Verificação adversarial (caça fraudes) |
 | `/kata --task nome --report` | Relatório outcome-first |
+| `/kata --task nome --audit` | Gradua as fases: followed / skipped / faked |
 
 ### CLI Python
 
@@ -127,6 +132,9 @@ kata --check-only               # Só VERIFY (lint + test + coverage)
 kata --plan                     # Modo planejamento: FIT + THINK, para
 kata --plan --task minha-tarefa # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
+kata --task minha-tarefa --report  # Relatório outcome-first
+kata --task minha-tarefa --audit   # Gradua fases (followed/skipped/faked)
+kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 ```
 
 ### Argumentos do CLI
@@ -134,6 +142,9 @@ kata --task minha-tarefa        # Retoma tarefa específica
 | Flag | Default | Descrição |
 |------|---------|-----------|
 | `--plan` | `False` | Modo planejamento: FIT + THINK, não modifica código |
+| `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes) |
+| `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
+| `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked |
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
 | `--test-paths` | `tests/` | Caminhos para pytest |
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
@@ -150,34 +161,52 @@ Classifica a tarefa antes de investir esforço:
 - **Rotas**: code-loop, plan-first, question, research, inference
 
 ### 1. THINK
-Declarar problema, assumptions, alternativas e unknowns antes de codar.
+Declarar problema, assumptions, alternativas e unknowns antes de codar — e o
+**critério de sucesso** (`done`), declarado antes da evidência (Fable Step 1).
+Budget de investigação: 2 buscas sem resultado → pare e pergunte ao usuário.
 
 ### 2. SIMPLIFY
 Verificar se o código é mínimo — sem abstrações especulativas (YAGNI) ou
 configurabilidade não solicitada.
 
-### 3. INTENT
-Verificar se a intenção do código está clara — nomes, imports, estrutura
-refletem o que o código faz.
+### 2.5 INTENT
+Verificar que código, teste e spec concordam antes de mudar comportamento.
+Ordem de autoridade em conflito: usuário > spec > testes > código. Não edite
+até resolver o conflito.
 
-### 4. SURGICAL
+### 3. SURGICAL
 Validar arquivo-por-arquivo que cada mudança rastreia direto ao pedido,
 sem efeitos colaterais.
 
-### 5. VERIFY
+### 4. VERIFY
 Rodar ruff + pytest + coverage (gate >= 70%) usando `--cov-fail-under` e
-checar critério de sucesso.
+confrontar o critério `done` declarado no THINK com o resultado final.
+**Hard bound** (Fable Step 5): após 3 tentativas falhas, a tarefa é devolvida
+ao usuário (`hand back`) com o que foi tentado, o output real e a hipótese
+atual — em vez de repetir o fix-verify indefinidamente.
 
-### 6. ARTIFACT
-Gerar artefatos da tarefa (provas, verificações, etc).
+### 4.2 TWIN CHECK
+Defeito corrigido? O mesmo padrão costuma existir em outros lugares — busque
+no projeto inteiro e registre o resultado. "Sem defeito" ≠ "não chequei".
 
-### 7. REPORT
-Relatório outcome-first documentando o que foi feito.
+### 4.5 ARTIFACT
+Verificar que as linhas devidas estão no relatório: INTENT (comportamento
+mudou), AUTH (ação irreversível), PENDING (follow-up prescrito e não tomado),
+TWINS (defeito corrigido e varredura registrada).
+
+### 5. REPORT
+Relatório outcome-first documentando o que foi feito, com caveats honestos.
+
+### AUDIT (modo CLI)
+`kata --audit` gradua as fases da tarefa como **followed** / **skipped** /
+**faked** (afirmado sem observação — o padrão R7-1), nomeando o risco concreto
+de cada skip/fake. Equivalente ao `/fable-method audit`.
 
 ### JUDGE (opcional)
-Verificação adversarial — tenta caçar fraudes e inconsistências no
-código produzido. É a nona e última fase, aplicada apenas quando
-solicitada após o REPORT.
+Verificação adversarial — re-executa as verificações afirmadas, confronta o
+diff com o relatório e caça fraudes em 6 categorias (weakened checks, false
+completion, scope creep, unauthorized action, spec betrayal, debris).
+É a última fase, aplicada apenas quando solicitada após o REPORT.
 
 ## Diretório de Trabalho
 
@@ -216,16 +245,20 @@ ln -s .karpathy .kata   # symlink preserva acesso ao legado
 kata/
 ├── opencode/
 │   ├── agent/kata.md                  ← Agente @kata (OpenCode)
-│   └── skills/kata-*/SKILL.md         ← 10 skills (8 fases + question + JUDGE)
+│   └── skills/kata-*/SKILL.md         ← 10 skills (fit, think, simplify, intent,
+│                                         surgical, verify, artifact, report,
+│                                         question, judge; TWIN CHECK vive no
+│                                         orquestrador)
 ├── claude-code/
-│   └── skills/kata-*/SKILL.md         ← 11 skills (kata orquestrador + 8 fases + question + JUDGE)
+│   └── skills/kata-*/SKILL.md         ← 11 skills (orquestrador kata + as 10 acima)
 ├── src/kata/
-│   ├── cli.py                  ← CLI headless (orquestra as 8 fases + judge)
+│   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
 │   ├── verify.py               ← Lógica de verificação (ruff/pytest/coverage)
 │   ├── judge.py                ← Lógica adversarial (caça fraudes)
 │   ├── __init__.py             ← Versão do pacote
 │   └── __main__.py             ← Entry point para `python -m kata`
+├── eval/                       ← Cenários de trap adversarial (python3 eval/run_traps.py)
 ├── scripts/
 │   ├── install.sh / install.ps1                        ← Instalação no OpenCode
 │   └── install-claude-code.sh / install-claude-code.ps1 ← Instalação no Claude Code

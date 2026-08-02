@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repo is
 
 Kata (型) is the tool itself, not a project where kata is applied. It implements the cycle
-`FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT` (+ optional `JUDGE`),
+`FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT`
+(+ optional `JUDGE`, and `--audit` grades task phases as followed / skipped / faked),
 combining the Karpathy Development Cycle with fit-gate/verification-gate ideas from
 [The Fable Method](https://github.com/Sahir619/fable-method).
 
@@ -46,7 +47,7 @@ immediately without reinstalling — `make reinstall` is only needed for newly a
 
 The `kata` CLI itself (this tool applied to *other* projects) is invoked as `kata` / `python -m kata`;
 see [`DOCUMENTATION.md`](DOCUMENTATION.md#cli) for its modes (`--init`, `--plan`, `--check-only`,
-`--judge`, `--report`) and verification flags (`--ruff-paths`, `--test-paths`, `--cov-source`, `--gate`).
+`--judge`, `--report`, `--audit`) and verification flags (`--ruff-paths`, `--test-paths`, `--cov-source`, `--gate`).
 
 ## Architecture
 
@@ -73,7 +74,7 @@ src/kata/
 - Task files live in `.kata/<task>.yaml` at the *target* project's root (not this repo's own root,
   except when kata is being used on itself). Schema is compatible with mushin's `.karpathy/`
   (`ln -s .karpathy .kata` to migrate).
-- Exit codes: `0` pass, `1` cycle/report/judge failure, `2` invalid CLI args (argparse).
+- Exit codes: `0` pass, `1` cycle/report/judge failure or audit fakes/skips, `2` invalid CLI args (argparse).
 
 ### Adding or changing a phase skill
 

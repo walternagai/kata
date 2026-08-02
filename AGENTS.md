@@ -25,7 +25,10 @@ O ciclo é inspirado em duas fontes complementares:
 ```
 src/kata/       código Python (cli.py, fit.py, verify.py, judge.py, __init__.py, __main__.py)
 tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_judge.py,
-                test_install.py — este roda os instaladores .sh de verdade)
+                test_install.py — roda os instaladores .sh de verdade;
+                test_eval_harness.py — parser de fraudes do run_traps.py;
+                test_schema_contract.py — schema documentado no DOCUMENTATION.md
+                contra o código e o template do --init)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
   skills/kata-*/SKILL.md 10 skills (fit, think, simplify, intent, surgical,
@@ -107,6 +110,12 @@ ambientes sem symlink e `-Uninstall`.
   um repositório real em `tmp_path` e chamam `git` de verdade. Cegueira a
   commit/untracked não é reproduzível com mock — o mock é justamente o que
   esconderia o defeito.
+- `test_schema_contract.py` lê o `DOCUMENTATION.md` e cobra que o schema
+  documentado cubra o que o código lê/grava e o template do `--init`. Mudar
+  qualquer um dos três sem sincronizar os outros quebra a suíte.
+- Fixtures de eval (`eval/scenarios/*/fixture`) são projetos deliberadamente
+  quebrados e ficam fora do ruff (`extend-exclude` no `pyproject.toml`) — o
+  s03 planta um F401 de propósito. Não "consertar" nem lintá-los.
 
 ## Convenções de código
 

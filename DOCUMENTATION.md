@@ -7,6 +7,7 @@ disciplined development cycle.
 ## Contents
 
 - [Overview](#overview)
+- [Specific uses](#specific-uses)
 - [Architecture](#architecture)
 - [Installation](#installation)
 - [CLI](#cli)
@@ -55,6 +56,39 @@ Two frontends share the same Python backend and cycle logic:
 Only the orchestration/interaction layer differs between the two — the
 verification and fraud-hunting logic (Ruff, pytest, coverage, judge) always
 runs through the `kata` Python package.
+
+## Specific uses
+
+Kata is a quality gate for software changes, not a project template. It fits
+the following situations:
+
+- **Before committing**: run the full cycle to force evidence for the change —
+  problem, assumptions, minimality, intent agreement, and passing lint, tests,
+  and coverage — instead of committing on a "it works" impression.
+- **Bug fixes**: the cycle is adversarial about defects. INTENT catches
+  code/test/specification conflicts, and TWIN CHECK searches the project for
+  the same defect pattern elsewhere, recording even a negative result.
+- **Small code-loop tasks**: the FIT gate measures the diff and routes trivial
+  changes (one file, fewer than ten lines) directly, without planning ceremony.
+- **Planning before implementation**: `kata --plan` runs FIT and THINK, saves
+  the plan with assumptions and unknowns, and stops — the plan can be reviewed
+  or handed off before a single line changes.
+- **Documentation-only changes**: docs-only tasks are recognized and are not
+  asked the INTENT question, keeping the gate silent where no behavior changed.
+- **Adversarial verification of finished work**: `kata --judge` re-runs every
+  claimed check and hunts the six fraud categories (weakened checks, false
+  completion, scope creep, unauthorized actions, specification betrayal,
+  debris) before a merge or hand-over.
+- **Auditing tasks after the fact**: `kata --audit` grades each phase of a
+  completed task as followed, skipped, or faked, and names the concrete risk
+  each skip or fake created — useful for review queues and hand-overs.
+- **Continuous integration**: `kata --check-only` runs Ruff, pytest, and
+  coverage with the coverage gate, non-interactively, as a CI entry point.
+- **Unsticking a fix-verify loop**: after 3 failed verification attempts the
+  task is handed back to the user with what was tried, the real output, and
+  the current hypothesis, instead of looping forever.
+- **Migrating legacy mushin tasks**: `.kata/` is schema-compatible with
+  `.karpathy/`, so existing tasks keep working through a symbolic link.
 
 ## Architecture
 

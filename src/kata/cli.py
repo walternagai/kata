@@ -9,6 +9,7 @@ Modos:
   --judge           Modo adversarial verification (caça fraudes em tarefa concluída)
   --task <name> --judge     Verifica tarefa específica adversarialmente
   --report          Gera relatório outcome-first de tarefa concluída (usa --task ou branch)
+  --audit           Gradua as fases da tarefa: followed / skipped / faked (usa --task ou branch)
 
 Port do `scripts/karpathy_cycle.py` do mushin, usando `.kata/` e
 lógica de verificação modularizada em `kata.verify` e `kata.fit`.
@@ -42,6 +43,11 @@ except ImportError:
 # ── helpers ──────────────────────────────────────────────────────────────
 
 _TASK_WHITESPACE = re.compile(r"\s")
+
+# Hard bound (Fable Step 5): após este número de tentativas de verificação
+# falhas, o ciclo devolve a tarefa ao usuário em vez de continuar o loop
+# fix-verify indefinidamente.
+MAX_VERIFY_ATTEMPTS = 3
 
 # Extensões que _task_path pode concatenar, conforme PyYAML esteja
 # presente ou não. A validação rejeita as duas independentemente.
@@ -411,6 +417,7 @@ def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
             "answered": False,
             "skipped": True,
         }
+        data["done"] = ""
         return data
 
     print("Pergunte-se:")
@@ -418,6 +425,11 @@ def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
     assumptions_raw = input("  Quais assumptions estou fazendo? (separadas por ;) ").strip()
     alternatives_raw = input("  Quais alternativas considerei? (separadas por ;) ").strip()
     unknowns = input("  O que NÃO sei? (preciso perguntar antes?) ").strip()
+    # Fable Step 1: definir "pronto" ANTES da evidência, com verificação
+    # nomeada ("done = este teste passa, o build fica verde, esta página
+    # renderiza"). O VERIFY confronta este critério declarado com o resultado
+    # final — sem isso, o critério só existe depois que tudo já foi feito.
+    done = input("  O que é 'pronto'? (critério de sucesso + como vou verificar) ").strip()
 
     data["think"] = {
         "problem": problem,
@@ -426,6 +438,7 @@ def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
         "unknowns": unknowns,
         "answered": True,
     }
+    data["done"] = done
     data["status"] = "think-complete"
     return data
 
@@ -594,7 +607,9 @@ def _step_verify(
 ) -> dict[str, Any]:
     """Fase 4: GOAL-DRIVEN — verificação de qualidade (ruff + pytest + coverage)."""
     _print_header("4. GOAL-DRIVEN — Verificação de qualidade")
-    verify: dict[str, Any] = {}
+    # Parte do verify existente (ex.: attempts de uma execução anterior) para
+    # que o contador de tentativas sobreviva entre retomadas da tarefa.
+    verify: dict[str, Any] = dict(data.get("verify", {}))
     all_ok = True
 
     results = run_all(
@@ -645,6 +660,12 @@ def _step_verify(
 
     # ── success criteria ──
     print("\n▶ Critério de sucesso da tarefa")
+    # Fable Step 1: o critério foi declarado no THINK, antes da evidência.
+    # O VERIFY confronta o declarado com o resultado final em vez de apenas
+    # perguntar "está satisfeito?" a um critério que só existe agora.
+    done = data.get("done", "")
+    if done:
+        print(f"  (declarado no THINK: {done})")
     if task == "check-only":
         success_met = True
         print("  (modo check-only — assumido satisfeito)")
@@ -653,6 +674,19 @@ def _step_verify(
     verify["success_criteria_met"] = success_met
     if not success_met:
         all_ok = False
+
+    # Hard bound (Fable Step 5): contador de tentativas de verificação
+    # persistido na tarefa. Após MAX_VERIFY_ATTEMPTS falhas, o ciclo devolve
+    # a tarefa ao usuário com o que foi tentado, o output real e a hipótese
+    # atual — não fica repetindo o mesmo fix-verify indefinidamente.
+    attempts = int(verify.get("attempts") or 0) + 1
+    verify["attempts"] = attempts
+    verify["hand_back"] = not all_ok and attempts >= MAX_VERIFY_ATTEMPTS
+    if verify["hand_back"]:
+        print(
+            f"  ⚠  {attempts} tentativas de verificação falharam — "
+            "devolvendo a tarefa ao usuário."
+        )
 
     data["verify"] = verify
     data["status"] = "approved" if all_ok else "rejected"
@@ -997,6 +1031,13 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     if think.get("problem"):
         print(f"  Problema: {think['problem']}")
 
+    # Fable Step 1: o critério de sucesso declarado no THINK aparece no
+    # relatório — o leitor vê o que era "pronto" e pode confrontar com o
+    # resultado.
+    done = data.get("done", "")
+    if done:
+        print(f"  Critério declarado: {done}")
+
     files = surgical.get("files", [])
     if files:
         needed = [f.get("path") for f in files if f.get("necessary")]
@@ -1037,6 +1078,16 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     caveats: list[str] = []
     if status == "rejected":
         caveats.append("Ciclo rejeitado — problemas de qualidade pendentes")
+    # Hard bound (Fable Step 5): estourado o limite de tentativas, o relatório
+    # diz explicitamente que a tarefa foi devolvida ao usuário — com o que foi
+    # tentado, o output real e a hipótese atual — em vez de um "rejeitado"
+    # genérico que convida a mais um ciclo fix-verify.
+    if verify.get("hand_back"):
+        caveats.append(
+            f"hand back: {verify.get('attempts', 0)} tentativa(s) de verificação "
+            "falharam — devolvendo ao usuário com o que foi tentado, o output "
+            "real e a hipótese atual"
+        )
     # Fase preenchida com default em modo não-interativo não foi verificada por
     # ninguém. Um relatório que não diz isso apresenta como cumprido um gate
     # que só foi contornado.
@@ -1098,6 +1149,9 @@ def _init_task(task: str) -> None:
     template: dict[str, Any] = {
         "task": task,
         "status": "draft",
+        # Fable Step 1: critério de sucesso declarado no THINK, antes da
+        # evidência; exibido no VERIFY e no relatório.
+        "done": "",
         "fit": {
             "trivial": False,
             "route": "code-loop",
@@ -1136,6 +1190,11 @@ def _init_task(task: str) -> None:
             "coverage_pct": None,
             "coverage_pass": None,
             "success_criteria_met": None,
+            # Fable Step 5: hard bounds. attempts conta execuções do VERIFY;
+            # hand_back é true quando o limite foi estourado com falha e a
+            # tarefa foi devolvida ao usuário.
+            "attempts": 0,
+            "hand_back": False,
         },
         "auth": {"action_taken": False, "authorized": False, "action": "", "quote": ""},
         "pending": {"action": "", "documented": False},
@@ -1153,6 +1212,113 @@ def _init_task(task: str) -> None:
     template = _capture_base_commit(template)
     path.write_text(_serialize(template), encoding="utf-8")
     print(f"✅  {path} criado. Preencha as respostas com o modo interativo.")
+
+
+# ── audit ────────────────────────────────────────────────────────────────
+
+
+# Risco concreto que cada fase faked/skipped cria, no estilo do
+# `/fable-method audit` do The Fable Method: cada skip/fake nomeia o que
+# deixou de ser observado e o que isso permite que aconteça.
+_AUDIT_RISKS: dict[str, str] = {
+    "fit": "rota e trivialidade não classificadas por humano — esforço pode ser "
+    "desperdiçado em tarefa trivial ou mal roteada",
+    "think": "assumptions nunca declaradas — qualquer solução pode atacar o "
+    "problema errado",
+    "intent": "código, teste e spec podem discordar sem registro — "
+    "comportamento muda sem intenção verificada",
+    "verify": "sucesso afirmado sem evidência de execução — a tarefa pode "
+    "estar aprovada sobre nada",
+    "twins": "defeito corrigido sem busca de recorrência — o mesmo padrão "
+    "pode se repetir em outros lugares",
+}
+
+# Para cada fase com semântica answered/skipped, a chave cujo conteúdo real
+# prova que a fase foi de fato respondida (não preenchida com default).
+_AUDIT_CONTENT_KEY: dict[str, str] = {
+    "fit": "reason",
+    "think": "problem",
+    "intent": "code_does",
+}
+
+
+def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
+    """Gradua as fases da tarefa como followed / skipped / faked.
+
+    Inspirado no `/fable-method audit` do Fable Method: cada passo é
+    *followed* (observado), *skipped* (pulado com registro) ou *faked*
+    (afirmado sem observação). Para cada skip/fake, nomeia o risco concreto
+    que criou.
+
+    - followed: fase com `answered: true` e conteúdo real (ex.: think.problem
+      não vazio);
+    - skipped: fase com `skipped: true` (documentado);
+    - faked: fase com `answered: true` mas conteúdo default/vazio (o padrão
+      do R7-1) OU verify afirmando sucesso sem evidência correspondente OU
+      twins declarando defeito sem busca.
+
+    Fases não iniciadas (nem answered nem skipped) ficam de fora: uma tarefa
+    em andamento não tem skip/fake a auditar.
+    """
+    achados: list[dict[str, str]] = []
+
+    for fase in ("fit", "think", "intent"):
+        bloco = data.get(fase, {})
+        if bloco.get("skipped"):
+            achados.append(
+                {"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]}
+            )
+            continue
+        if not bloco.get("answered"):
+            continue
+        if str(bloco.get(_AUDIT_CONTENT_KEY[fase], "")).strip():
+            achados.append({"fase": fase, "status": "followed", "risco": ""})
+        else:
+            achados.append(
+                {"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]}
+            )
+
+    verify = data.get("verify", {})
+    evidencias = [
+        verify.get(chave)
+        for chave in ("ruff_clean", "tests_pass", "coverage_pass")
+    ]
+    if verify.get("success_criteria_met") and not any(evidencias):
+        achados.append(
+            {"fase": "verify", "status": "faked", "risco": _AUDIT_RISKS["verify"]}
+        )
+    elif any(evidencias):
+        achados.append({"fase": "verify", "status": "followed", "risco": ""})
+
+    twins = data.get("twins", {})
+    if twins.get("defect_fixed") and not twins.get("searched"):
+        achados.append(
+            {"fase": "twins", "status": "faked", "risco": _AUDIT_RISKS["twins"]}
+        )
+    elif twins.get("searched"):
+        achados.append({"fase": "twins", "status": "followed", "risco": ""})
+
+    return achados
+
+
+def _print_audit(achados: list[dict[str, str]]) -> None:
+    """Imprime a graduação followed/skipped/faked com os riscos concretos."""
+    icones = {"followed": "✅", "skipped": "⏭️", "faked": "❌"}
+    if not achados:
+        print("  (nenhuma fase iniciada — tarefa em andamento)")
+        print()
+        return
+    for a in achados:
+        print(f"  {icones.get(a['status'], '•')} {a['fase'].upper()}: {a['status']}")
+        if a["risco"]:
+            print(f"     ⚠ {a['risco']}")
+    print()
+    fakes = [a for a in achados if a["status"] == "faked"]
+    skips = [a for a in achados if a["status"] == "skipped"]
+    if fakes or skips:
+        print(f"  ⚠  Audit encontrou {len(fakes)} fake(s) e {len(skips)} skip(s).")
+    else:
+        print("  ✅  Audit limpo — todas as fases foram seguidas.")
 
 
 # ── main ────────────────────────────────────────────────────────────────
@@ -1219,6 +1385,11 @@ def main() -> None:
         action="store_true",
         help="Gera relatório outcome-first de tarefa concluída",
     )
+    parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="Gradua as fases da tarefa: followed / skipped / faked (com risco concreto)",
+    )
     args = parser.parse_args()
 
     if args.plan and args.check_only:
@@ -1229,6 +1400,11 @@ def main() -> None:
         parser.error("--report e --judge são mutuamente exclusivos")
     if args.report and (args.plan or args.check_only):
         parser.error("--report é mutuamente exclusivo com --plan e --check-only")
+    if args.audit and (args.init or args.plan or args.check_only or args.judge or args.report):
+        parser.error(
+            "--audit é mutuamente exclusivo com --init, --plan, --check-only, "
+            "--judge e --report"
+        )
 
     _kata_dir().mkdir(parents=True, exist_ok=True)
 
@@ -1275,6 +1451,20 @@ def main() -> None:
         # tratá-lo como falha equipara ressalva a fraude grave e leva o CI
         # a ignorar o exit code por inútil.
         sys.exit(1 if result.verdict == "REFUTED" else 0)
+
+    # Modo --audit (graduação followed/skipped/faked)
+    if args.audit:
+        task = args.task or _pick_task()
+        path = _task_path(task)
+        if not path.exists():
+            print(f"⚠  {path} não encontrado. Execute o ciclo primeiro.")
+            sys.exit(1)
+        data = _deserialize(path.read_text(encoding="utf-8"))
+        _print_header(f"AUDIT — Graduação das fases de '{task}'")
+        achados = _audit_task(data)
+        _print_audit(achados)
+        # 0 = audit limpo (nenhum fake/skip); 1 = há fakes/skips.
+        sys.exit(1 if any(a["status"] != "followed" for a in achados) else 0)
 
     # Modo --check-only (CI)
     if args.check_only:

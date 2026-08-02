@@ -92,6 +92,8 @@ Use `.kata/` na raiz do projeto atual. Cada tarefa é um arquivo
 ```yaml
 task: nome-da-tarefa
 status: draft | think-complete | approved | rejected
+done: ""              # Fable Step 1: critério de sucesso declarado no THINK,
+                      # ANTES da evidência; exibido no VERIFY e no relatório
 base_commit: ""      # HEAD do git no início da tarefa; usado pelo JUDGE para
                       # comparar mesmo depois que a tarefa é commitada
 fit:
@@ -129,6 +131,11 @@ verify:
   coverage_pct: 0.0
   coverage_pass: false
   success_criteria_met: false
+  attempts: 0          # Fable Step 5: contador de execuções do VERIFY; ao
+                       # chegar em MAX_VERIFY_ATTEMPTS (3) com falha, hand back
+  hand_back: false     # true quando N tentativas falharam — tarefa devolvida
+                       # ao usuário com o que foi tentado, o output real e a
+                       # hipótese atual
 artifact:
   intent_owed: true
   intent_present: true
@@ -172,7 +179,7 @@ existe. Use o comando adequado ao shell hospedeiro (conforme a seção
 - **Windows PowerShell**: `New-Item -ItemType Directory -Force .kata`
 
 Esta etapa é obrigatória em todos os modos (`--init`, `--check-only`,
-`--judge`, `--report`, `--plan`, `--task`, e modo padrão).
+`--judge`, `--report`, `--audit`, `--plan`, `--task`, e modo padrão).
 
 Analise a primeira mensagem do usuário após `@kata` e extraia as flags. Não
 execute comandos antes de identificar o modo. Mapeamento:
@@ -185,6 +192,7 @@ execute comandos antes de identificar o modo. Mapeamento:
 | `@kata --task <name>` | `--task` | Carregue `.kata/<name>.yaml` com `read` e continue o ciclo a partir do status atual |
 | `@kata --judge` | `--judge` | Carregue a task (por branch ou --task), execute verificação adversarial (re-executa checks, caça fraudes) |
 | `@kata --report` | `--report` | Carregue a task (por branch ou --task), gere relatório outcome-first |
+| `@kata --audit [--task <name>]` | `--audit` | Carregue a task e gradue as fases como followed / skipped / faked, com o risco concreto de cada skip/fake (fable-method audit) |
 | `@kata` (sem args) | padrão | Detecte task via branch git (`bash`) ou menu interativo (`question`), FIT + ciclo completo |
 
 Para `--init`, você pode também usar o shell hospedeiro para rodar
@@ -221,9 +229,15 @@ Se nenhum `--task` for fornecido:
    - "Quais assumptions estou fazendo? (separadas por ;)"
    - "Quais alternativas considerei? (separadas por ;)"
    - "O que NÃO sei? (preciso perguntar antes?)"
+   - **"O que é 'pronto'? (critério de sucesso + como vou verificar)"** — Fable
+     Step 1: defina done ANTES da evidência e grave em `done`. O VERIFY
+     confronta este critério com o resultado final.
 2. Registre as respostas no `.kata/<task>.yaml` sob a chave `think`
 3. Atualize `status` para `think-complete`
 4. Se houver unknowns que podem ser investigados no código, faça-o (grep/read)
+   — **budget de investigação (Fable Step 5)**: 2 buscas/lookups consecutivos
+   sem resultado → pare de procurar e pergunte ao usuário em vez de continuar
+   vasculhando.
 5. Salve o arquivo e prossiga
 
 ### Fase 2: SIMPLIFY
@@ -283,14 +297,21 @@ Se nenhum `--task` for fornecido:
    - Extraia o percentual do output para exibição (regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`)
    - Gate: 70%. OK se returncode == 0 (já inclui o gate)
 
-4. **Critério de sucesso**: pergunte ao usuário "O critério de sucesso da tarefa está satisfeito?"
+4. **Critério de sucesso**: confronte o critério declarado no THINK (`done`)
+   com o resultado final e pergunte ao usuário "O critério de sucesso da
+   tarefa está satisfeito?"
    - Em modo `--check-only`, assuma satisfeito
 
-5. Calcule o resultado final:
+5. **Hard bound (Fable Step 5)**: registre `verify.attempts` (contador de
+   execuções do VERIFY). Após 3 tentativas falhas, grave `verify.hand_back:
+   true` e devolva a tarefa ao usuário com o que foi tentado, o output real
+   e a hipótese atual — não fique repetindo o mesmo fix-verify.
+
+6. Calcule o resultado final:
    - Aprovado se: ruff ✅ AND pytest ✅ AND coverage ✅ AND sucesso ✅
    - Rejeitado caso contrário
 
-6. Atualize `status` para `approved` ou `rejected` no YAML
+7. Atualize `status` para `approved` ou `rejected` no YAML
 
 ### Fase 4.2: TWIN CHECK
 

@@ -75,6 +75,33 @@ ou testar antes de prosseguir.
 Se um unknown bloqueia a implementação, **PARE e pergunte** antes de prosseguir.
 Se é investigável, resolva-o e registre a resposta.
 
+**Budget de investigação (Fable Step 5)**: no máximo **2 buscas/lookups
+consecutivos sem resultado**. Se a segunda busca não encontrar o que você
+procura, pare de vasculhar e pergunte ao usuário — continuar tentando
+cegamente é como o fable-method descreve o desperdício de um agente
+"preso na toca do coelho".
+
+### 5. Done (critério de sucesso antecipado)
+
+> "O que é 'pronto'? (critério de sucesso + como vou verificar)"
+
+Fable Step 1: definir done **antes** da evidência, com verificação nomeada.
+O critério só pode ser "verificado" se for declarado antes de se saber o
+resultado — senão é racionalização, não critério.
+
+**Bons exemplos:**
+- "done = os 3 testes novos de `test_verify.py` passam e o coverage do módulo fica ≥ 80%"
+- "done = `curl /health` retorna `{"status":"degraded"}` com AUTH_MODE=api_key e API_KEY vazio"
+- "done = ruff limpo + pytest 850 passam + nenhum teste novo marcado como skip"
+
+**Exemplos ruins (não verificáveis):**
+- "done = funcionar"
+- "done = deixar melhor"
+- "done = o usuário gostar"
+
+Grave o resultado na chave raiz `done` do YAML. O VERIFY vai confrontar este
+critério com o resultado final, e o relatório vai exibi-lo.
+
 ## Quando o usuário não sabe
 
 Se o usuário responder "não sei" ou "você decide", proponha uma resposta baseada
@@ -92,6 +119,7 @@ Após coletar as respostas, escreva/atualize `.kata/<task>.yaml`:
 
 ```yaml
 status: think-complete
+done: "warn no startup + /health degraded quando misconfig (verificado via curl)"
 think:
   problem: "O Mushin v2.2 acumula três problemas P0 que impedem confiança em produção..."
   assumptions:

@@ -36,6 +36,7 @@ python -m kata --task <name> --report   # regenerar relatório de tarefa existen
 ✅  KATA CYCLE — APROVADO: critério de sucesso satisfeito
 
   Problema: validação de data não preserva fuso horário
+  Critério declarado: parse_date retorna datetime com timezone UTC (teste novo passa)
   Arquivos alterados: src/parser.py, tests/test_parser.py
   INTENT: code does parse_date retorna datetime naive; check expects datetime
     com timezone UTC; spec says README: preservar fuso
@@ -52,6 +53,10 @@ python -m kata --task <name> --report   # regenerar relatório de tarefa existen
   AUTH: user said "pode fazer o deploy para staging"
   PENDING: fazer rollout para produção - aguardando sua autorização
 ```
+
+A linha "Critério declarado" é a chave `done` preenchida no THINK (Fable
+Step 1): o leitor vê o que era "pronto" antes da evidência e pode confrontar
+com o resultado.
 
 ## Linhas devidas (forced artifacts)
 
@@ -70,6 +75,10 @@ python -m kata --task <name> --report   # regenerar relatório de tarefa existen
 - AUTH ausente (ação externa sem autorização)
 - Cobertura abaixo do gate
 - Lint com alertas
+- **Hand back (Fable Step 5)**: `verify.hand_back: true` → o relatório deve
+  dizer que N tentativas de verificação falharam e a tarefa foi devolvida ao
+  usuário com o que foi tentado, o output real e a hipótese atual — não um
+  "rejeitado" genérico que convida a mais um ciclo fix-verify.
 
 ## Modo --report
 
@@ -80,6 +89,19 @@ python -m kata --task minha-tarefa --report
 ```
 
 Útil para compartilhar resultados em CI ou revisão.
+
+## Modo --audit (fable-method audit)
+
+Gradua as fases de uma tarefa como **followed** / **skipped** / **faked**
+(afirmado sem observação), com o risco concreto de cada skip/fake:
+
+```bash
+python -m kata --task minha-tarefa --audit
+```
+
+Exit codes: `0` = audit limpo; `1` = há fakes/skips (ou tarefa não
+encontrada); `2` = argumentos inválidos. Use quando quiser saber se uma
+tarefa foi de fato seguida ou só preenchida.
 
 ## Princípios
 

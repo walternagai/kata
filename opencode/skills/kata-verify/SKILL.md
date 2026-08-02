@@ -101,16 +101,25 @@ Se coverage < gate:
 
 ### Critério de sucesso
 
-Pergunte ao usuário com `question`:
+Confronte o critério declarado no THINK (chave `done`) com o resultado final
+e pergunte ao usuário com `question`:
 > "O critério de sucesso da tarefa está satisfeito?"
 
 O critério volta à fase THINK — o problema declarado foi resolvido?
 
 **Exemplo:**
-- THINK: "AUTH_MODE=api_key + API_KEY vazio bypassa auth silenciosamente"
-- Sucesso: "warn no startup + /health retorna degraded quando misconfig"
+- THINK `done`: "warn no startup + /health retorna degraded quando misconfig (via curl)"
+- Sucesso: o teste/manual confirma exatamente isso
 
-Se o critério não está satisfeito, o ciclo é **rejeitado**.
+Se o `done` declarado não foi alcançado, o ciclo é **rejeitado** — o critério
+não pode ser reescrito depois do fato.
+
+### Hard bound (Fable Step 5)
+
+Registre `verify.attempts` (contador de execuções do VERIFY). Após **3
+tentativas falhas**, grave `verify.hand_back: true` e **devolva a tarefa ao
+usuário** com o que foi tentado, o output real e a hipótese atual — não fique
+repetindo o mesmo fix-verify indefinidamente.
 
 ## Resumo final
 
@@ -145,12 +154,15 @@ Ou:
 
 ```yaml
 status: approved
+done: "warn no startup + /health degraded quando misconfig (verificado via curl)"
 verify:
   ruff_clean: true
   tests_pass: true
   coverage_pct: 87.0
   coverage_pass: true
   success_criteria_met: true
+  attempts: 1          # contador de execuções do VERIFY (hard bound)
+  hand_back: false     # true após 3 tentativas falhas — tarefa devolvida
 ```
 
 ## Modo --check-only (CI)

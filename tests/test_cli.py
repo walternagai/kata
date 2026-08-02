@@ -290,6 +290,9 @@ class TestStepThink:
         result = cli._step_think("task", data)
         assert result["think"]["answered"] is False
         assert result["think"]["skipped"] is True
+        # Sem ninguém para declarar o critério, done fica vazio — o audit
+        # enxerga a ausência em vez de um critério fabricado.
+        assert result["done"] == ""
 
     def test_step_think_already_answered(self, capsys) -> None:
         data: dict = {"think": {"answered": True, "problem": "old"}}
@@ -305,6 +308,7 @@ class TestStepThink:
             "Usuário logado; DB acessível",
             "Refatorar; Ignorar",
             "Não sei o impacto em prod",
+            "done = teste de fuso passa + curl /health retorna degraded",
         ]
         data: dict = {"think": {}}
         result = cli._step_think("task", data)
@@ -314,6 +318,8 @@ class TestStepThink:
         assert result["think"]["unknowns"] == "Não sei o impacto em prod"
         assert result["think"]["answered"] is True
         assert result["status"] == "think-complete"
+        # Fable Step 1: o critério de sucesso é declarado ANTES da evidência
+        assert result["done"] == "done = teste de fuso passa + curl /health retorna degraded"
 
 
 @patch("kata.cli.untracked_stats", return_value=([], 0))
@@ -555,6 +561,187 @@ class TestStepVerify:
         result = cli._step_verify("my-task", data)
         assert result["verify"]["success_criteria_met"] is False
         assert result["status"] == "rejected"
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_shows_declared_done(self, mock_run_all, mock_confirm, capsys) -> None:
+        """Fable Step 1: o VERIFY confronta o critério declarado no THINK com
+        o resultado final em vez de perguntar a um critério que só existe
+        agora."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="5 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = True
+        data: dict = {"done": "done = teste de fuso passa + curl /health degraded"}
+        cli._step_verify("my-task", data)
+        out = capsys.readouterr().out
+        assert "declarado no THINK" in out
+        assert "teste de fuso passa" in out
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_counts_attempts(self, mock_run_all, mock_confirm) -> None:
+        """Fable Step 5: o VERIFY persiste um contador de tentativas na tarefa."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="5 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = True
+        data: dict = {"verify": {"attempts": 2}}
+        result = cli._step_verify("my-task", data)
+        assert result["verify"]["attempts"] == 3
+        assert result["verify"]["hand_back"] is False  # sucesso não devolve
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_hand_back_after_three_failures(self, mock_run_all, mock_confirm) -> None:
+        """Fable Step 5: 3 tentativas falhas estouram o bound — a tarefa é
+        devolvida ao usuário em vez de repetir o fix-verify para sempre."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="5 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = False  # critério ainda não satisfeito
+        data: dict = {"verify": {"attempts": 2}}
+        result = cli._step_verify("my-task", data)
+        assert result["verify"]["attempts"] == 3
+        assert result["verify"]["hand_back"] is True
+        assert result["status"] == "rejected"
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_no_hand_back_before_limit(self, mock_run_all, mock_confirm) -> None:
+        """Antes do limite, a falha é um rejeitado normal — o bound só dispara
+        ao estourar as tentativas."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="5 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = False
+        result = cli._step_verify("my-task", {})
+        assert result["verify"]["attempts"] == 1
+        assert result["verify"]["hand_back"] is False
+        assert result["status"] == "rejected"
+
+
+class TestAuditTask:
+    """Testa _audit_task — graduação followed/skipped/faked (fable audit).
+
+    O gatilho para a fase faked é o padrão do R7-1: fase "respondida" com
+    conteúdo default/vazio. O audit existe para que isso seja visível, não
+    silencioso.
+    """
+
+    def test_clean_task_all_followed(self) -> None:
+        data = {
+            "fit": {"answered": True, "reason": "feature request", "skipped": False},
+            "think": {"answered": True, "problem": "bug real", "skipped": False},
+            "intent": {"answered": True, "code_does": "faz X", "skipped": False},
+            "verify": {"success_criteria_met": True, "ruff_clean": True,
+                       "tests_pass": True, "coverage_pass": True},
+            "twins": {"defect_fixed": False, "searched": True},
+        }
+        achados = cli._audit_task(data)
+        assert all(a["status"] == "followed" for a in achados)
+        assert {a["fase"] for a in achados} == {"fit", "think", "intent", "verify", "twins"}
+
+    def test_faked_think_empty_problem_is_the_r7_pattern(self) -> None:
+        """R7-1: THINK 'respondido' com conteúdo vazio é um passo faked — o
+        audit tem de nomear o risco concreto, não deixar passar."""
+        data = {"think": {"answered": True, "problem": "", "skipped": False}}
+        achados = cli._audit_task(data)
+        think = next(a for a in achados if a["fase"] == "think")
+        assert think["status"] == "faked"
+        assert "problema errado" in think["risco"]
+
+    def test_skipped_think_is_documented(self) -> None:
+        data = {"think": {"answered": False, "skipped": True}}
+        achados = cli._audit_task(data)
+        think = next(a for a in achados if a["fase"] == "think")
+        assert think["status"] == "skipped"
+        assert think["risco"]  # skip documentado ainda tem risco nomeado
+
+    def test_unanswered_phase_is_not_graded(self) -> None:
+        """Tarefa em andamento: fase nem iniciada não é skip nem fake."""
+        achados = cli._audit_task({})
+        assert achados == []
+
+    def test_faked_verify_claims_success_without_evidence(self) -> None:
+        """VERIFY afirmando sucesso sem nenhuma checagem objetiva é faked."""
+        data = {"verify": {"success_criteria_met": True}}
+        achados = cli._audit_task(data)
+        verify = next(a for a in achados if a["fase"] == "verify")
+        assert verify["status"] == "faked"
+        assert "aprovada sobre nada" in verify["risco"]
+
+    def test_verify_with_evidence_is_followed(self) -> None:
+        data = {"verify": {"success_criteria_met": True, "tests_pass": True}}
+        achados = cli._audit_task(data)
+        verify = next(a for a in achados if a["fase"] == "verify")
+        assert verify["status"] == "followed"
+
+    def test_faked_twins_defect_without_search(self) -> None:
+        """Defeito declarado corrigido sem busca de recorrência é faked."""
+        data = {"twins": {"defect_fixed": True, "searched": False}}
+        achados = cli._audit_task(data)
+        twins = next(a for a in achados if a["fase"] == "twins")
+        assert twins["status"] == "faked"
+        assert "se repetir" in twins["risco"]
+
+    def test_twins_searched_is_followed(self) -> None:
+        data = {"twins": {"defect_fixed": True, "searched": True}}
+        achados = cli._audit_task(data)
+        twins = next(a for a in achados if a["fase"] == "twins")
+        assert twins["status"] == "followed"
+
+    def test_fit_faked_when_reason_empty(self) -> None:
+        """FIT respondido sem justificativa (default) é faked — ninguém
+        classificou a tarefa."""
+        data = {"fit": {"answered": True, "reason": "", "skipped": False}}
+        achados = cli._audit_task(data)
+        fit = next(a for a in achados if a["fase"] == "fit")
+        assert fit["status"] == "faked"
+        assert "mal roteada" in fit["risco"]
+
+
+class TestPrintAudit:
+    """Testa _print_audit — output da graduação."""
+
+    def test_clean_audit_says_clean(self, capsys) -> None:
+        cli._print_audit([
+            {"fase": "think", "status": "followed", "risco": ""},
+            {"fase": "verify", "status": "followed", "risco": ""},
+        ])
+        out = capsys.readouterr().out
+        assert "THINK: followed" in out
+        assert "Audit limpo" in out
+
+    def test_faked_audit_lists_risks(self, capsys) -> None:
+        cli._print_audit([
+            {"fase": "think", "status": "faked", "risco": "problema errado"},
+        ])
+        out = capsys.readouterr().out
+        assert "THINK: faked" in out
+        assert "problema errado" in out
+        assert "1 fake(s)" in out
+
+    def test_empty_audit_says_task_in_progress(self, capsys) -> None:
+        cli._print_audit([])
+        out = capsys.readouterr().out
+        assert "nenhuma fase iniciada" in out
 
 
 class TestMainInit:
@@ -1740,6 +1927,85 @@ class TestMainJudge:
         assert exc.value.code == 2
 
 
+class TestMainAudit:
+    """Testa o modo --audit (graduação followed/skipped/faked)."""
+
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_audit_clean_exits_zero(
+        self, mock_kata_dir, mock_path, mock_deserialize,
+        tmp_path, monkeypatch,
+    ) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "test-task.yaml"
+        task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {
+            "task": "test-task",
+            "think": {"answered": True, "problem": "bug real", "skipped": False},
+        }
+
+        with patch("sys.argv", ["kata", "--task", "test-task", "--audit"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 0
+
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_audit_with_faked_phase_exits_one(
+        self, mock_kata_dir, mock_path, mock_deserialize,
+        tmp_path, monkeypatch,
+    ) -> None:
+        """R7-1 como tarefa concluída: THINK 'respondido' com conteúdo vazio
+        tem de derrubar o audit."""
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "test-task.yaml"
+        task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {
+            "task": "test-task",
+            "status": "approved",
+            "think": {"answered": True, "problem": "", "skipped": False},
+        }
+
+        with patch("sys.argv", ["kata", "--task", "test-task", "--audit"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_audit_task_not_found(self, mock_kata_dir, mock_path, tmp_path) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        mock_path.return_value = kata_dir / "nonexistent.yaml"
+
+        with patch("sys.argv", ["kata", "--task", "nonexistent", "--audit"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+
+    @pytest.mark.parametrize("flag", [
+        ["--audit", "--plan"],
+        ["--audit", "--check-only"],
+        ["--audit", "--judge"],
+        ["--audit", "--report"],
+        ["--audit", "--init", "x"],
+    ])
+    def test_audit_conflicts_with_other_modes(self, flag) -> None:
+        with patch("sys.argv", ["kata", *flag]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+
 class TestTaskFlagRejectsPathTraversal:
     """Testa que --task/--init/--judge/--report rejeitam nomes com '..'/'/'
     ponta a ponta pelo main(), não só no helper _task_path isolado."""
@@ -2016,6 +2282,7 @@ class TestStepReport:
         data = {
             "status": "approved",
             "think": {"problem": "validacao de data falha"},
+            "done": "done = teste de fuso passa",
             "intent": {
                 "code_does": "retorna None",
                 "check_expects": "retorna str",
@@ -2033,6 +2300,33 @@ class TestStepReport:
         assert "src/parser.py" in out
         assert "INTENT:" in out
         assert "92.0%" in out
+        # Fable Step 1: o critério declarado no THINK aparece no relatório
+        assert "Critério declarado" in out
+        assert "teste de fuso passa" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_without_done_omits_criterion(self, mock_scratch, capsys) -> None:
+        data = {"status": "approved", "think": {"problem": "x"}, "verify": {},
+                "artifact": {}}
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "Critério declarado" not in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_hand_back_caveat(self, mock_scratch, capsys) -> None:
+        """Fable Step 5: estourado o bound, o relatório diz explicitamente que
+        a tarefa foi devolvida — com o número de tentativas — em vez de um
+        'rejeitado' genérico."""
+        data = {
+            "status": "rejected",
+            "verify": {"hand_back": True, "attempts": 3},
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "hand back" in out
+        assert "3 tentativa(s)" in out
+        assert "hipótese atual" in out
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_report_warns_when_owed_intent_is_absent(self, mock_scratch, capsys) -> None:
@@ -2253,6 +2547,19 @@ class TestInitTaskTemplate:
         assert twins["matches_count"] == 0
         assert twins["files_count"] == 0
         assert twins["fix_applied"] is False
+
+    def test_template_has_done_and_verify_bounds(self, tmp_path, monkeypatch) -> None:
+        """O template declara as chaves novas dos gaps do Fable: `done`
+        (critério antecipado) e verify.attempts/hand_back (hard bounds)."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir(parents=True, exist_ok=True)
+        cli._init_task("fable-fields")
+        path = tmp_path / ".kata" / "fable-fields.yaml"
+        data = cli._deserialize(path.read_text(encoding="utf-8"))
+        assert data["done"] == ""
+        verify = data.get("verify", {})
+        assert verify["attempts"] == 0
+        assert verify["hand_back"] is False
 
 
 class TestPrintJudgeVerdict:

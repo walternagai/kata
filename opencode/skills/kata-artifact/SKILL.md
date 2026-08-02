@@ -28,7 +28,9 @@ linhas devidas estão presentes. Se algo está ausente e é devido, adicione.
 ### 1. Verificar INTENT
 
 Se comportamento foi alterado (`_step_verify` foi executado):
-- A seção `intent` do YAML deve ter `answered: true` e `code_does` preenchido.
+- A seção `intent` do YAML deve ter `answered: true` e `code_does` preenchido
+  — ou, em ciclo não-interativo, `skipped: true` (ninguém respondeu; a fase
+  foi preenchida com default, e isso é documentado, não omitido).
 - Se ausente: registre que a intenção não foi documentada.
 
 ### 2. Verificar AUTH

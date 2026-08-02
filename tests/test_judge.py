@@ -173,7 +173,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         frauds = hunt_weakened_checks(diff)
         # Duas linhas suspeitas, dois achados: a asserção que saiu e o `pass` que
         # entrou. São observações distintas sobre a mesma mudança, cada uma com
-        # sua evidência — não é contagem inflada.
+        # sua evidência — a contagem é de linhas suspeitas, não de padrões casados.
         assert len(frauds) == 2
         assert {f.description.split(": ", 1)[1] for f in frauds} == {
             "assert True (sempre passa se True for literal)",
@@ -227,6 +227,33 @@ diff --git a/tests/test_noqa.py b/tests/test_noqa.py
 """
         frauds = hunt_weakened_checks(diff)
         assert any("noqa" in f.description for f in frauds)
+
+    def test_one_fraud_per_line_when_two_patterns_match(self) -> None:
+        """Uma linha que casa dois padrões (comentário + noqa) conta uma vez.
+
+        Antes, cada padrão casado emitia uma fraude e o par comentário+noqa
+        virava 2 fraudes para 1 mudança — inflando o caveat "N fraude(s) de
+        alta severidade". A contagem mede linhas suspeitas, não padrões
+        casados: o mesmo princípio do H1 para debris.
+
+        A linha é montada por concatenação de propósito: o judge varre o diff
+        da própria tarefa e acusaria "noqa adicionado" se o texto completo
+        estivesse literal no arquivo de teste.
+        """
+        linha_suspeita = "#    assert result == 42  #" + " noqa: E501"
+        diff = f"""
+diff --git a/tests/test_comentada.py b/tests/test_comentada.py
+--- a/tests/test_comentada.py
++++ b/tests/test_comentada.py
+@@ -1 +1 @@
+-    assert result == 42
++{linha_suspeita}
+"""
+        frauds = hunt_weakened_checks(diff)
+        assert len(frauds) == 1
+        # O padrão mais específico vence: a linha virou comentário.
+        assert "comentário" in frauds[0].description
+        assert "noqa" not in frauds[0].description
 
     def test_multiple_frauds(self) -> None:
         diff = """

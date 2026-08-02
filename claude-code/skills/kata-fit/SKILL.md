@@ -89,6 +89,9 @@ fit:
   trivial: false
   route: code-loop     # code-loop | plan-first | question | research | inference
   reason: "Feature request com escopo bem definido"
+  answered: false
+  skipped: false       # true só se a fase foi preenchida com default sem
+                       # ninguém responder (modo não-interativo)
 ```
 
 ## Complementaridade com fable-method

@@ -105,6 +105,8 @@ think:
     1. Como extrair user_id? → dependencies.py:177 retorna user dict
     2. Migration SQLite? → seguir pattern ADD_*_COLUMN existente
   answered: true
+  skipped: false       # true só se a fase foi preenchida com default sem
+                       # ninguém responder (modo não-interativo)
 ```
 
 ## Princípios

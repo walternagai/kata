@@ -42,6 +42,9 @@ intent:
   code_does: "parse_date retorna datetime sem timezone"
   check_expects: "test espera datetime com timezone UTC"
   spec_says: "README: datas devem preservar timezone"
+  answered: false
+  skipped: false       # true só se a fase foi preenchida com default sem
+                       # ninguém responder (modo não-interativo)
 ```
 
 ### 3. Verificar concordância

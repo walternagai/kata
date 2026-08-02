@@ -267,6 +267,11 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
     marcador é o mesmo que o git emite (`new file mode`), então isto vale
     tanto para arquivos staged/commitados quanto para o diff sintético de
     untracked.
+
+    Contagem: uma fraude por linha de diff suspeita, não por padrão casado.
+    Uma linha que casa dois padrões (ex.: teste comentado que também ganhou
+    `# noqa`) é um único enfraquecimento e conta uma vez — o mesmo princípio
+    do H1 para debris ("predicado, não contador").
     """
     frauds: list[JudgeFraud] = []
     current_file = ""
@@ -294,6 +299,13 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
                     description=f"{current_file}: {desc}",
                     evidence=line.strip(),
                 ))
+                # Uma fraude por linha de diff, não por padrão casado: a mesma
+                # linha pode casar dois padrões (ex.: teste comentado com
+                # noqa inline casa "teste virado em comentário" e "noqa
+                # adicionado") e não pode contar duas vezes. O primeiro padrão
+                # casado é o mais específico (assert literal > comentário >
+                # pass > noqa).
+                break
 
     for path, added in new_test_bodies.items():
         for vazio in _empty_test_bodies(added):

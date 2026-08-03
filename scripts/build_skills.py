@@ -38,69 +38,170 @@ FONTE = REPO / "phases"
 # próprio em cada frontend (agente no OpenCode, skill no Claude Code).
 ORQUESTRADOR = "kata"
 
+# ── o contrato de um frontend ────────────────────────────────────────────
+
+# Os papéis que o ciclo exige. Um frontend é definido por como *ele* chama
+# cada um. São papéis, e não nomes de ferramenta, de propósito: `RUN` é
+# "executar um comando", não "bash" — um frontend sem bash ainda executa
+# comandos, e chamar a variável de BASH fazia o contrato parecer amarrado a
+# um shell específico.
+REQUIRED_ROLES: frozenset[str] = frozenset({
+    "LOAD_PHASE",   # carregar as instruções de uma fase
+    "ASK",          # perguntar ao usuário
+    "RUN",          # executar um comando
+    "READ",         # ler um arquivo
+    "WRITE",        # criar/escrever um arquivo
+    "EDIT",         # alterar um arquivo existente
+    "SEARCH",       # buscar por conteúdo no projeto
+    "LIST_FILES",   # encontrar arquivos por padrão de nome
+})
+
+# Como o frontend se apresenta. Não é capacidade: é nome, e não muda o que
+# o ciclo pode fazer.
+REQUIRED_IDENTITY: frozenset[str] = frozenset({
+    "AGENTE", "AGENTE_CAP", "AGENTE_CAP_MIN", "FRONTEND_NOME",
+    "ESTE_ORQUESTRADOR", "INVOC", "INVOC_SEM_ARGS",
+})
+
+# Capacidades conhecidas, para os blocos `<!--if:-->` / `<!--ifnot:-->`.
+# Capacidade não declarada aqui é erro de build: um typo em `<!--if:-->`
+# faria o bloco sumir calado dos dois frontends.
+CAPABILITIES: frozenset[str] = frozenset({
+    # A ferramenta de perguntar é de escolha fechada, com teto de opções —
+    # então pergunta narrativa vai em texto normal, e não nela. É o que
+    # governa quase todo o conteúdo condicional do repositório.
+    "closed_choice_ask",
+    # Existe uma lista de tarefas na UI para espelhar as fases.
+    "task_tracker",
+})
+
 FRONTENDS: dict[str, dict] = {
     "opencode": {
-        "vars": {
+        "roles": {
+            "LOAD_PHASE": "`skill`",
+            "ASK": "`question`",
+            "RUN": "`bash`",
+            "READ": "`read`",
+            "WRITE": "`write`",
+            "EDIT": "`edit`",
+            "SEARCH": "`grep`",
+            "LIST_FILES": "`glob`",
+        },
+        "identity": {
             "AGENTE": "o agente @kata",
+            "AGENTE_CAP": "O agente",
+            "AGENTE_CAP_MIN": "o agente",
             "FRONTEND_NOME": "OpenCode",
             "ESTE_ORQUESTRADOR": "O prompt do agente",
             "INVOC": "@kata ",
             "INVOC_SEM_ARGS": "`@kata` (sem args)",
-            "AGENTE_CAP": "O agente",
-            "AGENTE_CAP_MIN": "o agente",
-            "SKILL": "`skill`",
-            "ASK": "`question`",
-            "BASH": "`bash`",
-            "READ": "`read`",
-            "WRITE": "`write`",
-            "EDIT": "`edit`",
-            "GREP": "`grep`",
-            "GLOB": "`glob`",
         },
+        # `question` é uma ferramenta de pergunta geral, sem teto de opções.
+        "capabilities": set(),
         "orquestrador": "opencode/agent/kata.md",
         "fase": "opencode/skills/{slug}/SKILL.md",
     },
     "claude-code": {
-        "vars": {
+        "roles": {
+            "LOAD_PHASE": "`Skill`",
+            "ASK": "`AskUserQuestion`",
+            "RUN": "`Bash`",
+            "READ": "`Read`",
+            "WRITE": "`Write`",
+            "EDIT": "`Edit`",
+            "SEARCH": "`Grep`",
+            "LIST_FILES": "`Glob`",
+        },
+        "identity": {
             "AGENTE": "o kata",
+            "AGENTE_CAP": "A skill",
+            "AGENTE_CAP_MIN": "a skill",
             "FRONTEND_NOME": "Claude Code",
             "ESTE_ORQUESTRADOR": "Esta skill",
             "INVOC": "",
             "INVOC_SEM_ARGS": "(sem args)",
-            "AGENTE_CAP": "A skill",
-            "AGENTE_CAP_MIN": "a skill",
-            "SKILL": "`Skill`",
-            "ASK": "`AskUserQuestion`",
-            "BASH": "`Bash`",
-            "READ": "`Read`",
-            "WRITE": "`Write`",
-            "EDIT": "`Edit`",
-            "GREP": "`Grep`",
-            "GLOB": "`Glob`",
         },
+        # AskUserQuestion é fechada e cabe até 4 opções; pergunta aberta vai
+        # em texto normal. TaskCreate/TaskUpdate espelham as fases na UI.
+        "capabilities": {"closed_choice_ask", "task_tracker"},
         "orquestrador": "claude-code/skills/kata/SKILL.md",
         "fase": "claude-code/skills/{slug}/SKILL.md",
     },
 }
 
-_BLOCO = re.compile(
-    r"^[ \t]*<!--only:(?P<nomes>[\w\-, ]+)-->[ \t]*\n(?P<corpo>.*?)^[ \t]*<!--/only-->[ \t]*\n",
-    re.DOTALL | re.MULTILINE,
-)
+
+def validate_frontends() -> None:
+    """Todo frontend declara o contrato inteiro, e nada além dele.
+
+    Papel faltando só apareceria quando alguma fase o usasse, o que faz uma
+    definição incompleta parecer funcional até a fase errada ser renderizada.
+    Capacidade desconhecida é typo, e um typo em `<!--if:-->` some calado.
+    """
+    for nome, spec in FRONTENDS.items():
+        faltando = REQUIRED_ROLES - set(spec["roles"])
+        sobrando = set(spec["roles"]) - REQUIRED_ROLES
+        if faltando:
+            raise ValueError(f"{nome}: papéis não declarados: {sorted(faltando)}")
+        if sobrando:
+            raise ValueError(f"{nome}: papéis fora do contrato: {sorted(sobrando)}")
+        if set(spec["identity"]) != REQUIRED_IDENTITY:
+            diff = set(spec["identity"]) ^ REQUIRED_IDENTITY
+            raise ValueError(f"{nome}: identidade divergente: {sorted(diff)}")
+        desconhecidas = set(spec["capabilities"]) - CAPABILITIES
+        if desconhecidas:
+            raise ValueError(f"{nome}: capacidades desconhecidas: {sorted(desconhecidas)}")
+
+
+def _vars(frontend: str) -> dict[str, str]:
+    spec = FRONTENDS[frontend]
+    return {**spec["roles"], **spec["identity"]}
+
+
+def _bloco(marcador: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"^[ \t]*<!--{marcador}:(?P<nomes>[\w\-, ]+)-->[ \t]*\n"
+        rf"(?P<corpo>.*?)^[ \t]*<!--/{marcador}-->[ \t]*\n",
+        re.DOTALL | re.MULTILINE,
+    )
+
+
+_ONLY = _bloco("only")
+_IF = _bloco("if")
+_IFNOT = _bloco("ifnot")
 _VAR = re.compile(r"\{\{(\w+)\}\}")
 
 
 def _resolve_blocos(texto: str, frontend: str) -> str:
-    """Mantém o corpo dos blocos do frontend pedido e remove os demais."""
+    """Resolve os blocos condicionais para um frontend.
 
-    def escolhe(m: re.Match[str]) -> str:
+    `<!--if:CAP-->` e `<!--ifnot:CAP-->` primeiro, `<!--only:NOME-->` depois.
+    A ordem importa pouco porque não se aninham, mas a preferência importa
+    muito: quase todo conteúdo condicional deste repositório depende de uma
+    *capacidade* (a ferramenta de perguntar ser de escolha fechada), e não da
+    identidade do frontend. Amarrá-lo ao nome obrigaria um terceiro frontend
+    com a mesma forma a ser adicionado a treze blocos, um a um. `only:` fica
+    para o que é identidade de verdade: frontmatter, título, invocação.
+    """
+    capacidades = FRONTENDS[frontend]["capabilities"]
+
+    def por_capacidade(m: re.Match[str], quando: bool) -> str:
+        nomes = {n.strip() for n in m.group("nomes").split(",")}
+        desconhecidas = nomes - CAPABILITIES
+        if desconhecidas:
+            raise ValueError(f"capacidade desconhecida: {sorted(desconhecidas)}")
+        tem = bool(nomes & capacidades)
+        return m.group("corpo") if tem is quando else ""
+
+    def por_frontend(m: re.Match[str]) -> str:
         nomes = {n.strip() for n in m.group("nomes").split(",")}
         desconhecidos = nomes - set(FRONTENDS)
         if desconhecidos:
             raise ValueError(f"frontend desconhecido em <!--only:-->: {sorted(desconhecidos)}")
         return m.group("corpo") if frontend in nomes else ""
 
-    return _BLOCO.sub(escolhe, texto)
+    texto = _IF.sub(lambda m: por_capacidade(m, True), texto)
+    texto = _IFNOT.sub(lambda m: por_capacidade(m, False), texto)
+    return _ONLY.sub(por_frontend, texto)
 
 
 def _resolve_vars(texto: str, valores: dict[str, str], origem: str) -> str:
@@ -118,7 +219,7 @@ def _resolve_vars(texto: str, valores: dict[str, str], origem: str) -> str:
 def render(fonte: str, frontend: str, origem: str = "<memória>") -> str:
     """Aplica blocos condicionais e variáveis para um frontend."""
     texto = _resolve_blocos(fonte, frontend)
-    return _resolve_vars(texto, FRONTENDS[frontend]["vars"], origem)
+    return _resolve_vars(texto, _vars(frontend), origem)
 
 
 # Comentário HTML: não aparece no markdown renderizado, mas aparece para quem
@@ -159,6 +260,7 @@ def _fontes() -> list[Path]:
 
 def build(check: bool = False) -> int:
     """Gera (ou confere) todos os arquivos. Retorna a contagem de divergências."""
+    validate_frontends()
     divergentes: list[str] = []
 
     for caminho in _fontes():

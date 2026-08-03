@@ -791,26 +791,49 @@ applied to one frontend and forgotten in the other — the ARTIFACT phase had a
 received the corrected step numbering or the `base_commit` instruction. Today
 93% of the source is shared and the remaining 7% is declared difference.
 
-The template language has exactly two constructs:
+### The frontend contract
+
+A frontend is defined by three things, declared in `FRONTENDS` in
+`scripts/build_skills.py` and checked by `validate_frontends()`:
+
+| Part | What it is |
+|---|---|
+| `roles` | How the host names each of `REQUIRED_ROLES`: `LOAD_PHASE`, `ASK`, `RUN`, `READ`, `WRITE`, `EDIT`, `SEARCH`, `LIST_FILES` |
+| `identity` | How the frontend presents itself — its name, the invocation prefix, whether it is an agent or a skill |
+| `capabilities` | What the host can do beyond the roles: `closed_choice_ask`, `task_tracker` |
+
+They are **roles**, not tool names: `RUN` means "run a command", not "bash".
+While the variable was called `BASH`, the contract read as if it were bound to
+a particular shell, which is exactly what kata claims not to be.
+
+The template language has three constructs:
 
 | Construct | Purpose |
 |---|---|
-| `{{BASH}}`, `{{READ}}`, `{{ASK}}`, `{{SKILL}}`, … | The host's name for a tool. An undeclared variable is a build error, never literal text |
-| `<!--only:claude-code-->` … `<!--/only-->` | A block included in the named frontends only (comma-separated). Markdown-invisible, and stripped from the output |
+| `{{RUN}}`, `{{READ}}`, `{{ASK}}`, `{{LOAD_PHASE}}`, … | How this host names that role. An undeclared variable is a build error, never literal text |
+| `<!--if:CAP-->` / `<!--ifnot:CAP-->` … | A block that depends on a host **capability**. An unknown capability is a build error — a typo here would delete the block from every frontend in silence |
+| `<!--only:FRONTEND-->` … | A block for a named frontend (comma-separated). For genuine **identity** only |
 
-Use a block when the *guidance* genuinely differs — the 4-option limit of
-`AskUserQuestion`, or free-text versus closed questions. Use a variable when
-only the tool's name changes. Rewriting shared prose into two blocks to avoid a
-small wording difference re-creates by hand the drift this exists to prevent.
+**Prefer capability blocks.** Almost all conditional content in this repository
+exists because the asking tool is closed-choice, not because the frontend is
+called Claude Code. Writing such a block as `only:claude-code` forces a third
+host of the same shape to be added to each block by hand — the duplication of
+the previous section, returning through another door. `only:` is right for
+frontmatter, the title, and the invocation prefix, and little else.
+
+Rewriting shared prose into two blocks to avoid a small wording difference
+re-creates by hand the drift this exists to prevent.
 
 **`question` is a trap.** The route `question` is a `fit.route` value and is
 spelled the same in every frontend; only the *asking tool* becomes `{{ASK}}`.
 Confusing them makes a frontend instruct `route: AskUserQuestion`, which the CLI
 does not accept. `tests/test_skills_build.py` checks this specifically.
 
-Adding a frontend means adding an entry to `FRONTENDS` in
-`scripts/build_skills.py`: its tool vocabulary and where its files go. No phase
-content has to be rewritten.
+Adding a frontend means adding one entry to `FRONTENDS`: its role vocabulary,
+its identity, its capabilities, and where its files go. No phase content has to
+be rewritten — `test_um_frontend_novo_e_so_uma_entrada_na_tabela` proves it by
+rendering the whole tree for a host that does not exist in the repository, so a
+source that had quietly coupled itself to a real frontend would fail there.
 
 ## Compatibility and limitations
 

@@ -43,7 +43,7 @@ passou.
 
 Para esta fase, use:
 
-- **{{BASH}}**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
+- **{{RUN}}**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
 - **{{ASK}}** (via `kata-question`): pergunte ao usuário se o critério de sucesso foi satisfeito.
 - **{{WRITE}} / {{EDIT}}**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
 
@@ -194,7 +194,7 @@ verify:
 Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
 só as 3 verificações objetivas (ruff + pytest + coverage). O critério de
 sucesso é assumido satisfeito. Útil para CI/CD pipelines — nesse modo, a
-skill nem precisa ser carregada: chame o CLI diretamente via {{BASH}}.
+skill nem precisa ser carregada: chame o CLI diretamente via {{RUN}}.
 
 Para executar via CLI:
 ```bash

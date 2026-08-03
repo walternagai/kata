@@ -54,13 +54,13 @@ Se `code_does`, `check_expects` e `spec_says` não concordam:
 1. **NÃO edite ainda.** O conflito é a descoberta mais importante.
 2. Determine a ordem de autoridade:
    - Declaração explícita do usuário > spec/README > teste > código atual
-<!--only:opencode-->
+<!--ifnot:closed_choice_ask-->
 3. Pergunte ao usuário ou resolva pela ordem de autoridade.
-<!--/only-->
-<!--only:claude-code-->
+<!--/ifnot-->
+<!--if:closed_choice_ask-->
 3. Pergunte ao usuário (via {{ASK}}, com as opções sendo as
    fontes possíveis a seguir) ou resolva pela ordem de autoridade.
-<!--/only-->
+<!--/if-->
 4. Registre a resolução no YAML.
 
 ### 4. Referência: ordem de autoridade

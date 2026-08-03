@@ -19,16 +19,16 @@ Antes de escrever qualquer linha de código, declarar explicitamente:
 
 Para esta fase, use:
 
-<!--only:opencode-->
+<!--ifnot:closed_choice_ask-->
 - **{{ASK}}**: faça as 4 perguntas ao usuário, **uma a uma**. Não jogue todas de uma vez.
-<!--/only-->
-<!--only:claude-code-->
+<!--/ifnot-->
+<!--if:closed_choice_ask-->
 - **Texto livre** (ver `kata-question`): faça as 4 perguntas ao usuário, **uma a uma**,
   em texto normal, com uma proposta baseada em contexto quando possível. Não jogue
   todas de uma vez, e não force isso em {{ASK}} — são respostas narrativas,
   não escolhas fechadas.
-<!--/only-->
-- **{{READ}} / {{GREP}}**: investigue unknowns sobre código existente (ex: "Como X funciona hoje?").
+<!--/if-->
+- **{{READ}} / {{SEARCH}}**: investigue unknowns sobre código existente (ex: "Como X funciona hoje?").
 - **{{WRITE}} / {{EDIT}}**: registre as respostas em `.kata/<task>.yaml` e atualize `status: think-complete`.
 
 ## Roteiro de Perguntas
@@ -76,13 +76,13 @@ Unknowns são coisas que você precisa investigar no código, perguntar ao usuá
 ou testar antes de prosseguir.
 
 **Tipos de unknown:**
-- **Código**: "Como X funciona hoje?" → investigar com {{GREP}}/{{READ}}
-<!--only:opencode-->
+- **Código**: "Como X funciona hoje?" → investigar com {{SEARCH}}/{{READ}}
+<!--ifnot:closed_choice_ask-->
 - **Decisão**: "Devo usar A ou B?" → perguntar ao usuário
-<!--/only-->
-<!--only:claude-code-->
+<!--/ifnot-->
+<!--if:closed_choice_ask-->
 - **Decisão**: "Devo usar A ou B?" → perguntar ao usuário (bom caso para {{ASK}}, se A/B forem as únicas opções)
-<!--/only-->
+<!--/if-->
 - **Comportamento**: "O que acontece quando Y?" → testar ou perguntar
 
 Se um unknown bloqueia a implementação, **PARE e pergunte** antes de prosseguir.

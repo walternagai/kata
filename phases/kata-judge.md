@@ -28,7 +28,7 @@ Verificar adversarialmente uma tarefa concluída:
 
 ## Execução
 
-Via {{BASH}}:
+Via {{RUN}}:
 
 ```bash
 python -m kata --task <name> --judge

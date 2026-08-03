@@ -208,6 +208,12 @@ diff com o relatório e caça fraudes em 6 categorias (weakened checks, false
 completion, scope creep, unauthorized action, spec betrayal, debris).
 É a última fase, aplicada apenas quando solicitada após o REPORT.
 
+Se o juiz não encontrar fraude mas também não tiver tido como observar — nada
+re-executado (o caso de todo toolchain que não é Python), ou teste numa
+linguagem cujos padrões ele não lê — o veredito é **UNVERIFIABLE**, não
+VERIFIED, e os pontos cegos vêm listados. "Não consegui olhar" não é
+reportado como "está tudo certo".
+
 ## Diretório de Trabalho
 
 O kata usa `.kata/` na raiz do projeto. Cada tarefa é um arquivo YAML:

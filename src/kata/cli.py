@@ -261,7 +261,12 @@ def _print_header(text: str) -> None:
 
 def _print_judge_verdict(result: JudgeResult) -> None:
     """Imprime o veredito do juiz adversarial."""
-    verdict_icon = {"VERIFIED": "✅", "VERIFIED WITH CAVEATS": "⚠️", "REFUTED": "❌"}
+    verdict_icon = {
+        "VERIFIED": "✅",
+        "VERIFIED WITH CAVEATS": "⚠️",
+        "UNVERIFIABLE": "❓",
+        "REFUTED": "❌",
+    }
     icon = verdict_icon.get(result.verdict, "❓")
     print(f"\n{icon}  VEREDITO: {result.verdict}")
     print()
@@ -286,6 +291,12 @@ def _print_judge_verdict(result: JudgeResult) -> None:
             print(f"       {f.description}")
             if f.evidence:
                 print(f"       → {f.evidence}")
+        print()
+
+    if result.blind_spots:
+        print("  Pontos cegos (o juiz não conseguiu observar):")
+        for b in result.blind_spots:
+            print(f"    ❓ {b}")
         print()
 
     if result.caveats:
@@ -1450,6 +1461,13 @@ def main() -> None:
         # verificou e aprovou com ressalvas de severidade baixa/média;
         # tratá-lo como falha equipara ressalva a fraude grave e leva o CI
         # a ignorar o exit code por inútil.
+        #
+        # UNVERIFIABLE também sai 0, e a escolha é deliberada: o juiz não
+        # encontrou nada errado, apenas não teve como olhar. Reprovar por
+        # isso quebraria o `--judge` de todo projeto não-Python — que é
+        # justamente quem mais o recebe — antes que houvesse alternativa a
+        # oferecer. O veredito e a seção de pontos cegos dizem em voz alta
+        # o que não foi observado; quem quiser barrar no CI lê o veredito.
         sys.exit(1 if result.verdict == "REFUTED" else 0)
 
     # Modo --audit (graduação followed/skipped/faked)

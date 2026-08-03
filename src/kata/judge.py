@@ -8,7 +8,10 @@ Inspirado no fable-judge do The Fable Method
 3. Re-run every claimed verification — executa de novo e compara
 4. Hunt frauds — 6 categorias (weakened checks, false completion,
    scope creep, unauthorized action, spec betrayal, debris)
-5. Deliver verdict — VERIFIED / VERIFIED WITH CAVEATS / REFUTED
+5. Deliver verdict — VERIFIED / VERIFIED WITH CAVEATS / UNVERIFIABLE / REFUTED
+
+UNVERIFIABLE cobre o caso em que nada foi observado: o juiz não achou fraude
+porque não teve como procurar. Ver `judge_task`.
 """
 
 from __future__ import annotations
@@ -29,6 +32,12 @@ _WEAKENED_PATTERNS: list[tuple[str, str]] = [
     (r"^\+\s*pass\s*$", "corpo de teste substituído por pass"),
     (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
 ]
+
+# Extensões cujos testes _WEAKENED_PATTERNS sabe ler. Os padrões acima são
+# sintaxe Python (`assert`, `pass`, o supressor de lint): num teste .js/.go/.rs
+# eles não casam nunca. Sem esta lista, "nenhuma fraude encontrada" viraria uma
+# afirmação sobre código que o hunter jamais conseguiu ler.
+_WEAKENED_PATTERN_EXTS = frozenset({".py"})
 
 _DEBRIS_FILE_PATTERNS = [
     r"\.tmp$",
@@ -63,11 +72,13 @@ class JudgeResult:
     """Resultado completo da verificação adversarial.
 
     Attributes:
-        verdict: VERIFIED | VERIFIED WITH CAVEATS | REFUTED
+        verdict: VERIFIED | VERIFIED WITH CAVEATS | UNVERIFIABLE | REFUTED
         claims: Claims que o juiz consegue confrontar com a realidade.
         unverifiable_claims: Claims aceitas sem verificação, por não haver
             comando que as reproduza.
         caveats: Ressalvas sobre o resultado.
+        blind_spots: O que o juiz não conseguiu observar. Não é acusação —
+            é confissão, e é o que separa UNVERIFIABLE de VERIFIED.
         frauds: Fraudes encontradas durante a verificação.
         re_ran_checks: Resultados da re-execução das verificações.
         details: Metadados extras.
@@ -79,6 +90,7 @@ class JudgeResult:
     caveats: list[str] = field(default_factory=list)
     frauds: list[JudgeFraud] = field(default_factory=list)
     re_ran_checks: dict[str, bool] = field(default_factory=dict)
+    blind_spots: list[str] = field(default_factory=list)
     details: dict[str, Any] = field(default_factory=dict)
 
 
@@ -215,6 +227,35 @@ def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> l
 
 def _is_test_file(filepath: str) -> bool:
     return filepath.startswith("tests/") or "/test_" in filepath or "_test." in filepath
+
+
+# Convenções de nome de teste em várias linguagens: test_x.py, x_test.go,
+# x.test.js, x.spec.ts, x_spec.rb. Casa no basename e exige separador antes
+# do token, senão "latest.py", "contest.py" e "attempt_parser.py" entram.
+_TEST_BASENAME = re.compile(r"^(?:test|spec)[_.\-]|[_.\-](?:test|spec)s?\.", re.IGNORECASE)
+
+
+def _unreadable_test_files(changed: list[str]) -> list[str]:
+    """Testes que _WEAKENED_PATTERNS não tem como ler, por serem de outra linguagem.
+
+    Existe para o juiz confessar, não para acusar: num repositório poliglota
+    o ruff e o pytest podem passar e ser re-executados — desarmando o outro
+    ponto cego — enquanto um teste .js do mesmo diff foi esvaziado sem que
+    hunt_weakened_checks pudesse enxergar. "Nenhuma fraude" ali é ausência
+    de leitura, não ausência de fraude.
+
+    Reconhece teste pela convenção do nome, e não por morar em `tests/`:
+    incluir todo arquivo do diretório marcaria `tests/fixtures/dados.json`
+    como teste ilegível em todo projeto que tem fixture, e uma ressalva que
+    aparece sempre é uma ressalva que ninguém lê. O preço é não flagrar
+    `__tests__/index.js`, que não traz token nenhum no nome.
+    """
+    return [
+        f
+        for f in changed
+        if _TEST_BASENAME.search(f.rsplit("/", 1)[-1])
+        and Path(f).suffix.lower() not in _WEAKENED_PATTERN_EXTS
+    ]
 
 
 def is_debris_file(filepath: str) -> bool:
@@ -443,7 +484,8 @@ def judge_task(
     2. Estabelece verdade material (git diff)
     3. Re-executa verificações que o relatório afirma que passaram
     4. Caça fraudes em 6 categorias
-    5. Entrega veredito
+    5. Registra o que não conseguiu observar (pontos cegos)
+    6. Entrega veredito
     """
     base_commit = task_data.get("base_commit")
     diff = _run_git_diff(cwd=cwd, base_commit=base_commit)
@@ -485,6 +527,22 @@ def judge_task(
     frauds.extend(hunt_spec_betrayal(task_data))
     frauds.extend(hunt_debris(diff, changed))
 
+    # Pontos cegos: o que o juiz não teve como observar. Separados das
+    # caveats porque governam o veredito, e das fraudes porque não são
+    # acusação — não observar não é evidência de fraude nem de honestidade.
+    blind_spots: list[str] = []
+    if not claimed_checks:
+        blind_spots.append(
+            "nenhuma verificação re-executada — o relatório não afirma nenhum "
+            "check que o juiz saiba reproduzir"
+        )
+    unreadable = _unreadable_test_files(changed)
+    if unreadable:
+        blind_spots.append(
+            f"{len(unreadable)} arquivo(s) de teste sem padrão de enfraquecimento "
+            "para a linguagem: " + ", ".join(unreadable[:5])
+        )
+
     high = [f for f in frauds if f.severity == "high"]
     caveats: list[str] = []
     oversized = _oversized_untracked(untracked_files(cwd=cwd), cwd=cwd)
@@ -506,6 +564,12 @@ def judge_task(
     elif frauds:
         verdict = "VERIFIED WITH CAVEATS"
         caveats.append(f"{len(frauds)} fraude(s) de média/baixa severidade")
+    elif blind_spots:
+        # A mesma doutrina de fit.untracked_stats: "não consegui olhar" não
+        # pode virar "está tudo bem". Sem isto, um projeto cujas verificações
+        # o juiz não sabe rodar — qualquer um que não seja Python — recebia
+        # VERIFIED limpo, sem uma ressalva sequer, tendo re-executado nada.
+        verdict = "UNVERIFIABLE"
     else:
         verdict = "VERIFIED"
 
@@ -516,6 +580,7 @@ def judge_task(
         caveats=caveats,
         frauds=frauds,
         re_ran_checks=re_ran,
+        blind_spots=blind_spots,
         details={
             "changed_files": len(changed),
             "diff_lines": len(diff.split("\n")),

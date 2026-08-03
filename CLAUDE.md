@@ -70,7 +70,9 @@ src/kata/
 - `judge.py`: treats a task's `.kata/<task>.yaml` as a set of claims, diffs them against Git reality,
   re-runs claimed checks, and hunts six fraud categories: weakened checks, false completion, scope
   creep, unauthorized action, spec betrayal, debris. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
-  (medium/low findings only), `REFUTED` (any high-severity finding).
+  (medium/low findings only), `UNVERIFIABLE` (no fraud, but nothing could be
+  observed — nothing re-run, or tests in a language it has no patterns for),
+  `REFUTED` (any high-severity finding).
 - Task files live in `.kata/<task>.yaml` at the *target* project's root (not this repo's own root,
   except when kata is being used on itself). Schema is compatible with mushin's `.karpathy/`
   (`ln -s .karpathy .kata` to migrate).

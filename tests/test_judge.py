@@ -13,6 +13,7 @@ from kata.judge import (
     _changed_files,
     _oversized_untracked,
     _run_git_diff,
+    _unreadable_test_files,
     _untracked_diff,
     collect_claims,
     collect_unverifiable_claims,
@@ -504,15 +505,23 @@ class TestHuntDebris:
 class TestJudgeTask:
     """Testa judge_task end-to-end."""
 
-    def test_verified_no_claims(
+    def test_sem_claims_e_unverifiable_nao_verified(
         self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
+        """Tarefa que não afirma nenhum check reproduzível não pode sair VERIFIED.
+
+        Este teste afirmava o contrário. O veredito limpo era emitido sem
+        que run_all fosse chamado uma única vez — o juiz aprovava por não
+        ter procurado.
+        """
         mock_diff.return_value = ""
         mock_files.return_value = []
         result = judge_task({})
-        assert result.verdict == "VERIFIED"
+        assert result.verdict == "UNVERIFIABLE"
         assert result.frauds == []
+        assert any("nenhuma verificação re-executada" in b for b in result.blind_spots)
+        mock_run_all.assert_not_called()
 
     def test_verified_all_checks_pass(
         self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
@@ -1065,3 +1074,135 @@ class TestJudgeSeesUntrackedFiles:
         diff = _run_git_diff(cwd=tmp_path)
         assert "blob.bin" not in diff
         assert _changed_files(cwd=tmp_path) == ["blob.bin"]
+
+
+class TestUnreadableTestFiles:
+    """`_unreadable_test_files` reconhece teste pelo nome, em qualquer linguagem."""
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "src/calculadora.test.js",
+            "internal/soma_test.go",
+            "spec/models/user_spec.rb",
+            "app/Widget.spec.ts",
+            "test_legado.rb",
+        ],
+    )
+    def test_teste_de_outra_linguagem_e_ilegivel(self, path: str) -> None:
+        assert _unreadable_test_files([path]) == [path]
+
+    @pytest.mark.parametrize(
+        "path",
+        ["tests/test_calculadora.py", "src/soma_test.py", "kata/verify.py"],
+    )
+    def test_python_e_codigo_comum_nao_entram(self, path: str) -> None:
+        assert _unreadable_test_files([path]) == []
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "tests/fixtures/dados.json",
+            "templates/base.html",
+            "src/temperature.py",
+            "src/latest.js",
+            "src/contest.go",
+            "src/attempt_parser.rb",
+        ],
+    )
+    def test_nao_confunde_fixture_nem_substring(self, path: str) -> None:
+        """Uma ressalva que aparece em todo projeto é uma ressalva que ninguém lê.
+
+        `latest`, `contest` e `templates` são a mesma família de falso
+        positivo que _DEBRIS_FILE_PATTERNS já teve de resolver para "temp".
+        """
+        assert _unreadable_test_files([path]) == []
+
+
+@patch("kata.judge.untracked_files", return_value=[])
+@patch("kata.judge._changed_files")
+@patch("kata.judge._run_git_diff")
+@patch("kata.judge.run_all")
+class TestBlindSpots:
+    """O juiz confessa o que não conseguiu observar, e o veredito reflete isso."""
+
+    def test_teste_ilegivel_derruba_o_verified_limpo(
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        """Repositório poliglota: os checks Python rodam e passam, e mesmo
+        assim há um teste .js no diff que hunt_weakened_checks não lê."""
+        mock_diff.return_value = ""
+        mock_files.return_value = ["src/soma.js", "src/soma.test.js"]
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+        }
+        task = {
+            "verify": {"ruff_clean": True, "tests_pass": True},
+            "surgical": {
+                "files": [
+                    {"path": "src/soma.js", "necessary": True},
+                    {"path": "src/soma.test.js", "necessary": True},
+                ]
+            },
+        }
+        result = judge_task(task)
+
+        assert result.verdict == "UNVERIFIABLE"
+        assert result.re_ran_checks == {"ruff": True, "pytest": True}
+        assert any("src/soma.test.js" in b for b in result.blind_spots)
+
+    def test_checks_reexecutados_e_tudo_python_sai_verified(
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        """O caminho honesto continua VERIFIED — a correção não pode
+        transformar trabalho verificado em suspeita."""
+        mock_diff.return_value = ""
+        mock_files.return_value = ["src/soma.py", "tests/test_soma.py"]
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True),
+        }
+        task = {
+            "verify": {"ruff_clean": True, "tests_pass": True, "coverage_pass": True},
+            "surgical": {
+                "files": [
+                    {"path": "src/soma.py", "necessary": True},
+                    {"path": "tests/test_soma.py", "necessary": True},
+                ]
+            },
+        }
+        result = judge_task(task)
+
+        assert result.verdict == "VERIFIED"
+        assert result.blind_spots == []
+
+    def test_fraude_grave_vence_o_ponto_cego(
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        """UNVERIFIABLE não pode mascarar REFUTED: quando o juiz achou fraude,
+        ele achou — o ponto cego é sobre o resto."""
+        mock_diff.return_value = ""
+        mock_files.return_value = []
+        mock_run_all.return_value = {}
+        task = {"intent": {"answered": True, "all_agree": False}}
+        result = judge_task(task)
+
+        assert result.verdict == "REFUTED"
+        assert result.blind_spots != []
+
+    def test_fraude_leve_vence_o_ponto_cego(
+        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        mock_diff.return_value = ""
+        mock_files.return_value = ["scratch/saida.tmp"]
+        mock_run_all.return_value = {}
+        result = judge_task({})
+
+        assert result.verdict == "VERIFIED WITH CAVEATS"
+        assert result.blind_spots != []

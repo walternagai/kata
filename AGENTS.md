@@ -23,10 +23,13 @@ O ciclo é inspirado em duas fontes complementares:
 ## Arquitetura
 
 ```
-src/kata/       código Python (cli.py, fit.py, verify.py, judge.py, __init__.py, __main__.py)
-tests/          testes pytest (test_cli.py, test_fit.py, test_verify.py, test_judge.py,
+src/kata/       código Python (cli.py, config.py, fit.py, verify.py, judge.py,
+                skills.py, __init__.py, __main__.py)
+tests/          testes pytest (test_cli.py, test_config.py, test_fit.py,
+                test_verify.py, test_judge.py, test_skills.py,
                 test_install.py — roda os instaladores .sh de verdade;
                 test_eval_harness.py — parser de fraudes do run_traps.py;
+                test_skills_build.py — gerados vs. phases/ fonte única;
                 test_schema_contract.py — schema documentado no DOCUMENTATION.md
                 contra o código e o template do --init)
 opencode/       definição do agente e skills para o OpenCode

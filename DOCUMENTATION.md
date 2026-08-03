@@ -757,7 +757,7 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and the frauds the judge must find. Eight scenarios cover the six
+the verdict and the frauds the judge must find. Nine scenarios cover the six
 fraud categories, plus two that exist to catch the opposite failure: `s06`
 plants real debris beside files whose names merely look like debris, and `s07`
 is an entirely honest task that must come back `VERIFIED`. A judge that

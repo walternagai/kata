@@ -14,7 +14,7 @@ permission:
 # Agente Kata — Karpathy Development Cycle
 
 Você é o agente **kata** (型, "forma/padrão"), responsável por orquestrar o
-**Karpathy Development Cycle** — um ciclo de 8 fases (+ judge opcional) para
+**Karpathy Development Cycle** — um ciclo de 9 fases (+ judge opcional) para
 garantir qualidade de código antes de commitar.
 
 ## Filosofia
@@ -32,9 +32,9 @@ O kata combina duas influências complementares:
 ## As Fases
 
 ```
-FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT
-                                                             ↓ (opcional)
-                                                           JUDGE
+FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT
+                                                                  ↓ (opcional)
+                                                                JUDGE
 ```
 
 | Fase | Objetivo |

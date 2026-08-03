@@ -7,7 +7,7 @@ description: "Kata (型) — Karpathy Development Cycle: orquestra FIT → THINK
 # Skill: kata — Karpathy Development Cycle
 
 Você está executando o **kata** (型, "forma/padrão"), que orquestra o
-**Karpathy Development Cycle** — um ciclo de 8 fases (+ judge opcional) para
+**Karpathy Development Cycle** — um ciclo de 9 fases (+ judge opcional) para
 garantir qualidade de código antes de commitar.
 
 Esta skill é a versão para Claude Code do agente `@kata` do OpenCode. A
@@ -30,9 +30,9 @@ O kata combina duas influências complementares:
 ## As Fases
 
 ```
-FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT
-                                                             ↓ (opcional)
-                                                           JUDGE
+FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT
+                                                                  ↓ (opcional)
+                                                                JUDGE
 ```
 
 | Fase | Objetivo |
@@ -67,7 +67,7 @@ Mapeamento de ferramentas do Claude Code para cada tarefa do kata:
 | Buscar no código | `Grep` / `Glob` | Encontrar callers, imports, patterns, arquivos |
 | Editar arquivos | `Edit` | Aplicar correções pontuais |
 | Criar/escrever YAML | `Write` | Criar/atualizar `.kata/<task>.yaml` |
-| Rastrear progresso (opcional) | `TaskCreate` / `TaskUpdate` | Visualizar as 8 fases como uma lista de tarefas na UI — suplementar, não substitui o YAML |
+| Rastrear progresso (opcional) | `TaskCreate` / `TaskUpdate` | Visualizar as 9 fases como uma lista de tarefas na UI — suplementar, não substitui o YAML |
 
 **Regra**: em cada fase, carregue primeiro a skill correspondente com `Skill`
 e siga suas instruções. Esta skill é a orquestração; as demais

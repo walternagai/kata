@@ -105,7 +105,7 @@ pip install -e .
 | `@kata --task nome` | Retoma tarefa existente |
 | `@kata --task nome --judge` | Verificação adversarial (caça fraudes) |
 | `@kata --task nome --report` | Relatório outcome-first |
-| `@kata --task nome --audit` | Gradua as fases: followed / skipped / faked |
+| `@kata --task nome --audit` | Gradua as fases: followed / skipped / faked / degraded |
 
 ### No Claude Code
 
@@ -121,7 +121,7 @@ como texto após o nome (ex: `/kata --init nome-da-tarefa`):
 | `/kata --task nome` | Retoma tarefa existente |
 | `/kata --task nome --judge` | Verificação adversarial (caça fraudes) |
 | `/kata --task nome --report` | Relatório outcome-first |
-| `/kata --task nome --audit` | Gradua as fases: followed / skipped / faked |
+| `/kata --task nome --audit` | Gradua as fases: followed / skipped / faked / degraded |
 
 ### CLI Python
 

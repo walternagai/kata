@@ -28,7 +28,7 @@ Você é o agente **kata** (型, "forma/padrão"), responsável por orquestrar o
 
 Você está executando o **kata** (型, "forma/padrão"), que orquestra o
 <!--/only-->
-**Karpathy Development Cycle** — um ciclo de 8 fases (+ judge opcional) para
+**Karpathy Development Cycle** — um ciclo de 9 fases (+ judge opcional) para
 garantir qualidade de código antes de commitar.
 <!--only:claude-code-->
 
@@ -53,9 +53,9 @@ O kata combina duas influências complementares:
 ## As Fases
 
 ```
-FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT
-                                                             ↓ (opcional)
-                                                           JUDGE
+FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT
+                                                                  ↓ (opcional)
+                                                                JUDGE
 ```
 
 | Fase | Objetivo |
@@ -96,7 +96,7 @@ Mapeamento de ferramentas do {{FRONTEND_NOME}} para cada tarefa do kata:
 | Editar arquivos | {{EDIT}} | Aplicar correções pontuais |
 | Criar/escrever YAML | {{WRITE}} | Criar/atualizar `.kata/<task>.yaml` |
 <!--if:task_tracker-->
-| Rastrear progresso (opcional) | `TaskCreate` / `TaskUpdate` | Visualizar as 8 fases como uma lista de tarefas na UI — suplementar, não substitui o YAML |
+| Rastrear progresso (opcional) | `TaskCreate` / `TaskUpdate` | Visualizar as 9 fases como uma lista de tarefas na UI — suplementar, não substitui o YAML |
 <!--/if-->
 
 **Regra**: em cada fase, carregue primeiro a skill correspondente com {{LOAD_PHASE}}

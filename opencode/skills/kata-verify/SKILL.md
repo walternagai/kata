@@ -1,7 +1,8 @@
 ---
 name: kata-verify
-description: Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 4 — executar ruff, pytest e coverage, interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, gate, CI, verificação de qualidade.
+description: Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 4 — executar lint, teste e coverage do projeto (declarados em .kata/config.yaml ou os defaults Python), interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, eslint, vitest, go test, gate, CI, verificação de qualidade.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-verify.md. Não edite aqui. -->
 
 # Skill: kata-verify
 
@@ -10,17 +11,41 @@ Fase 4 do Karpathy Development Cycle — **GOAL-DRIVEN**.
 ## Objetivo
 
 Verificar a qualidade do código com critérios objetivos:
-1. **Ruff** — lint limpo
-2. **pytest** — todos os testes passam
+1. **Lint** — limpo
+2. **Teste** — todos passam
 3. **Coverage** — ≥ gate (default 70%)
 4. **Critério de sucesso** — a tarefa resolve o problema declarado na fase THINK
+
+## Antes de tudo: que comandos verificam ESTE projeto?
+
+**Leia `.kata/config.yaml` antes de rodar qualquer coisa.** Se existir, os
+comandos declarados ali são os do projeto e devem ser usados verbatim:
+
+```yaml
+verify:
+  lint: npx eslint src tests
+  test: npx vitest run
+  coverage: npx vitest run --coverage
+  coverage_pattern: 'All files\s+\|\s+([\d.]+)'
+  gate: 80
+```
+
+Cada papel aceita string ou lista. Papel omitido cai no default Python
+(ruff/pytest/pytest-cov). `python -m kata --check-only` já lê esse arquivo
+sozinho — prefira-o a montar os comandos à mão.
+
+Sem `.kata/config.yaml`, valem os defaults Python descritos abaixo. **Se o
+projeto não for Python e não houver config**, não invente um comando nem
+declare sucesso: proponha ao usuário criar o `.kata/config.yaml` e registre
+o bloqueio como caveat. Verificação que não rodou não é verificação que
+passou.
 
 ## Ferramentas
 
 Para esta fase, use:
 
-- **shell hospedeiro**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
-- **`question`**: pergunte ao usuário se o critério de sucesso foi satisfeito.
+- **`bash`**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
+- **`question`** (via `kata-question`): pergunte ao usuário se o critério de sucesso foi satisfeito.
 - **`write` / `edit`**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
 
 ## Comandos
@@ -102,7 +127,7 @@ Se coverage < gate:
 ### Critério de sucesso
 
 Confronte o critério declarado no THINK (chave `done`) com o resultado final
-e pergunte ao usuário com `question`:
+e pergunte ao usuário via `question`:
 > "O critério de sucesso da tarefa está satisfeito?"
 
 O critério volta à fase THINK — o problema declarado foi resolvido?
@@ -169,7 +194,8 @@ verify:
 
 Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
 só as 3 verificações objetivas (ruff + pytest + coverage). O critério de
-sucesso é assumido satisfeito. Útil para CI/CD pipelines.
+sucesso é assumido satisfeito. Útil para CI/CD pipelines — nesse modo, a
+skill nem precisa ser carregada: chame o CLI diretamente via `bash`.
 
 Para executar via CLI:
 ```bash
@@ -181,4 +207,4 @@ python -m kata --check-only
 - **Gate é inegociável**: coverage < 70% = rejeitado, sem exceção
 - **Falso verde é pior que vermelho**: se os testes passam mas não testam nada, é pior que falhar
 - **Critério de sucesso é subjetivo mas obrigatório**: o humano precisa confirmar que resolveu
-- **Exit code**: 0 = aprovado, 1 = rejeitado — para integração com CI
+- **Exit code**: 0 = aprovado, 1 = rejeitado — para integração com CI (via o CLI `python -m kata`)

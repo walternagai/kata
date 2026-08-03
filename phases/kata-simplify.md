@@ -1,8 +1,7 @@
 ---
 name: kata-simplify
-description: Fase SIMPLIFY do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 2 — verificar se o código é mínimo, sem abstrações especulativas ou configurabilidade não solicitada. Triggers: SIMPLIFY, código mínimo, abstração, diff, overengineering, YAGNI.
+description: Fase SIMPLIFY do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 2 — verificar se o código é mínimo, sem abstrações especulativas ou configurabilidade não solicitada. Triggers: SIMPLIFY, código mínimo, abstração, diff, overengineering, YAGNI.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-simplify.md. Não edite aqui. -->
 
 # Skill: kata-simplify
 
@@ -20,16 +19,16 @@ declarado na fase THINK. Detectar:
 
 Para esta fase, use:
 
-- **`bash`**: `git diff --stat` (ou `git diff --cached --stat` se vazio) para medir volume.
-- **`question`** (via `kata-question`): checklist de minimalismo — pergunte ao usuário, não valide sozinho.
-- **`read`**: inspecione partes do diff que parecerem suspeitas.
-- **`write` / `edit`**: registre as respostas em `.kata/<task>.yaml`.
+- **{{BASH}}**: `git diff --stat` (ou `git diff --cached --stat` se vazio) para medir volume.
+- **{{ASK}}** (via `kata-question`): checklist de minimalismo — pergunte ao usuário, não valide sozinho.
+- **{{READ}}**: inspecione partes do diff que parecerem suspeitas.
+- **{{WRITE}} / {{EDIT}}**: registre as respostas em `.kata/<task>.yaml`.
 
 ## Procedimento
 
 ### 1. Visualizar o diff
 
-Execute (via `bash`):
+Execute (via {{BASH}}):
 ```bash
 git diff --stat
 ```
@@ -43,7 +42,13 @@ Mostre o output ao usuário para ter noção do volume de mudanças.
 
 ### 2. Checklist de Minimalismo
 
-Para cada item, use `question` e pergunte ao usuário:
+<!--only:opencode-->
+Para cada item, use {{ASK}} e pergunte ao usuário:
+<!--/only-->
+<!--only:claude-code-->
+Para cada item, use {{ASK}} e pergunte ao usuário (opções fechadas
+sim/não, com a resposta desejada como primeira opção):
+<!--/only-->
 
 | Pergunta | Resposta desejada | Ação se for "Sim" |
 |----------|-------------------|-------------------|

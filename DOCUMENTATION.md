@@ -18,6 +18,7 @@ disciplined development cycle.
 - [OpenCode integration](#opencode-integration)
 - [Claude Code integration](#claude-code-integration)
 - [Testing and evaluation](#testing-and-evaluation)
+- [Editing the prompts](#editing-the-prompts)
 - [Compatibility and limitations](#compatibility-and-limitations)
 
 ## Overview
@@ -103,16 +104,21 @@ src/kata/
 ├── __init__.py  Package version
 └── __main__.py python -m kata entry point
 
-opencode/
+phases/                           SINGLE SOURCE for every frontend prompt
+├── kata.md                       The orchestrator
+└── kata-*.md                     The 10 phases
+
+opencode/                         GENERATED — do not edit by hand
 ├── agent/kata.md                 OpenCode @kata agent definition
 └── skills/kata-*/SKILL.md        Phase-specific operating instructions
 
-claude-code/
+claude-code/                      GENERATED — do not edit by hand
 └── skills/kata-*/SKILL.md        kata orchestrator skill + the same 10
-                                   phase-specific skills, ported to Claude Code
+                                   phase-specific skills
 
 tests/                            Unit tests for the Python implementation
 eval/                             Adversarial trap scenarios
+scripts/build_skills.py           Renders phases/ into both frontends
 scripts/install.sh                OpenCode symlink installer
 scripts/install-claude-code.sh    Claude Code symlink installer
 ```
@@ -732,6 +738,41 @@ invokes the Makefile rather than restating the commands, so what is verified
 locally and what is verified remotely cannot drift apart. The coverage gate
 comes from `[tool.coverage.report] fail_under` in `pyproject.toml`, so
 `make test` enforces it without the workflow having to repeat the threshold.
+
+## Editing the prompts
+
+The files under `opencode/` and `claude-code/` are **generated**. Edit
+`phases/<name>.md` and run `make build-skills`; committing the regenerated
+files is part of the change. `tests/test_skills_build.py` fails when they are
+stale, so the drift cannot pass CI unnoticed.
+
+Each phase used to exist as two hand-maintained copies. The discipline failed:
+the copies accumulated 395 divergent lines, and part of that was an improvement
+applied to one frontend and forgotten in the other — the ARTIFACT phase had a
+"Ferramentas" section only in Claude Code, and the OpenCode orchestrator never
+received the corrected step numbering or the `base_commit` instruction. Today
+93% of the source is shared and the remaining 7% is declared difference.
+
+The template language has exactly two constructs:
+
+| Construct | Purpose |
+|---|---|
+| `{{BASH}}`, `{{READ}}`, `{{ASK}}`, `{{SKILL}}`, … | The host's name for a tool. An undeclared variable is a build error, never literal text |
+| `<!--only:claude-code-->` … `<!--/only-->` | A block included in the named frontends only (comma-separated). Markdown-invisible, and stripped from the output |
+
+Use a block when the *guidance* genuinely differs — the 4-option limit of
+`AskUserQuestion`, or free-text versus closed questions. Use a variable when
+only the tool's name changes. Rewriting shared prose into two blocks to avoid a
+small wording difference re-creates by hand the drift this exists to prevent.
+
+**`question` is a trap.** The route `question` is a `fit.route` value and is
+spelled the same in every frontend; only the *asking tool* becomes `{{ASK}}`.
+Confusing them makes a frontend instruct `route: AskUserQuestion`, which the CLI
+does not accept. `tests/test_skills_build.py` checks this specifically.
+
+Adding a frontend means adding an entry to `FRONTENDS` in
+`scripts/build_skills.py`: its tool vocabulary and where its files go. No phase
+content has to be rewritten.
 
 ## Compatibility and limitations
 

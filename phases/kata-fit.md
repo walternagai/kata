@@ -1,8 +1,7 @@
 ---
 name: kata-fit
-description: Fase FIT do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 0 — classificar a tarefa, aplicar triviality gate e definir a rota antes do THINK. Triggers: FIT, triviality gate, fit gate, classificar tarefa, rotear, plan-first, question, research, inference.
+description: Fase FIT do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 0 — classificar a tarefa, aplicar triviality gate e definir a rota antes do THINK. Triggers: FIT, triviality gate, fit gate, classificar tarefa, rotear, plan-first, question, research, inference.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-fit.md. Não edite aqui. -->
 
 # Skill: kata-fit
 
@@ -23,16 +22,16 @@ a tarefa para evitar desperdício de rigor em tarefas triviais ou mal-classifica
 
 Para esta fase, use:
 
-- **`bash`**: `git diff --stat` e `git diff --name-only` para medir volume do diff.
-- **`question`** (via `kata-question`): classifique a tarefa com o usuário, uma pergunta por vez.
-- **`grep`**: investigue se a tarefa exige pesquisa no código.
-- **`write` / `edit`**: registre a classificação em `.kata/<task>.yaml`.
+- **{{BASH}}**: `git diff --stat` e `git diff --name-only` para medir volume do diff.
+- **{{ASK}}** (via `kata-question`): classifique a tarefa com o usuário, uma pergunta por vez.
+- **{{GREP}}**: investigue se a tarefa exige pesquisa no código.
+- **{{WRITE}} / {{EDIT}}**: registre a classificação em `.kata/<task>.yaml`.
 
 ## Procedimento
 
 ### 1. Triviality gate
 
-Execute (via `bash`):
+Execute (via {{BASH}}):
 ```bash
 git diff --stat          # unstaged
 git diff --name-only
@@ -58,7 +57,16 @@ Se trivial:
 
 ### 2. Fit gate — Classificar a rota
 
+<!--only:opencode-->
 Pergunte ao usuário (ou classifique baseado no contexto):
+<!--/only-->
+<!--only:claude-code-->
+Pergunte ao usuário (ou classifique baseado no contexto). Como são 5
+rotas nomeadas — acima do limite de 4 opções do {{ASK}} — prefira
+listar as opções em texto e perguntar em texto livre, ou use
+{{ASK}} com as 4 rotas mais comuns e deixe `inference` acessível
+via "Other":
+<!--/only-->
 
 | Rota | Quando usar | O que fazer |
 |------|-------------|-------------|
@@ -76,7 +84,7 @@ Pergunte ao usuário (ou classifique baseado no contexto):
 ### 3. Registrar no YAML
 
 Se `base_commit` ainda não estiver gravado na tarefa, registre o HEAD atual
-do git (`git rev-parse HEAD` via `bash`) nessa chave. É o ponto de
+do git (`git rev-parse HEAD` via {{BASH}}) nessa chave. É o ponto de
 comparação que o JUDGE usa depois — sem ele, o JUDGE só enxerga diff
 não commitado.
 

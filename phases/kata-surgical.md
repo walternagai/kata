@@ -1,8 +1,7 @@
 ---
 name: kata-surgical
-description: Fase SURGICAL do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 3 — validar arquivo por arquivo que cada mudança rastreia direto ao pedido, sem efeitos colaterais. Triggers: SURGICAL, cada linha, arquivo, import, diff, rastrear, efeito colateral.
+description: Fase SURGICAL do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 3 — validar arquivo por arquivo que cada mudança rastreia direto ao pedido, sem efeitos colaterais. Triggers: SURGICAL, cada linha, arquivo, import, diff, rastrear, efeito colateral.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-surgical.md. Não edite aqui. -->
 
 # Skill: kata-surgical
 
@@ -19,17 +18,22 @@ Nenhuma mudança deve ser "de passagem" ou "enquanto estou aqui".
 
 Para esta fase, use:
 
-- **`bash`**: `git diff --name-only` (ou `--cached` se vazio) para listar arquivos.
-- **`read`**: inspecione o diff de cada arquivo suspeito (`git diff <arquivo>` via `bash`).
-- **`grep`**: busque callers quando uma assinatura mudar.
-- **`question`** (via `kata-question`): confirme com o usuário se cada arquivo é necessário.
-- **`write` / `edit`**: registre o resultado em `.kata/<task>.yaml`.
+- **{{BASH}}**: `git diff --name-only` (ou `--cached` se vazio) para listar arquivos.
+- **{{READ}}**: inspecione o diff de cada arquivo suspeito (`git diff <arquivo>` via {{BASH}}).
+- **{{GREP}}**: busque callers quando uma assinatura mudar.
+<!--only:opencode-->
+- **{{ASK}}** (via `kata-question`): confirme com o usuário se cada arquivo é necessário.
+<!--/only-->
+<!--only:claude-code-->
+- **{{ASK}}** (via `kata-question`): confirme com o usuário se cada arquivo é necessário — uma pergunta por arquivo se forem poucos (≤4), ou liste todos em texto e peça a lista de exceções se forem muitos.
+<!--/only-->
+- **{{WRITE}} / {{EDIT}}**: registre o resultado em `.kata/<task>.yaml`.
 
 ## Procedimento
 
 ### 1. Listar arquivos alterados
 
-Execute (via `bash`):
+Execute (via {{BASH}}):
 ```bash
 git diff --name-only
 ```
@@ -71,7 +75,7 @@ Registre `true` ou `false` no YAML.
 
 Para cada arquivo, verifique:
 - **Mudança de assinatura**: se uma função mudou assinatura, todos os callers foram atualizados?
-  - Use `grep` para encontrar chamadas à função alterada.
+  - Use {{GREP}} para encontrar chamadas à função alterada.
 - **Mudança de schema**: se um modelo mudou, as migrations estão incluídas no diff?
 - **Mudança de comportamento**: se a lógica mudou, os testes foram atualizados?
 - **Imports novos**: cada import novo é realmente necessário para a mudança?
@@ -81,7 +85,7 @@ Para cada arquivo, verifique:
 Antes de utilizar qualquer API, endpoint, assinatura de função, chave de
 configuração, ou valor que você está escrevendo de memória:
 
-1. **Pare e abra a fonte real** com `read` — o arquivo de documentação, o código-fonte
+1. **Pare e abra a fonte real** com {{READ}} — o arquivo de documentação, o código-fonte
    da biblioteca, a página de referência, ou o arquivo de configuração real.
 2. Se a fonte não estiver acessível, **marque no relatório** que o valor veio
    de memória e não foi verificado (low-confidence).
@@ -100,7 +104,7 @@ configuração, ou valor que você está escrevendo de memória:
 Pergunte:
 > "Imports removidos são só os que sua mudança tornou inúteis?"
 
-**Detecção automática** (opcional, via `bash`):
+**Detecção automática** (opcional, via {{BASH}}):
 ```bash
 # Encontra imports não utilizados com ruff
 python -m ruff check --select F401 <caminhos-do-projeto>

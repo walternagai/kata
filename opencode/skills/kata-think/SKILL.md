@@ -2,6 +2,7 @@
 name: kata-think
 description: Fase THINK do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 1 — declarar problema, assumptions, alternativas e unknowns antes de codar. Triggers: THINK, assumptions, problema, unknowns, antes de codificar, declarar contexto.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-think.md. Não edite aqui. -->
 
 # Skill: kata-think
 
@@ -68,7 +69,7 @@ Unknowns são coisas que você precisa investigar no código, perguntar ao usuá
 ou testar antes de prosseguir.
 
 **Tipos de unknown:**
-- **Código**: "Como X funciona hoje?" → investigar com grep/read
+- **Código**: "Como X funciona hoje?" → investigar com `grep`/`read`
 - **Decisão**: "Devo usar A ou B?" → perguntar ao usuário
 - **Comportamento**: "O que acontece quando Y?" → testar ou perguntar
 

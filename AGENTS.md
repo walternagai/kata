@@ -53,10 +53,31 @@ Diferente do OpenCode, a versão Claude Code é só skills (sem subagente): o
 ciclo pergunta a cada fase, e isso funciona melhor na conversa principal do
 que num subagente isolado que só reporta um resumo no fim.
 
-**Uma fase existe em triplicata.** Ao mudar o comportamento de uma fase,
-sincronize os três lugares: `opencode/skills/kata-<fase>/SKILL.md`,
-`claude-code/skills/kata-<fase>/SKILL.md` e — para fases com lógica objetiva
-(FIT, VERIFY, JUDGE) — a função correspondente em `src/kata/`.
+**A fonte de uma fase é uma só: `phases/kata-<fase>.md`.** Os arquivos em
+`opencode/` e `claude-code/` são **gerados** por `scripts/build_skills.py` —
+não os edite à mão; `make build-skills` os regrava e
+`tests/test_skills_build.py` reprova se ficarem desatualizados.
+
+Antes disto a fase vivia em duplicata mantida por disciplina manual, e a
+disciplina falhou: 395 linhas divergentes, parte delas melhoria aplicada num
+frontend e esquecida no outro. Hoje 93% da fonte é compartilhada; os 7%
+restantes são diferença declarada, não acidental.
+
+Na fonte, o que muda por frontend se escreve de duas formas:
+
+- `{{BASH}}`, `{{READ}}`, `{{ASK}}`… — nome da ferramenta no host. Variável
+  não declarada é erro de build, não texto literal.
+- `<!--only:claude-code-->` … `<!--/only-->` — bloco que só entra naquele
+  frontend. Use quando a *orientação* difere (ex.: o limite de 4 opções do
+  `AskUserQuestion`), não quando só o nome da ferramenta muda.
+
+Cuidado com `question`: a **rota** `question` é valor de `fit.route` e se
+escreve igual nos dois frontends; só a **ferramenta** de perguntar vira
+`{{ASK}}`. Trocar uma pela outra faz o frontend instruir `route:
+AskUserQuestion`, que o CLI não reconhece.
+
+Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
+`src/kata/` — mudança de comportamento ali tem de acompanhar a fonte.
 
 - `fit.py` é a lógica do fit gate (diff_stats, is_trivial) modularizada para
   testes independentes.
@@ -70,9 +91,11 @@ sincronize os três lugares: `opencode/skills/kata-<fase>/SKILL.md`,
 ## Desenvolvimento
 
 ```bash
+make build-skills  # gera opencode/ e claude-code/ a partir de phases/
+make check-skills  # falha se o gerado estiver desatualizado
 make test      # pytest + coverage (gate 70%)
-make lint      # ruff check src/ tests/ eval/
-make format    # ruff format src/ tests/ eval/
+make lint      # ruff check src/ tests/ eval/ scripts/
+make format    # ruff format src/ tests/ eval/ scripts/
 
 make install                 # symlinks do agente + skills em ~/.config/opencode/
 make uninstall               # remove os symlinks
@@ -93,8 +116,8 @@ o que é verificado remoto não devem poder divergir.
 
 `scripts/install.sh` cria **symlinks** de `opencode/` para `~/.config/opencode/`;
 `scripts/install-claude-code.sh` faz o mesmo de `claude-code/skills/` para
-`~/.claude/skills/`. Isso significa que editar arquivos em `opencode/` ou
-`claude-code/` reflete imediatamente sem reinstalar. Use `make reinstall` /
+`~/.claude/skills/`. Isso significa que rodar `make build-skills` reflete
+imediatamente na instalação, sem reinstalar. Use `make reinstall` /
 `make reinstall-claude-code` só se criar **novos** arquivos de skill/agent.
 
 Ambos respeitam `OPENCODE_CONFIG_DIR` / `CLAUDE_CONFIG_DIR` quando definidos.

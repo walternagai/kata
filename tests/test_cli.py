@@ -1901,6 +1901,45 @@ class TestMainJudge:
                 cli.main()
         assert exc.value.code == 0
 
+    @patch("kata.cli.judge_task")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_judge_unverifiable_e_anunciado_e_nao_e_falha(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
+        tmp_path, monkeypatch, capsys,
+    ) -> None:
+        """UNVERIFIABLE tem de aparecer na tela com os pontos cegos listados.
+
+        O exit 0 é deliberado: o juiz não achou nada errado, só não teve
+        como olhar. Reprovar aqui quebraria o --judge de todo projeto
+        não-Python antes de haver alternativa a oferecer.
+        """
+        from kata.judge import JudgeResult
+
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "test-task.yaml"
+        task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+
+        mock_deserialize.return_value = {"task": "test-task", "status": "approved"}
+        mock_judge.return_value = JudgeResult(
+            verdict="UNVERIFIABLE",
+            blind_spots=["nenhuma verificação re-executada — o relatório não afirma"],
+        )
+
+        with patch("sys.argv", ["kata", "--task", "test-task", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert "UNVERIFIABLE" in out
+        assert "Pontos cegos" in out
+        assert "nenhuma verificação re-executada" in out
+        assert exc.value.code == 0
+
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_judge_task_not_found(self, mock_kata_dir, mock_path, tmp_path, monkeypatch) -> None:

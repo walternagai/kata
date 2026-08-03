@@ -273,7 +273,7 @@ kata --check-only \
   audited task does not exist), or the judge returned `REFUTED`;
 - `2`: invalid CLI arguments, as produced by `argparse`.
 
-`VERIFIED WITH CAVEATS` exits `0`. The judge did verify the task and approved
+`VERIFIED WITH CAVEATS` and `UNVERIFIABLE` both exit `0`. The judge did verify the task and approved
 it with low- or medium-severity notes; treating that as a failure would equate
 a caveat with a high-severity fraud and push callers to ignore the exit code.
 Read the printed caveats to decide whether they matter for your workflow.
@@ -394,9 +394,20 @@ The judge is opt-in. It re-runs claimed checks and returns:
 
 | Verdict | Meaning |
 |---|---|
-| `VERIFIED` | No fraud was detected |
+| `VERIFIED` | No fraud was detected, and the judge was able to look |
 | `VERIFIED WITH CAVEATS` | Only medium- or low-severity findings were detected |
+| `UNVERIFIABLE` | No fraud, but the judge could observe nothing (see blind spots) |
 | `REFUTED` | At least one high-severity finding was detected |
+
+A **blind spot** is the judge admitting what it could not observe — not an
+accusation, since not having looked is evidence of neither fraud nor honesty.
+Two are detected: the report claims no check the judge knows how to re-run
+(the case for every non-Python toolchain), and the diff touches a test file
+in a language `hunt_weakened_checks` has no patterns for (`x.test.js`,
+`x_test.go`). With no fraud at all, any blind spot yields `UNVERIFIABLE`
+instead of `VERIFIED`: "I could not look" must never be reported as "all
+clear". With fraud present, the fraud decides the verdict and the blind
+spots are still listed.
 
 Claims are reported in two groups. Lint, tests, coverage, surgical scope and
 intent alignment are confronted with the repository and listed as verified.
@@ -555,7 +566,7 @@ judge_task(task_data, cwd=None, ...) -> JudgeResult
 ```
 
 `JudgeResult` contains the verdict, verified claims, unverifiable claims,
-caveats, fraud findings, re-executed checks, and metadata.
+caveats, fraud findings, re-executed checks, blind spots, and metadata.
 
 ## OpenCode integration
 

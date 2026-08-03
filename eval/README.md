@@ -58,7 +58,8 @@ mudança. O SHA não pode vir pronto no fixture: só existe em tempo de execuç�
 ## Ground truth schema
 
 ```yaml
-expected_verdict: "REFUTED"          # VERIFIED | VERIFIED WITH CAVEATS | REFUTED
+expected_verdict: "REFUTED"          # VERIFIED | VERIFIED WITH CAVEATS |
+                                    # UNVERIFIABLE | REFUTED
 expected_frauds:                     # a lista COMPLETA de fraudes esperadas
   - type: weakened_checks              # correspondência é exata: faltar é falso
     severity: high                     # negativo, exceder é falso positivo, e

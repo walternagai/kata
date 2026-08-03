@@ -2855,3 +2855,145 @@ class TestConfigDoProjeto:
         assert mock_run_all.call_args.kwargs["gate"] == 70.0
         assert mock_run_all.call_args.kwargs["config"].customizado is False
         assert "declaradas pelo projeto" not in capsys.readouterr().out
+
+
+class TestDoctor:
+    """`--doctor` é o preflight: instalação parcial reprova, ausente não."""
+
+    def _instala(self, config_dir, nomes):
+        skills = config_dir / "skills"
+        skills.mkdir(parents=True, exist_ok=True)
+        for nome in nomes:
+            (skills / nome).mkdir()
+
+    def test_instalacao_completa_sai_zero(self, tmp_path, monkeypatch, capsys) -> None:
+        from kata.skills import ORCHESTRATOR_SKILL, PHASE_SKILLS
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(tmp_path / "oc", PHASE_SKILLS)
+        self._instala(tmp_path / "cc", [*PHASE_SKILLS, ORCHESTRATOR_SKILL])
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 0
+        assert "Instalação completa" in capsys.readouterr().out
+
+    def test_instalacao_parcial_reprova_e_nomeia_o_que_falta(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """9 de 10 é pior que 0 de 10: o ciclo roda e perde uma fase calado."""
+        from kata.skills import PHASE_SKILLS
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(tmp_path / "oc", [s for s in PHASE_SKILLS if s != "kata-intent"])
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 1
+        assert "PARCIAL" in out
+        assert "kata-intent" in out
+        assert "fase fingida" in out
+
+    def test_nada_instalado_avisa_mas_nao_reprova(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """Quem só usa o CLI nunca instalou frontend nenhum, e está tudo bem."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0
+        assert "Nenhum frontend instalado" in out
+
+    def test_nao_precisa_de_kata_dir(self, tmp_path, monkeypatch) -> None:
+        """`--doctor` roda de qualquer diretório: é sobre a instalação das
+        skills, não sobre uma tarefa."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+        assert not (tmp_path / ".kata").exists()
+
+
+class TestAuditPreflight:
+    """Fase rodada sem a skill dela é degradada, não seguida.
+
+    Antes disto, uma skill não instalada fazia o orquestrador improvisar a
+    fase e gravar a seção como qualquer outra. O audit lia o YAML e dizia
+    `followed` — a fraude vinha do ferramental e passava pelo detector que
+    existe justamente para pegá-la.
+    """
+
+    def test_skill_faltante_vira_achado_degradado(self) -> None:
+        data = {
+            "preflight": {"skills_missing": ["kata-simplify", "kata-intent"]},
+            "fit": {"answered": True, "reason": "feature", "skipped": False},
+        }
+        achados = cli._audit_task(data)
+        pre = [a for a in achados if a["fase"] == "preflight"]
+        assert len(pre) == 1
+        assert pre[0]["status"] == "degraded"
+        assert "kata-simplify" in pre[0]["risco"]
+        assert "kata-intent" in pre[0]["risco"]
+
+    def test_preflight_limpo_nao_gera_achado(self) -> None:
+        data = {
+            "preflight": {"skills_missing": []},
+            "fit": {"answered": True, "reason": "feature", "skipped": False},
+        }
+        assert not [a for a in cli._audit_task(data) if a["fase"] == "preflight"]
+
+    def test_tarefa_antiga_sem_preflight_nao_quebra(self) -> None:
+        """Tarefas criadas antes da chave existir continuam auditáveis."""
+        data = {"fit": {"answered": True, "reason": "feature", "skipped": False}}
+        achados = cli._audit_task(data)
+        assert [a["fase"] for a in achados] == ["fit"]
+
+    def test_degradado_reprova_o_audit(self, tmp_path, monkeypatch, capsys) -> None:
+        """Exit 1: um ciclo que rodou fases sem as instruções delas não pode
+        sair com audit limpo."""
+        monkeypatch.chdir(tmp_path)
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        (kata_dir / "t.yaml").write_text(
+            "task: t\nstatus: approved\n"
+            "preflight:\n  skills_missing: [kata-think]\n"
+            "fit: {answered: true, reason: feature, skipped: false}\n",
+            encoding="utf-8",
+        )
+
+        with patch("sys.argv", ["kata", "--task", "t", "--audit"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 1
+        assert "PREFLIGHT: degraded" in out
+        assert "kata-think" in out
+        assert "degradada(s)" in out
+
+    def test_init_cria_a_chave_preflight(self, tmp_path, monkeypatch) -> None:
+        """Quem começa pelo CLI e quem começa pela skill têm de acabar com o
+        mesmo arquivo — senão o gate não dispara para um dos dois."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        cli._init_task("t")
+        import yaml
+
+        data = yaml.safe_load((tmp_path / ".kata" / "t.yaml").read_text(encoding="utf-8"))
+        assert data["preflight"] == {"skills_missing": []}

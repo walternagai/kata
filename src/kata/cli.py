@@ -10,6 +10,7 @@ Modos:
   --task <name> --judge     Verifica tarefa específica adversarialmente
   --report          Gera relatório outcome-first de tarefa concluída (usa --task ou branch)
   --audit           Gradua as fases da tarefa: followed / skipped / faked (usa --task ou branch)
+  --doctor          Confere se as skills de fase estão instaladas em cada frontend
 
 Port do `scripts/karpathy_cycle.py` do mushin, usando `.kata/` e
 lógica de verificação modularizada em `kata.verify` e `kata.fit`.
@@ -38,6 +39,7 @@ from kata.config import (
 )
 from kata.fit import diff_stats, is_trivial, untracked_stats
 from kata.judge import JudgeResult, is_debris_file, judge_task
+from kata.skills import InstallStatus, doctor
 from kata.verify import VerifyResult, run_all, search_pattern, untracked_files
 
 try:
@@ -1229,6 +1231,7 @@ def _init_task(task: str) -> None:
             "searched": False, "pattern": "", "result": "", "defect_fixed": False,
             "matches_count": 0, "files_count": 0, "fix_applied": False,
         },
+        "preflight": {"skills_missing": []},
         "artifact": {
             "intent_owed": False, "intent_present": False,
             "auth_owed": False, "auth_present": False,
@@ -1258,6 +1261,9 @@ _AUDIT_RISKS: dict[str, str] = {
     "estar aprovada sobre nada",
     "twins": "defeito corrigido sem busca de recorrência — o mesmo padrão "
     "pode se repetir em outros lugares",
+    "preflight": "fase(s) executada(s) sem a skill correspondente — as "
+    "instruções da fase não foram carregadas, e o que ficou registrado "
+    "veio de improviso",
 }
 
 # Para cada fase com semântica answered/skipped, a chave cujo conteúdo real
@@ -1288,6 +1294,16 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
     em andamento não tem skip/fake a auditar.
     """
     achados: list[dict[str, str]] = []
+
+    # Preflight primeiro: se as instruções de uma fase não foram sequer
+    # carregadas, o que as outras graduações leem foi escrito sem elas.
+    faltando = data.get("preflight", {}).get("skills_missing") or []
+    if faltando:
+        achados.append({
+            "fase": "preflight",
+            "status": "degraded",
+            "risco": f"{_AUDIT_RISKS['preflight']} — faltou: {', '.join(faltando)}",
+        })
 
     for fase in ("fit", "think", "intent"):
         bloco = data.get(fase, {})
@@ -1330,7 +1346,7 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
 
 def _print_audit(achados: list[dict[str, str]]) -> None:
     """Imprime a graduação followed/skipped/faked com os riscos concretos."""
-    icones = {"followed": "✅", "skipped": "⏭️", "faked": "❌"}
+    icones = {"followed": "✅", "skipped": "⏭️", "faked": "❌", "degraded": "⚠️"}
     if not achados:
         print("  (nenhuma fase iniciada — tarefa em andamento)")
         print()
@@ -1342,10 +1358,48 @@ def _print_audit(achados: list[dict[str, str]]) -> None:
     print()
     fakes = [a for a in achados if a["status"] == "faked"]
     skips = [a for a in achados if a["status"] == "skipped"]
-    if fakes or skips:
-        print(f"  ⚠  Audit encontrou {len(fakes)} fake(s) e {len(skips)} skip(s).")
+    degradadas = [a for a in achados if a["status"] == "degraded"]
+    if fakes or skips or degradadas:
+        resumo = f"{len(fakes)} fake(s) e {len(skips)} skip(s)"
+        if degradadas:
+            resumo += f", {len(degradadas)} degradada(s)"
+        print(f"  ⚠  Audit encontrou {resumo}.")
     else:
         print("  ✅  Audit limpo — todas as fases foram seguidas.")
+
+
+def _print_doctor(estados: list[InstallStatus]) -> int:
+    """Imprime o estado de instalação. Devolve o exit code.
+
+    Instalação **parcial** é o que reprova, e não a ausente: quem nunca
+    instalou um frontend não perde nada, mas quem tem 9 das 10 skills roda o
+    ciclo inteiro e perde uma fase sem ser avisado — o orquestrador tenta
+    carregar a que falta, falha, e o modelo improvisa a fase a partir do
+    nome dela.
+    """
+    parciais = 0
+    for e in estados:
+        if e.completo:
+            print(f"  ✅ {e.frontend}: {len(e.instaladas)} skill(s) em {e.config_dir}")
+        elif e.ausente:
+            print(f"  •  {e.frontend}: não instalado ({e.config_dir})")
+        else:
+            parciais += 1
+            print(f"  ❌ {e.frontend}: instalação PARCIAL em {e.config_dir}")
+            print(f"     {len(e.instaladas)} instalada(s), faltando: {', '.join(e.faltando)}")
+    print()
+    if parciais:
+        print(f"  ⚠  {parciais} frontend(s) com instalação parcial.")
+        print("     O ciclo vai tentar carregar a skill que falta, não conseguir,")
+        print("     e improvisar a fase — que é o que o --audit chama de fase fingida.")
+        print("     Rode `make reinstall` / `make reinstall-claude-code`.")
+    elif all(e.ausente for e in estados):
+        print("  ⚠  Nenhum frontend instalado. Rode `make install` ou")
+        print("     `make install-claude-code`. O CLI `kata` funciona sem isso.")
+    else:
+        print("  ✅  Instalação completa.")
+    print()
+    return 1 if parciais else 0
 
 
 # ── main ────────────────────────────────────────────────────────────────
@@ -1406,6 +1460,11 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Confere se as skills de fase estão instaladas em cada frontend",
+    )
+    parser.add_argument(
         "--judge",
         action="store_true",
         help="Modo adversarial verification — re-executa verificações e caça fraudes",
@@ -1435,6 +1494,12 @@ def main() -> None:
             "--audit é mutuamente exclusivo com --init, --plan, --check-only, "
             "--judge e --report"
         )
+
+    # --doctor não toca em tarefa nem precisa de .kata/: é sobre a
+    # instalação das skills, e tem de funcionar de qualquer diretório.
+    if args.doctor:
+        _print_header("DOCTOR — Instalação das skills de fase")
+        sys.exit(_print_doctor(doctor()))
 
     _kata_dir().mkdir(parents=True, exist_ok=True)
 

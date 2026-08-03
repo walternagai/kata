@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Kata (型) is the tool itself, not a project where kata is applied. It implements the cycle
 `FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT`
-(+ optional `JUDGE`, and `--audit` grades task phases as followed / skipped / faked),
+(+ optional `JUDGE`, and `--audit` grades task phases as followed / skipped / faked / degraded),
 combining the Karpathy Development Cycle with fit-gate/verification-gate ideas from
 [The Fable Method](https://github.com/Sahir619/fable-method).
 
@@ -41,6 +41,7 @@ make reinstall                # after adding NEW skill/agent files (edits alone 
 make install-claude-code      # symlink kata skills into ~/.claude/
 make uninstall-claude-code
 
+python3 -m kata --doctor      # are the phase skills installed? (partial install exits 1)
 python3 eval/run_traps.py     # adversarial JUDGE trap scenarios (eval/scenarios/)
 ```
 
@@ -58,6 +59,7 @@ see [`DOCUMENTATION.md`](DOCUMENTATION.md#cli) for its modes (`--init`, `--plan`
 src/kata/
 ├── cli.py       CLI, task persistence (.kata/*.yaml), cycle orchestration, reports
 ├── config.py    .kata/config.yaml — the target project's own lint/test/coverage commands
+├── skills.py    PHASE_SKILLS + per-frontend install check (the --doctor preflight)
 ├── fit.py       diff_stats() / is_trivial() — the fit gate
 ├── verify.py    run_ruff / run_pytest / run_coverage / run_command / search_pattern / run_all()
 ├── judge.py     collect_claims() + six hunt_*() fraud detectors + judge_task()
@@ -88,7 +90,12 @@ src/kata/
 - Task files live in `.kata/<task>.yaml` at the *target* project's root (not this repo's own root,
   except when kata is being used on itself). Schema is compatible with mushin's `.karpathy/`
   (`ln -s .karpathy .kata` to migrate).
-- Exit codes: `0` pass, `1` cycle/report/judge failure or audit fakes/skips, `2` invalid CLI args (argparse).
+- `skills.py`: `PHASE_SKILLS` is the canonical list the cycle needs. `--doctor` checks each frontend's
+  config dir; a **partial** install exits 1 (a missing skill makes the orchestrator improvise the phase),
+  an absent one does not. A phase run without its skill is recorded in `preflight.skills_missing` and
+  graded `degraded` by `--audit`.
+- Exit codes: `0` pass, `1` cycle/report/judge failure, audit fakes/skips/degraded, or a partial install
+  found by `--doctor`; `2` invalid CLI args (argparse).
 
 ### Adding or changing a phase skill
 

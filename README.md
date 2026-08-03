@@ -133,6 +133,7 @@ kata --plan                     # Modo planejamento: FIT + THINK, para
 kata --plan --task minha-tarefa # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
 kata --task minha-tarefa --report  # Relatório outcome-first
+kata --doctor                      # As skills de fase estão instaladas?
 kata --task minha-tarefa --audit   # Gradua fases (followed/skipped/faked)
 kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 ```
@@ -144,7 +145,8 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--plan` | `False` | Modo planejamento: FIT + THINK, não modifica código |
 | `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes) |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
-| `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked |
+| `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
+| `--doctor` | `False` | Confere se as skills de fase estão instaladas em cada frontend |
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
 | `--test-paths` | `tests/` | Caminhos para pytest |
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
@@ -293,6 +295,7 @@ kata/
 │   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
 │   ├── config.py               ← .kata/config.yaml (comandos do projeto alvo)
+│   ├── skills.py               ← Preflight: as skills de fase estão instaladas?
 │   ├── verify.py               ← Lógica de verificação (lint/teste/coverage)
 │   ├── judge.py                ← Lógica adversarial (caça fraudes)
 │   ├── __init__.py             ← Versão do pacote

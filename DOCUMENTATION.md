@@ -98,6 +98,7 @@ the following situations:
 src/kata/
 ├── cli.py       CLI, task persistence, cycle orchestration, and reports
 ├── config.py    `.kata/config.yaml` — the target project's own check commands
+├── skills.py    Which phase skills the cycle needs, and whether they are installed
 ├── fit.py       Diff measurement and triviality gate
 ├── verify.py    Lint, test, coverage, and pattern search
 ├── judge.py     Adversarial verification and fraud detection
@@ -245,7 +246,8 @@ reports a summary at the end.
 | `kata --check-only` | Run Ruff, pytest, and coverage without task interaction |
 | `kata --report --task TASK` | Regenerate the outcome-first report |
 | `kata --judge --task TASK` | Run adversarial verification |
-| `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked, with the concrete risk of each skip/fake (fable-method audit) |
+| `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
+| `kata --doctor` | Check whether the phase skills are installed in each frontend |
 | `kata --version` | Print the package version |
 
 The `--plan`, `--check-only`, `--judge`, `--report`, and `--audit`
@@ -320,8 +322,9 @@ asked for, which is the class of lie the judge exists to hunt.
 ### Exit codes
 
 - `0`: the requested operation passed;
-- `1`: the cycle or report status failed, the audit found fakes/skips (or the
-  audited task does not exist), or the judge returned `REFUTED`;
+- `1`: the cycle or report status failed, the audit found fakes/skips/degraded
+  phases (or the audited task does not exist), the judge returned `REFUTED`,
+  or `--doctor` found a partial install;
 - `2`: invalid CLI arguments, as produced by `argparse`.
 
 `VERIFIED WITH CAVEATS` and `UNVERIFIABLE` both exit `0`. The judge did verify the task and approved
@@ -436,12 +439,43 @@ The audit mode (`kata --audit [--task TASK]`) grades each phase of a task as:
 - **skipped**: the phase has `skipped: true` (documented);
 - **faked**: the phase has `answered: true` but default/empty content — the
   R7-1 pattern — or VERIFY claims success without corresponding evidence, or
-  TWINS declares a defect without a search.
+  TWINS declares a defect without a search;
+- **degraded**: `preflight.skills_missing` is not empty — one or more phases
+  ran without their own skill loaded, so whatever the other grades read was
+  written without those instructions.
 
 For each skip/fake, the audit names the concrete risk it created (e.g.
 "THINK faked → assumptions never declared; any solution may attack the wrong
 problem"). It is the kata's equivalent of the fable-method's `/fable-method
 audit`, and catches phases that were filled in without being observed.
+
+### Preflight
+
+The orchestrator is not self-contained: at each phase it loads the matching
+skill and follows its instructions. When a skill is not installed, the call
+fails, the orchestrator has no instructions for that phase, and the model
+improvises from the phase name. The result is a task file with the section
+filled in and nothing behind it — precisely the faked phase the audit exists
+to catch, except produced by the tooling rather than by the agent, and
+invisible in the output.
+
+`kata --doctor` reports, per frontend, which of the expected skills are
+present under `$OPENCODE_CONFIG_DIR/skills` and `$CLAUDE_CONFIG_DIR/skills`
+(defaulting to `~/.config/opencode` and `~/.claude`). A broken symlink does
+not count as installed, because `exists()` follows the link and so does the
+host when it tries to load the skill.
+
+**A partial install is what fails, not an absent one.** Exit code `1` is
+reserved for a frontend that has some skills but not all: someone who never
+installed a frontend loses nothing, while someone with 9 of the 10 skills
+runs the whole cycle and silently loses a phase. With no frontend installed
+at all, `--doctor` says so and exits `0` — the `kata` CLI works without any.
+
+When a skill fails to load mid-cycle, the orchestrator is instructed not to
+improvise: it falls back to a per-phase minimum contract documented in the
+orchestrator itself, records the skill name in `preflight.skills_missing`,
+and discloses it in the report. VERIFY and JUDGE degrade best, because their
+logic lives in the Python package rather than in the skill text.
 
 ### JUDGE
 
@@ -548,6 +582,10 @@ twins:
   matches_count: 0
   files_count: 0
   fix_applied: false
+preflight:
+  skills_missing: []    # phase skills that failed to load in this run;
+                        # a phase run without its own instructions is
+                        # degraded, not followed
 artifact:
   intent_owed: false
   intent_present: false

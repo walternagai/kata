@@ -115,6 +115,48 @@ shell hospedeiro. Para Python, prefira `python -m ...`; no Windows, use
 não puder ser executada nativamente, registre o bloqueio como caveat em vez
 de declarar sucesso.
 
+## Preflight — as skills de fase estão instaladas?
+
+O orquestrador não é auto-contido: cada fase carrega a skill
+correspondente e segue as instruções dela. Se uma skill não carregar e você
+improvisar a fase a partir do nome, o `.kata/<task>.yaml` sai preenchido sem
+nada por trás — a "fase fingida" que o `--audit` existe para caçar, só que
+produzida pelo ferramental em vez do agente. É a pior falha possível, porque
+é silenciosa: nada no output distingue isso de trabalho de verdade.
+
+Antes de começar o ciclo, rode `python -m kata --doctor` via {{BASH}} (ou
+`py -m kata` no Windows). Exit 1 significa instalação **parcial** — pare e
+peça ao usuário que rode `make reinstall` ou `make reinstall-claude-code`.
+Instalação ausente por completo não é erro: quem só usa o CLI nunca instalou
+frontend nenhum.
+
+**Se uma chamada de {{SKILL}} falhar durante o ciclo:**
+
+1. **Não improvise.** Não escreva a seção da fase como se a tivesse seguido.
+2. Use o contrato mínimo abaixo — o suficiente para não pular a fase em
+   silêncio, e deliberadamente menos do que a skill entregaria.
+3. Acrescente o nome da skill a `preflight.skills_missing` no YAML.
+4. Diga no relatório final quais fases rodaram sem instrução própria.
+
+### Contrato mínimo de cada fase
+
+Isto é o piso para quando a skill não carregar, nunca um substituto para
+carregá-la. Reparar que VERIFY e JUDGE degradam bem: a lógica deles vive no
+pacote Python, e não no texto da skill.
+
+| Fase | Piso, se a skill não carregar |
+|------|-------------------------------|
+| FIT | Medir o diff, decidir trivialidade e rota, gravar `fit.route` e `fit.reason` |
+| THINK | Perguntar problema, assumptions, alternativas, unknowns e o critério `done`; gravar em `think` |
+| SIMPLIFY | Confrontar o diff com o pedido: código mínimo, sem abstração especulativa nem configurabilidade não solicitada |
+| INTENT | Ler código, teste e spec; se discordarem, resolver por usuário > spec > teste > código **antes** de editar |
+| SURGICAL | Confirmar arquivo por arquivo que a mudança rastreia ao pedido; conferir imports órfãos |
+| VERIFY | `python -m kata --check-only` — a lógica é do CLI |
+| TWIN CHECK | Se um defeito foi corrigido, buscar o mesmo padrão no projeto inteiro com {{GREP}} |
+| ARTIFACT | Conferir as linhas devidas: INTENT, AUTH, PENDING, TWINS |
+| REPORT | Resultado na primeira linha, verificações, caveats honestos, linhas devidas |
+| JUDGE | `python -m kata --task <name> --judge` — a lógica é do CLI |
+
 ## Diretório de Trabalho
 
 Use `.kata/` na raiz do projeto atual. Cada tarefa é um arquivo
@@ -167,6 +209,10 @@ verify:
   hand_back: false     # true quando N tentativas falharam — tarefa devolvida
                        # ao usuário com o que foi tentado, o output real e a
                        # hipótese atual
+preflight:
+  skills_missing: []    # skills de fase que não carregaram nesta execução.
+                        # Fase rodada sem a instrução dela é fase degradada,
+                        # não fase seguida — o --audit a gradua como tal
 artifact:
   intent_owed: true
   intent_present: true
@@ -238,6 +284,8 @@ Para `--init`, você pode também usar {{BASH}} para rodar
 carregar o YAML e prosseguir com THINK interativamente.
 
 ## Detecção de Task
+
+Antes de qualquer fase, confira a instalação (ver **Preflight** acima).
 
 Se nenhum `--task` for fornecido:
 1. Tente detectar o branch git atual via {{BASH}}: `git rev-parse --abbrev-ref HEAD`

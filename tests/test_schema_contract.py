@@ -51,19 +51,32 @@ def _chaves_lidas_pelo_codigo() -> set[str]:
     Casa o padrão `.get("secao", {}).get("chave"` e as leituras via variável
     intermediária (`twins = data.get("twins", {})` seguido de
     `twins.get("defect_fixed")`).
+
+    As seções são descobertas pelo receptor da chamada (`data` ou
+    `task_data`), e não por uma lista escrita à mão. Enquanto a lista era
+    fixa, uma seção nova ficava invisível para este teste: `preflight` foi
+    lida pelo `--audit` e não documentada em nenhum orquestrador, e o teste
+    que existe justamente para pegar isso passou.
+
+    O receptor importa: `config.get("tool", {}).get("coverage", {})`, em
+    _detect_cov_source, lê o pyproject.toml e não o YAML da tarefa.
     """
     fonte = "".join(
         (REPO / "src" / "kata" / f).read_text(encoding="utf-8") for f in ("cli.py", "judge.py")
     )
-    secoes = {
-        "fit", "think", "simplify", "intent", "surgical",
-        "verify", "artifact", "auth", "pending", "twins",
-    }
+    aninhada = re.compile(r'\b(?:data|task_data)\.get\("(\w+)", \{\}\)\.get\("(\w+)"')
+
     lidas: set[str] = set()
-    for secao, chave in re.findall(r'\.get\("(\w+)", \{\}\)\.get\("(\w+)"', fonte):
-        if secao in secoes:
-            lidas.add(f"{secao}.{chave}")
-    # leituras em duas etapas, via variável com o nome da seção
+    secoes: set[str] = set()
+    for secao, chave in aninhada.findall(fonte):
+        secoes.add(secao)
+        lidas.add(f"{secao}.{chave}")
+
+    # Leituras em duas etapas: `twins = data.get("twins", {})` e depois
+    # `twins.get("defect_fixed")`. A seção precisa ter sido vista acima ou
+    # aqui, na atribuição.
+    for secao in re.findall(r'\b(\w+)\s*=\s*(?:data|task_data)\.get\("(?:\w+)", \{\}\)', fonte):
+        secoes.add(secao)
     for secao in secoes:
         for chave in re.findall(rf"\b{secao}\.get\(\"(\w+)\"", fonte):
             lidas.add(f"{secao}.{chave}")

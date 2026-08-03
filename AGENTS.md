@@ -71,6 +71,11 @@ Na fonte, o que muda por frontend se escreve de duas formas:
   frontend. Use quando a *orientação* difere (ex.: o limite de 4 opções do
   `AskUserQuestion`), não quando só o nome da ferramenta muda.
 
+Cuidado com concordância: `{{ESTE_ORQUESTRADOR}}` e `{{AGENTE_CAP}}` mudam de
+gênero entre os frontends ("O prompt do agente" / "Esta skill"), e o
+adjetivo seguinte tem de concordar com os dois. Quando não der, escreva a
+frase sem a variável — "o orquestrador" descreve ambos e não flexiona.
+
 Cuidado com `question`: a **rota** `question` é valor de `fit.route` e se
 escreve igual nos dois frontends; só a **ferramenta** de perguntar vira
 `{{ASK}}`. Trocar uma pela outra faz o frontend instruir `route:
@@ -84,6 +89,10 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
 - `verify.py` é a lógica de verificação (ruff/pytest/coverage via
   `--cov-fail-under`) modularizada para testes independentes.
 - `judge.py` é a lógica adversarial que verifica fraudes e inconsistências.
+- `skills.py` é o preflight: a lista canônica de skills que o ciclo precisa e
+  a checagem de instalação por frontend (`kata --doctor`). Instalação parcial
+  reprova; ausente não. Uma fase rodada sem a skill dela vai para
+  `preflight.skills_missing` e o `--audit` a gradua como `degraded`.
 - O CLI (`cli.py`) orquestra as 9 fases + audit + judge opcional e chama
   `fit.py`, `verify.py`, `judge.py`.
 - Entry point do CLI: `kata.cli:main` (declarado em `pyproject.toml`).

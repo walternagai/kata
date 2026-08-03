@@ -63,13 +63,20 @@ disciplina falhou: 395 linhas divergentes, parte delas melhoria aplicada num
 frontend e esquecida no outro. Hoje 93% da fonte é compartilhada; os 7%
 restantes são diferença declarada, não acidental.
 
-Na fonte, o que muda por frontend se escreve de duas formas:
+Na fonte, o que muda por frontend se escreve de três formas:
 
-- `{{BASH}}`, `{{READ}}`, `{{ASK}}`… — nome da ferramenta no host. Variável
-  não declarada é erro de build, não texto literal.
-- `<!--only:claude-code-->` … `<!--/only-->` — bloco que só entra naquele
-  frontend. Use quando a *orientação* difere (ex.: o limite de 4 opções do
-  `AskUserQuestion`), não quando só o nome da ferramenta muda.
+- `{{RUN}}`, `{{READ}}`, `{{ASK}}`, `{{LOAD_PHASE}}`… — como o host chama
+  cada **papel** de `REQUIRED_ROLES`. São papéis, não nomes de ferramenta:
+  `RUN` é "executar um comando", não "bash". Variável não declarada é erro
+  de build, nunca texto literal.
+- `<!--if:closed_choice_ask-->` / `<!--ifnot:...-->` — bloco que depende de uma
+  **capacidade** do host. É a forma preferida: quase todo conteúdo condicional
+  deste repositório existe porque a ferramenta de perguntar é de escolha
+  fechada, e não porque o frontend se chama Claude Code.
+- `<!--only:opencode-->` — bloco por **identidade**. Só para o que de fato é
+  identidade: frontmatter, título, prefixo de invocação. Escrever um bloco de
+  capacidade como `only:` obriga um terceiro host com a mesma forma a ser
+  adicionado a cada bloco à mão — a duplicata voltando por outra porta.
 
 Cuidado com concordância: `{{ESTE_ORQUESTRADOR}}` e `{{AGENTE_CAP}}` mudam de
 gênero entre os frontends ("O prompt do agente" / "Esta skill"), e o

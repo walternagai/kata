@@ -18,22 +18,22 @@ Nenhuma mudança deve ser "de passagem" ou "enquanto estou aqui".
 
 Para esta fase, use:
 
-- **{{BASH}}**: `git diff --name-only` (ou `--cached` se vazio) para listar arquivos.
-- **{{READ}}**: inspecione o diff de cada arquivo suspeito (`git diff <arquivo>` via {{BASH}}).
-- **{{GREP}}**: busque callers quando uma assinatura mudar.
-<!--only:opencode-->
+- **{{RUN}}**: `git diff --name-only` (ou `--cached` se vazio) para listar arquivos.
+- **{{READ}}**: inspecione o diff de cada arquivo suspeito (`git diff <arquivo>` via {{RUN}}).
+- **{{SEARCH}}**: busque callers quando uma assinatura mudar.
+<!--ifnot:closed_choice_ask-->
 - **{{ASK}}** (via `kata-question`): confirme com o usuário se cada arquivo é necessário.
-<!--/only-->
-<!--only:claude-code-->
+<!--/ifnot-->
+<!--if:closed_choice_ask-->
 - **{{ASK}}** (via `kata-question`): confirme com o usuário se cada arquivo é necessário — uma pergunta por arquivo se forem poucos (≤4), ou liste todos em texto e peça a lista de exceções se forem muitos.
-<!--/only-->
+<!--/if-->
 - **{{WRITE}} / {{EDIT}}**: registre o resultado em `.kata/<task>.yaml`.
 
 ## Procedimento
 
 ### 1. Listar arquivos alterados
 
-Execute (via {{BASH}}):
+Execute (via {{RUN}}):
 ```bash
 git diff --name-only
 ```
@@ -75,7 +75,7 @@ Registre `true` ou `false` no YAML.
 
 Para cada arquivo, verifique:
 - **Mudança de assinatura**: se uma função mudou assinatura, todos os callers foram atualizados?
-  - Use {{GREP}} para encontrar chamadas à função alterada.
+  - Use {{SEARCH}} para encontrar chamadas à função alterada.
 - **Mudança de schema**: se um modelo mudou, as migrations estão incluídas no diff?
 - **Mudança de comportamento**: se a lógica mudou, os testes foram atualizados?
 - **Imports novos**: cada import novo é realmente necessário para a mudança?
@@ -104,7 +104,7 @@ configuração, ou valor que você está escrevendo de memória:
 Pergunte:
 > "Imports removidos são só os que sua mudança tornou inúteis?"
 
-**Detecção automática** (opcional, via {{BASH}}):
+**Detecção automática** (opcional, via {{RUN}}):
 ```bash
 # Encontra imports não utilizados com ruff
 python -m ruff check --select F401 <caminhos-do-projeto>

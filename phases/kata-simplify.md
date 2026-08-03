@@ -19,7 +19,7 @@ declarado na fase THINK. Detectar:
 
 Para esta fase, use:
 
-- **{{BASH}}**: `git diff --stat` (ou `git diff --cached --stat` se vazio) para medir volume.
+- **{{RUN}}**: `git diff --stat` (ou `git diff --cached --stat` se vazio) para medir volume.
 - **{{ASK}}** (via `kata-question`): checklist de minimalismo — pergunte ao usuário, não valide sozinho.
 - **{{READ}}**: inspecione partes do diff que parecerem suspeitas.
 - **{{WRITE}} / {{EDIT}}**: registre as respostas em `.kata/<task>.yaml`.
@@ -28,7 +28,7 @@ Para esta fase, use:
 
 ### 1. Visualizar o diff
 
-Execute (via {{BASH}}):
+Execute (via {{RUN}}):
 ```bash
 git diff --stat
 ```
@@ -42,13 +42,13 @@ Mostre o output ao usuário para ter noção do volume de mudanças.
 
 ### 2. Checklist de Minimalismo
 
-<!--only:opencode-->
+<!--ifnot:closed_choice_ask-->
 Para cada item, use {{ASK}} e pergunte ao usuário:
-<!--/only-->
-<!--only:claude-code-->
+<!--/ifnot-->
+<!--if:closed_choice_ask-->
 Para cada item, use {{ASK}} e pergunte ao usuário (opções fechadas
 sim/não, com a resposta desejada como primeira opção):
-<!--/only-->
+<!--/if-->
 
 | Pergunta | Resposta desejada | Ação se for "Sim" |
 |----------|-------------------|-------------------|

@@ -24,7 +24,7 @@ Produzir um relatório legível por humanos que:
 
 ## Execução
 
-Via {{BASH}}:
+Via {{RUN}}:
 ```bash
 python -m kata --task <name>     # relatório automático ao final do ciclo
 python -m kata --task <name> --report   # regenerar relatório de tarefa existente

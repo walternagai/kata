@@ -7,7 +7,12 @@ description: Como perguntar ao usuário e a rota `question` no ciclo Karpathy (k
 # Skill: kata-question
 
 Guia para perguntar ao usuário e para a rota `question` no Karpathy
-Development Cycle, adaptado ao conjunto de ferramentas do Claude Code.
+Development Cycle, adaptado a um host cuja ferramenta de perguntar é de
+escolha fechada.
+
+**A rota `question` e a ferramenta de perguntar são coisas diferentes.** A
+rota é um valor de `fit.route` no YAML da tarefa e se escreve `question` em
+qualquer frontend; a ferramenta muda de nome conforme o host.
 
 ## Objetivo
 
@@ -15,11 +20,12 @@ Development Cycle, adaptado ao conjunto de ferramentas do Claude Code.
 2. Diagnosticar e entregar achados quando a tarefa for classificada como rota `question` no FIT.
 3. Evitar decisões unilaterais quando a resposta depende de preferência, contexto de negócio ou intenção do usuário.
 
-## Diferença em relação ao OpenCode
+## Qual ferramenta para qual pergunta
 
-O OpenCode tem uma ferramenta dedicada `question` para perguntas de texto
-livre. O Claude Code não tem — existem duas formas de perguntar, e a escolha
-entre elas importa:
+Neste host, `AskUserQuestion` é de **escolha fechada**: opções nomeadas, até 4 por
+pergunta, com "Other" sempre disponível para texto livre. Não há ferramenta
+dedicada para pergunta aberta — ela vai em texto normal. A escolha entre as
+duas formas importa:
 
 | Tipo de pergunta | Ferramenta | Exemplos no kata |
 |-------------------|-----------|-------------------|

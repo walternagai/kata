@@ -8,6 +8,10 @@ description: Uso da ferramenta `question` e da rota `question` no ciclo Karpathy
 
 Guia para o uso da ferramenta `question` e da rota `question` no Karpathy Development Cycle.
 
+**A rota `question` e a ferramenta de perguntar são coisas diferentes.** A
+rota é um valor de `fit.route` no YAML da tarefa e se escreve `question` em
+qualquer frontend; a ferramenta muda de nome conforme o host.
+
 ## Objetivo
 
 1. Fazer perguntas ao usuário de forma disciplinada, uma por vez, sem interrogar.

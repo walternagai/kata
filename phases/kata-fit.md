@@ -22,16 +22,16 @@ a tarefa para evitar desperdício de rigor em tarefas triviais ou mal-classifica
 
 Para esta fase, use:
 
-- **{{BASH}}**: `git diff --stat` e `git diff --name-only` para medir volume do diff.
+- **{{RUN}}**: `git diff --stat` e `git diff --name-only` para medir volume do diff.
 - **{{ASK}}** (via `kata-question`): classifique a tarefa com o usuário, uma pergunta por vez.
-- **{{GREP}}**: investigue se a tarefa exige pesquisa no código.
+- **{{SEARCH}}**: investigue se a tarefa exige pesquisa no código.
 - **{{WRITE}} / {{EDIT}}**: registre a classificação em `.kata/<task>.yaml`.
 
 ## Procedimento
 
 ### 1. Triviality gate
 
-Execute (via {{BASH}}):
+Execute (via {{RUN}}):
 ```bash
 git diff --stat          # unstaged
 git diff --name-only
@@ -57,16 +57,16 @@ Se trivial:
 
 ### 2. Fit gate — Classificar a rota
 
-<!--only:opencode-->
+<!--ifnot:closed_choice_ask-->
 Pergunte ao usuário (ou classifique baseado no contexto):
-<!--/only-->
-<!--only:claude-code-->
+<!--/ifnot-->
+<!--if:closed_choice_ask-->
 Pergunte ao usuário (ou classifique baseado no contexto). Como são 5
 rotas nomeadas — acima do limite de 4 opções do {{ASK}} — prefira
 listar as opções em texto e perguntar em texto livre, ou use
 {{ASK}} com as 4 rotas mais comuns e deixe `inference` acessível
 via "Other":
-<!--/only-->
+<!--/if-->
 
 | Rota | Quando usar | O que fazer |
 |------|-------------|-------------|
@@ -84,7 +84,7 @@ via "Other":
 ### 3. Registrar no YAML
 
 Se `base_commit` ainda não estiver gravado na tarefa, registre o HEAD atual
-do git (`git rev-parse HEAD` via {{BASH}}) nessa chave. É o ponto de
+do git (`git rev-parse HEAD` via {{RUN}}) nessa chave. É o ponto de
 comparação que o JUDGE usa depois — sem ele, o JUDGE só enxerga diff
 não commitado.
 

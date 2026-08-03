@@ -1,8 +1,7 @@
 ---
 name: kata-verify
-description: Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando o kata estiver na fase 4 — executar lint, teste e coverage do projeto (declarados em .kata/config.yaml ou os defaults Python), interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, eslint, vitest, go test, gate, CI, verificação de qualidade.
+description: Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 4 — executar lint, teste e coverage do projeto (declarados em .kata/config.yaml ou os defaults Python), interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, eslint, vitest, go test, gate, CI, verificação de qualidade.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-verify.md. Não edite aqui. -->
 
 # Skill: kata-verify
 
@@ -44,9 +43,9 @@ passou.
 
 Para esta fase, use:
 
-- **`Bash`**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
-- **`AskUserQuestion`** (via `kata-question`): pergunte ao usuário se o critério de sucesso foi satisfeito.
-- **`Write` / `Edit`**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
+- **{{BASH}}**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
+- **{{ASK}}** (via `kata-question`): pergunte ao usuário se o critério de sucesso foi satisfeito.
+- **{{WRITE}} / {{EDIT}}**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
 
 ## Comandos
 
@@ -127,7 +126,7 @@ Se coverage < gate:
 ### Critério de sucesso
 
 Confronte o critério declarado no THINK (chave `done`) com o resultado final
-e pergunte ao usuário via `AskUserQuestion`:
+e pergunte ao usuário via {{ASK}}:
 > "O critério de sucesso da tarefa está satisfeito?"
 
 O critério volta à fase THINK — o problema declarado foi resolvido?
@@ -195,7 +194,7 @@ verify:
 Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
 só as 3 verificações objetivas (ruff + pytest + coverage). O critério de
 sucesso é assumido satisfeito. Útil para CI/CD pipelines — nesse modo, a
-skill nem precisa ser carregada: chame o CLI diretamente via `Bash`.
+skill nem precisa ser carregada: chame o CLI diretamente via {{BASH}}.
 
 Para executar via CLI:
 ```bash

@@ -1,8 +1,7 @@
 ---
 name: kata-artifact
-description: Fase ARTIFACT do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 4.5 — verificar que linhas devidas (INTENT, AUTH, PENDING, TWINS) estão no relatório antes de finalizar. Triggers: ARTIFACT, artifact gate, relatório, linhas devidas, fable-method.
+description: Fase ARTIFACT do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 4.5 — verificar que linhas devidas (INTENT, AUTH, PENDING, TWINS) estão no relatório antes de finalizar. Triggers: ARTIFACT, artifact gate, relatório, linhas devidas, fable-method.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-artifact.md. Não edite aqui. -->
 
 # Skill: kata-artifact
 
@@ -17,9 +16,9 @@ linhas devidas estão presentes. Se algo está ausente e é devido, adicione.
 
 ## Ferramentas
 
-- **`read`**: verifique o `.kata/<task>.yaml` atual.
-- **`question`** (via `kata-question`) ou texto livre: preencha linhas devidas ausentes.
-- **`write` / `edit`**: registre o resultado em `.kata/<task>.yaml`.
+- **{{READ}}**: verifique o `.kata/<task>.yaml` atual.
+- **{{ASK}}** (via `kata-question`) ou texto livre: preencha linhas devidas ausentes.
+- **{{WRITE}} / {{EDIT}}**: registre o resultado em `.kata/<task>.yaml`.
 
 ## Linhas devidas
 

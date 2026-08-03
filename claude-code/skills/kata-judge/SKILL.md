@@ -2,6 +2,7 @@
 name: kata-judge
 description: Fase JUDGE do ciclo Karpathy (kata). Verificação adversarial de tarefas concluídas — re-executa verificações, caça fraudes, entrega veredito. Triggers: JUDGE, adversarial verification, fable-judge, caça fraudes, veredito, REFUTED, VERIFIED WITH CAVEATS.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-judge.md. Não edite aqui. -->
 
 # Skill: kata-judge
 
@@ -23,7 +24,8 @@ Verificar adversarialmente uma tarefa concluída:
    commitada — o estado normal de uma tarefa "concluída"
 3. **Re-run every claimed verification** — executar de novo e comparar
 4. **Hunt frauds** — 6 categorias
-5. **Deliver verdict** — VERIFIED / VERIFIED WITH CAVEATS / REFUTED
+5. **Confess blind spots** — registrar o que não teve como observar
+6. **Deliver verdict** — VERIFIED / VERIFIED WITH CAVEATS / UNVERIFIABLE / REFUTED
 
 ## Execução
 
@@ -54,9 +56,32 @@ python -m kata --judge
 
 | Veredito | Condição |
 |----------|----------|
-| **VERIFIED** | Nenhuma fraude encontrada |
+| **VERIFIED** | Nenhuma fraude encontrada, e o juiz teve como procurar |
 | **VERIFIED WITH CAVEATS** | Fraudes de média/baixa severidade, nenhuma alta |
+| **UNVERIFIABLE** | Nenhuma fraude, mas o juiz não teve como observar |
 | **REFUTED** | Pelo menos uma fraude de alta severidade |
+
+### Pontos cegos
+
+Um ponto cego é o juiz confessando o que não conseguiu observar. Não é
+acusação: não ter observado não é evidência de fraude nem de honestidade.
+Dois disparam hoje:
+
+1. **Nenhuma verificação re-executada** — o relatório não afirma nenhum
+   check (`ruff_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
+   reproduzir, então nada é re-executado. Declarar os comandos do projeto em
+   `.kata/config.yaml` é o que desarma este ponto cego.
+2. **Teste em linguagem sem sondas** — o juiz conhece a sintaxe de Python,
+   JS/TS, Go, Ruby, Rust e Java/Kotlin. Um teste fora dessa lista (`.php`,
+   `.swift`, `.exs`…) não pode ser lido, e o juiz diz isso em vez de calar.
+
+Não havendo fraude nenhuma, qualquer ponto cego faz o veredito ser
+**UNVERIFIABLE** em vez de VERIFIED: "não consegui olhar" não pode ser
+reportado como "está tudo certo". Havendo fraude, ela manda no veredito e
+os pontos cegos continuam listados.
+
+O exit code de UNVERIFIABLE é `0` — o juiz não encontrou nada errado,
+apenas não teve como olhar. Quem quiser barrar no CI lê o veredito.
 
 ## Resultado no CLI
 
@@ -77,6 +102,9 @@ python -m kata --judge
        2 arquivo(s) alterado(s) não declarado(s) como necessários
        → extra_a.py, extra_b.py
 
+  Pontos cegos (o juiz não conseguiu observar):
+    ❓ 1 arquivo(s) de teste sem padrão de enfraquecimento para a linguagem: src/soma.test.js
+
   Re-execução:
     ✅ ruff
     ❌ pytest
@@ -95,7 +123,8 @@ Se a skill decidir registrar o veredito em `.kata/<task>.yaml` (via
 
 ```yaml
 judge:
-  verdict: "REFUTED"           # VERIFIED | VERIFIED WITH CAVEATS | REFUTED
+  verdict: "REFUTED"           # VERIFIED | VERIFIED WITH CAVEATS |
+                               # UNVERIFIABLE | REFUTED
   frauds:
     - type: false_completion
       severity: high
@@ -117,3 +146,5 @@ invoca explicitamente para verificar uma tarefa já concluída.
 - **Re-execute sempre**: toda claim de verificação deve ser re-executada, nunca assumida
 - **Fraude de alta severidade = REFUTED**: uma só já invalida o ciclo
 - **Caveats honestos**: se algo não pôde ser verificado, diga exatamente isso
+- **Não observar não é aprovar**: sem nada observado, o veredito é
+  UNVERIFIABLE, nunca VERIFIED

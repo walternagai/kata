@@ -2,6 +2,7 @@
 name: kata-fit
 description: Fase FIT do ciclo Karpathy (kata). Use quando o kata estiver na fase 0 — classificar a tarefa, aplicar triviality gate e definir a rota antes do THINK. Triggers: FIT, triviality gate, fit gate, classificar tarefa, rotear, plan-first, question, research, inference.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-fit.md. Não edite aqui. -->
 
 # Skill: kata-fit
 
@@ -79,8 +80,9 @@ via "Other":
 ### 3. Registrar no YAML
 
 Se `base_commit` ainda não estiver gravado na tarefa, registre o HEAD atual
-do git (`git rev-parse HEAD` via `Bash`) nessa chave — é o ponto de
-comparação que o JUDGE usa depois.
+do git (`git rev-parse HEAD` via `Bash`) nessa chave. É o ponto de
+comparação que o JUDGE usa depois — sem ele, o JUDGE só enxerga diff
+não commitado.
 
 ```yaml
 status: draft
@@ -101,7 +103,7 @@ do fable-method (Steps 0-3). A diferença principal:
 
 - **fable-method**: o fit gate é implícito no fluxo do agente, sem CLI
 - **kata**: o fit gate é explícito tanto no CLI (`--plan`, `--check-only`)
-  quanto nas skills do Claude Code (e no agente OpenCode)
+  quanto nos frontends (agente OpenCode e skills do Claude Code)
 
 Para tarefas que o kata não cobre (marketing, research, data analysis, devops),
 consulte os domain adapters do [The Fable Method](https://github.com/Sahir619/fable-method).

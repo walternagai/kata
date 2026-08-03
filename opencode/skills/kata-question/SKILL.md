@@ -2,6 +2,7 @@
 name: kata-question
 description: Uso da ferramenta `question` e da rota `question` no ciclo Karpathy (kata). Use quando o agente @kata precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-question.md. Não edite aqui. -->
 
 # Skill: kata-question
 
@@ -18,8 +19,7 @@ Guia para o uso da ferramenta `question` e da rota `question` no Karpathy Develo
 Para esta skill, use:
 
 - **`question`**: faça uma pergunta por chamada. Não agrupe múltiplas perguntas em uma única chamada.
-- **shell do sistema** (a ferramenta `bash` do OpenCode, quando disponível):
-  `git diff`, `grep`, `pytest` etc., para coletar evidências antes de perguntar.
+- **`bash`**: `git diff`, `grep`, `pytest` etc., para coletar evidências antes de perguntar.
 - **`read` / `grep`**: investigue o código para embasar a pergunta.
 - **`write` / `edit`**: registre a resposta ou os achados em `.kata/<task>.yaml`.
 
@@ -37,10 +37,10 @@ A rota `question` é escolhida quando o usuário quer entender algo antes de dec
 ### Procedimento da rota `question`
 
 1. **Entenda a pergunta** — reformule para o usuário confirmar.
-2. **Colete evidências** — use o shell do sistema, `read` e `grep` para obter dados.
+2. **Colete evidências** — use `bash`, `read` e `grep` para obter dados.
 3. **Não altere código** — a menos que o usuário autorize explicitamente.
 4. **Entregue achados** — organize em: contexto, evidências, recomendação.
-5. **Registre** em `.kata/<task>.yaml` sob `question` e finalize o ciclo.
+5. **Registre** em `.kata/<task>.yaml` (via `write`/`edit`) sob `question` e finalize o ciclo.
 
 ```yaml
 status: approved
@@ -58,7 +58,7 @@ question:
   user_approved: false
 ```
 
-## Uso geral da ferramenta `question`
+## Uso geral de perguntas
 
 ### Regras
 
@@ -66,7 +66,7 @@ question:
 - **Contexto primeiro** — mostre ao usuário o que você já sabe antes de perguntar.
 - **Proponha, não interrogue** — ofereça uma resposta padrão; pergunte se confirma.
 - **Seja específico** — perguntas vagas geram respostas vagas.
-- **Não use `question` para substituir investigação** — primeiro pesquise, depois pergunte.
+- **Não use pergunta para substituir investigação** — primeiro pesquise com `bash`/`read`/`grep`, depois pergunte.
 
 ### Exemplos
 
@@ -87,7 +87,7 @@ question:
 
 ## Output no YAML
 
-Para uso geral, registre quando a resposta influencia o ciclo:
+Registre quando a resposta influencia o ciclo:
 
 ```yaml
 question:
@@ -96,7 +96,7 @@ question:
   context: "Testes passam e cobertura está acima de 70%"
 ```
 
-Para rota `question`, use o formato acima com `findings` e `recommendation`.
+Para rota `question`, use o formato com `findings` e `recommendation` mostrado acima.
 
 ## Princípios
 

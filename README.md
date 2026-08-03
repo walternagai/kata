@@ -255,6 +255,7 @@ O kata usa `.kata/` na raiz do projeto. Cada tarefa é um arquivo YAML:
 ## Desenvolvimento
 
 ```bash
+make build-skills          # gera opencode/ e claude-code/ a partir de phases/
 make test                  # pytest + coverage
 make lint                  # ruff check
 make format                # ruff format
@@ -277,13 +278,16 @@ ln -s .karpathy .kata   # symlink preserva acesso ao legado
 
 ```
 kata/
-├── opencode/
+├── phases/                            ← FONTE ÚNICA dos prompts (11 arquivos:
+│                                         kata.md + as 10 fases). É aqui que se
+│                                         edita; o resto é gerado.
+├── opencode/                          ← GERADO (make build-skills)
 │   ├── agent/kata.md                  ← Agente @kata (OpenCode)
 │   └── skills/kata-*/SKILL.md         ← 10 skills (fit, think, simplify, intent,
 │                                         surgical, verify, artifact, report,
 │                                         question, judge; TWIN CHECK vive no
 │                                         orquestrador)
-├── claude-code/
+├── claude-code/                       ← GERADO (make build-skills)
 │   └── skills/kata-*/SKILL.md         ← 11 skills (orquestrador kata + as 10 acima)
 ├── src/kata/
 │   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
@@ -295,6 +299,7 @@ kata/
 │   └── __main__.py             ← Entry point para `python -m kata`
 ├── eval/                       ← Cenários de trap adversarial (python3 eval/run_traps.py)
 ├── scripts/
+│   ├── build_skills.py                                 ← Gera os frontends a partir de phases/
 │   ├── install.sh / install.ps1                        ← Instalação no OpenCode
 │   └── install-claude-code.sh / install-claude-code.ps1 ← Instalação no Claude Code
 └── tests/                      ← Testes pytest (ver `make test` para cobertura)

@@ -2,7 +2,6 @@
 name: kata-judge
 description: Fase JUDGE do ciclo Karpathy (kata). Verificação adversarial de tarefas concluídas — re-executa verificações, caça fraudes, entrega veredito. Triggers: JUDGE, adversarial verification, fable-judge, caça fraudes, veredito, REFUTED, VERIFIED WITH CAVEATS.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-judge.md. Não edite aqui. -->
 
 # Skill: kata-judge
 
@@ -29,7 +28,7 @@ Verificar adversarialmente uma tarefa concluída:
 
 ## Execução
 
-Via `bash`:
+Via {{BASH}}:
 
 ```bash
 python -m kata --task <name> --judge
@@ -118,8 +117,8 @@ apenas não teve como olhar. Quem quiser barrar no CI lê o veredito.
 
 O CLI Python não persiste o resultado do judge de volta no arquivo de
 tarefa — `--judge` é uma verificação stateless, re-executada a cada chamada.
-Se o agente decidir registrar o veredito em `.kata/<task>.yaml` (via
-`write`/`edit`), use a chave `judge`:
+Se {{AGENTE_CAP_MIN}} decidir registrar o veredito em `.kata/<task>.yaml` (via
+{{WRITE}}/{{EDIT}}), use a chave `judge`:
 
 ```yaml
 judge:

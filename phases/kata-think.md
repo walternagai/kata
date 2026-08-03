@@ -1,8 +1,7 @@
 ---
 name: kata-think
-description: Fase THINK do ciclo Karpathy (kata). Use quando o kata estiver na fase 1 — declarar problema, assumptions, alternativas e unknowns antes de codar. Triggers: THINK, assumptions, problema, unknowns, antes de codificar, declarar contexto.
+description: Fase THINK do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 1 — declarar problema, assumptions, alternativas e unknowns antes de codar. Triggers: THINK, assumptions, problema, unknowns, antes de codificar, declarar contexto.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-think.md. Não edite aqui. -->
 
 # Skill: kata-think
 
@@ -20,12 +19,17 @@ Antes de escrever qualquer linha de código, declarar explicitamente:
 
 Para esta fase, use:
 
+<!--only:opencode-->
+- **{{ASK}}**: faça as 4 perguntas ao usuário, **uma a uma**. Não jogue todas de uma vez.
+<!--/only-->
+<!--only:claude-code-->
 - **Texto livre** (ver `kata-question`): faça as 4 perguntas ao usuário, **uma a uma**,
   em texto normal, com uma proposta baseada em contexto quando possível. Não jogue
-  todas de uma vez, e não force isso em `AskUserQuestion` — são respostas narrativas,
+  todas de uma vez, e não force isso em {{ASK}} — são respostas narrativas,
   não escolhas fechadas.
-- **`Read` / `Grep`**: investigue unknowns sobre código existente (ex: "Como X funciona hoje?").
-- **`Write` / `Edit`**: registre as respostas em `.kata/<task>.yaml` e atualize `status: think-complete`.
+<!--/only-->
+- **{{READ}} / {{GREP}}**: investigue unknowns sobre código existente (ex: "Como X funciona hoje?").
+- **{{WRITE}} / {{EDIT}}**: registre as respostas em `.kata/<task>.yaml` e atualize `status: think-complete`.
 
 ## Roteiro de Perguntas
 
@@ -72,8 +76,13 @@ Unknowns são coisas que você precisa investigar no código, perguntar ao usuá
 ou testar antes de prosseguir.
 
 **Tipos de unknown:**
-- **Código**: "Como X funciona hoje?" → investigar com `Grep`/`Read`
-- **Decisão**: "Devo usar A ou B?" → perguntar ao usuário (bom caso para `AskUserQuestion`, se A/B forem as únicas opções)
+- **Código**: "Como X funciona hoje?" → investigar com {{GREP}}/{{READ}}
+<!--only:opencode-->
+- **Decisão**: "Devo usar A ou B?" → perguntar ao usuário
+<!--/only-->
+<!--only:claude-code-->
+- **Decisão**: "Devo usar A ou B?" → perguntar ao usuário (bom caso para {{ASK}}, se A/B forem as únicas opções)
+<!--/only-->
 - **Comportamento**: "O que acontece quando Y?" → testar ou perguntar
 
 Se um unknown bloqueia a implementação, **PARE e pergunte** antes de prosseguir.

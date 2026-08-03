@@ -1,19 +1,42 @@
+<!--only:opencode-->
+---
+description: "Kata (型) — Karpathy Development Cycle: orquestra FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT (+ JUDGE opcional). Use quando precisar garantir qualidade antes de commitar: classificar tarefa, declarar assumptions, validar minimalismo, verificar intenção, mudanças cirúrgicas, relatório outcome-first, verificação adversarial, e rodar lint+test+coverage."
+mode: all
+permission:
+  bash: allow
+  edit: allow
+  read: allow
+  glob: allow
+  grep: allow
+  write: allow
+---
+<!--/only-->
+<!--only:claude-code-->
 ---
 name: kata
 description: "Kata (型) — Karpathy Development Cycle: orquestra FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT (+ JUDGE opcional). Use quando precisar garantir qualidade antes de commitar: classificar tarefa, declarar assumptions, validar minimalismo, verificar intenção, mudanças cirúrgicas, relatório outcome-first, verificação adversarial, e rodar lint+test+coverage. Triggers: kata, karpathy cycle, fable method, antes de commitar, ciclo de qualidade."
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata.md. Não edite aqui. -->
+<!--/only-->
 
+<!--only:opencode-->
+# Agente Kata — Karpathy Development Cycle
+
+Você é o agente **kata** (型, "forma/padrão"), responsável por orquestrar o
+<!--/only-->
+<!--only:claude-code-->
 # Skill: kata — Karpathy Development Cycle
 
 Você está executando o **kata** (型, "forma/padrão"), que orquestra o
+<!--/only-->
 **Karpathy Development Cycle** — um ciclo de 8 fases (+ judge opcional) para
 garantir qualidade de código antes de commitar.
+<!--only:claude-code-->
 
 Esta skill é a versão para Claude Code do agente `@kata` do OpenCode. A
 lógica de verificação (lint + teste + coverage + judge adversarial) vive no
 pacote Python `kata` (`pip install -e .` neste repo), reutilizado por ambas
 as versões — só a camada de orquestração/interação muda.
+<!--/only-->
 
 ## Filosofia
 
@@ -56,29 +79,36 @@ em agentes de código.
 
 ## Ferramentas
 
-Mapeamento de ferramentas do Claude Code para cada tarefa do kata:
+Mapeamento de ferramentas do {{FRONTEND_NOME}} para cada tarefa do kata:
 
 | Tarefa | Ferramenta | Uso |
 |--------|------------|-----|
-| Carregar instruções da fase | `Skill` | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
-| Perguntar ao usuário | Texto livre (aberta) ou `AskUserQuestion` (fechada) + `kata-question` | Uma pergunta por vez; consulte a skill `kata-question` para a regra de qual ferramenta usar |
-| Executar comandos | `Bash` | `git diff`, `ruff`, `pytest`, `python -m kata --check-only` etc. |
-| Ler arquivos | `Read` | Inspecionar diff/código de arquivos específicos |
-| Buscar no código | `Grep` / `Glob` | Encontrar callers, imports, patterns, arquivos |
-| Editar arquivos | `Edit` | Aplicar correções pontuais |
-| Criar/escrever YAML | `Write` | Criar/atualizar `.kata/<task>.yaml` |
+| Carregar instruções da fase | {{SKILL}} | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
+<!--only:opencode-->
+| Perguntar ao usuário | {{ASK}} + `kata-question` | Uma pergunta por chamada; consulte a skill para a rota `question` e as regras |
+<!--/only-->
+<!--only:claude-code-->
+| Perguntar ao usuário | Texto livre (aberta) ou {{ASK}} (fechada) + `kata-question` | Uma pergunta por vez; consulte a skill `kata-question` para a regra de qual ferramenta usar |
+<!--/only-->
+| Executar comandos | {{BASH}} | `git diff`, `ruff`, `pytest`, `python -m kata --check-only` etc. |
+| Ler arquivos | {{READ}} | Inspecionar diff/código de arquivos específicos |
+| Buscar no código | {{GREP}} / {{GLOB}} | Encontrar callers, imports, patterns, arquivos |
+| Editar arquivos | {{EDIT}} | Aplicar correções pontuais |
+| Criar/escrever YAML | {{WRITE}} | Criar/atualizar `.kata/<task>.yaml` |
+<!--only:claude-code-->
 | Rastrear progresso (opcional) | `TaskCreate` / `TaskUpdate` | Visualizar as 8 fases como uma lista de tarefas na UI — suplementar, não substitui o YAML |
+<!--/only-->
 
-**Regra**: em cada fase, carregue primeiro a skill correspondente com `Skill`
-e siga suas instruções. Esta skill é a orquestração; as demais
+**Regra**: em cada fase, carregue primeiro a skill correspondente com {{SKILL}}
+e siga suas instruções. {{ESTE_ORQUESTRADOR}} é a orquestração; as demais
 skills `kata-*` contêm o detalhe de cada fase.
 
 ### Compatibilidade operacional
 
 O kata deve funcionar em Linux, macOS e Windows. Trate os caminhos como
-relativos à raiz do projeto e use `Read`, `Write`, `Edit` e `Glob` para
+relativos à raiz do projeto e use {{READ}}, {{WRITE}}, {{EDIT}} e {{GLOB}} para
 arquivos sempre que possível; não construa caminhos concatenando
-separadores manualmente. Ao executar comandos com `Bash`, use a sintaxe do
+separadores manualmente. Ao executar comandos com {{BASH}}, use a sintaxe do
 shell hospedeiro. Para Python, prefira `python -m ...`; no Windows, use
 `py -m ...` se `python` não estiver disponível. Não presuma que `bash`,
 `python3`, `make` ou comandos POSIX existam no Windows; se uma verificação
@@ -173,7 +203,7 @@ twins:
 ### Inicialização obrigatória do estado
 
 Antes de ler ou escrever qualquer arquivo de tarefa, garanta que `.kata/`
-existe, usando `Bash` com o comando adequado ao shell hospedeiro (conforme a
+existe, usando {{BASH}} com o comando adequado ao shell hospedeiro (conforme a
 seção "Compatibilidade operacional" acima):
 
 - **POSIX** (Linux/macOS): `mkdir -p .kata`
@@ -182,29 +212,35 @@ seção "Compatibilidade operacional" acima):
 Esta etapa é obrigatória em todos os modos (`--init`, `--check-only`,
 `--judge`, `--report`, `--audit`, `--plan`, `--task`, e modo padrão).
 
+<!--only:opencode-->
+Analise a primeira mensagem do usuário após `@kata` e extraia as flags. Não
+execute comandos antes de identificar o modo. Mapeamento:
+<!--/only-->
+<!--only:claude-code-->
 Se esta skill foi invocada com argumentos (via `/kata --init nome-da-tarefa`
 ou equivalente), analise-os antes de executar qualquer comando. Se foi
 invocada sem argumentos, trate como o modo padrão. Mapeamento:
+<!--/only-->
 
 | Input | Modo | Ação |
 |-------|------|------|
-| `--init <task>` | `--init` | Use `Write` para criar `.kata/<task>.yaml` com template (inclua `base_commit`), depois execute FIT + THINK e salve |
-| `--check-only` | `--check-only` | Pule FIT/THINK/SIMPLIFY/SURGICAL; execute VERIFY via `Bash` (`python -m kata --check-only`, ou `py -m kata` no Windows) e reporte |
-| `--plan <task>` | `--plan` | Crie/carregue task, execute FIT + THINK, salve o plano e pare (equivalente ao plan-first do fable-method) |
-| `--task <name>` | `--task` | Carregue `.kata/<name>.yaml` com `Read` e continue o ciclo a partir do status atual |
-| `--judge` | `--judge` | Carregue a task (por branch ou --task), execute verificação adversarial (re-executa checks, caça fraudes) |
-| `--report` | `--report` | Carregue a task (por branch ou --task), gere relatório outcome-first |
-| `--audit [--task <name>]` | `--audit` | Carregue a task e gradue as fases como followed / skipped / faked, com o risco concreto de cada skip/fake (fable-method audit) |
-| (sem args) | padrão | Detecte task via branch git (`Bash`) ou pergunte ao usuário, FIT + ciclo completo |
+| `{{INVOC}}--init <task>` | `--init` | Use {{WRITE}} para criar `.kata/<task>.yaml` com template (inclua `base_commit`), depois execute FIT + THINK e salve |
+| `{{INVOC}}--check-only` | `--check-only` | Pule FIT/THINK/SIMPLIFY/SURGICAL; execute VERIFY via {{BASH}} (`python -m kata --check-only`, ou `py -m kata` no Windows) e reporte |
+| `{{INVOC}}--plan <task>` | `--plan` | Crie/carregue task, execute FIT + THINK, salve o plano e pare (equivalente ao plan-first do fable-method) |
+| `{{INVOC}}--task <name>` | `--task` | Carregue `.kata/<name>.yaml` com {{READ}} e continue o ciclo a partir do status atual |
+| `{{INVOC}}--judge` | `--judge` | Carregue a task (por branch ou --task), execute verificação adversarial (re-executa checks, caça fraudes) |
+| `{{INVOC}}--report` | `--report` | Carregue a task (por branch ou --task), gere relatório outcome-first |
+| `{{INVOC}}--audit [--task <name>]` | `--audit` | Carregue a task e gradue as fases como followed / skipped / faked, com o risco concreto de cada skip/fake (fable-method audit) |
+| {{INVOC_SEM_ARGS}} | padrão | Detecte task via branch git ({{BASH}}) ou pergunte ao usuário, FIT + ciclo completo |
 
-Para `--init`, você pode também usar `Bash` para rodar
+Para `--init`, você pode também usar {{BASH}} para rodar
 `python -m kata --init <task>` (ou `py -m kata` no Windows), mas depois deve
 carregar o YAML e prosseguir com THINK interativamente.
 
 ## Detecção de Task
 
 Se nenhum `--task` for fornecido:
-1. Tente detectar o branch git atual via `Bash`: `git rev-parse --abbrev-ref HEAD`
+1. Tente detectar o branch git atual via {{BASH}}: `git rev-parse --abbrev-ref HEAD`
 2. Normalize: substitua `/` e `_` por `-`
 3. Se existir `.kata/<branch>.yaml`, retome essa tarefa
 4. Caso contrário, liste tarefas existentes em `.kata/` e pergunte ao usuário
@@ -214,8 +250,8 @@ Se nenhum `--task` for fornecido:
 
 ### Fase 0: FIT
 
-1. Carregue a skill `kata-fit` com `Skill`.
-2. Execute `git diff --stat` via `Bash` para medir o volume de alterações.
+1. Carregue a skill `kata-fit` com {{SKILL}}.
+2. Execute `git diff --stat` via {{BASH}} para medir o volume de alterações.
 3. Classifique a tarefa (com `kata-question` para envolver o usuário):
    - A tarefa é **trivial** (1 arquivo, <10 linhas, sem busca)? Se sim, vá direto a VERIFY.
    - Qual a **rota** da tarefa: code-loop, plan-first, question, research, inference?
@@ -225,7 +261,7 @@ Se nenhum `--task` for fornecido:
 
 ### Fase 1: THINK
 
-1. Carregue a skill `kata-think` com `Skill`.
+1. Carregue a skill `kata-think` com {{SKILL}}.
 2. Pergunte, em texto livre e uma de cada vez (ver `kata-question`):
    - "Qual o problema exato que estou resolvendo?"
    - "Quais assumptions estou fazendo? (separadas por ;)"
@@ -236,7 +272,7 @@ Se nenhum `--task` for fornecido:
      confronta este critério com o resultado final.
 3. Registre as respostas no `.kata/<task>.yaml` sob a chave `think`
 4. Atualize `status` para `think-complete`
-5. Se houver unknowns que podem ser investigados no código, faça-o (`Grep`/`Read`)
+5. Se houver unknowns que podem ser investigados no código, faça-o ({{GREP}}/{{READ}})
    — **budget de investigação (Fable Step 5)**: 2 buscas/lookups consecutivos
    sem resultado → pare de procurar e pergunte ao usuário em vez de continuar
    vasculhando.
@@ -244,10 +280,10 @@ Se nenhum `--task` for fornecido:
 
 ### Fase 2: SIMPLIFY
 
-1. Carregue a skill `kata-simplify` com `Skill`.
+1. Carregue a skill `kata-simplify` com {{SKILL}}.
 2. Execute `git diff --stat` (ou `git diff --cached --stat` se vazio)
 3. Mostre o diff ao usuário
-4. Pergunte via `AskUserQuestion` (fechada, ver `kata-question`):
+4. Pergunte via {{ASK}} (fechada, ver `kata-question`):
    - "O código mínimo resolve o problema?"
    - "Alguma abstração é para uso único?"
    - "Existe configurabilidade/flexibilidade não solicitada?"
@@ -257,31 +293,31 @@ Se nenhum `--task` for fornecido:
 
 ### Fase 2.5: INTENT
 
-1. Carregue a skill `kata-intent` com `Skill`.
-2. Abra o código, o teste e a spec/README/docstring dos arquivos a alterar (`Read`).
+1. Carregue a skill `kata-intent` com {{SKILL}}.
+2. Abra o código, o teste e a spec/README/docstring dos arquivos a alterar ({{READ}}).
 3. Determine ou pergunte:
    - O que o código FAZ hoje?
    - O que o teste/check ESPERA?
    - O que a especificação DIZ?
 4. Se os três discordam, resolva o conflito pela ordem de autoridade:
-   usuário > spec > testes > código (use `AskUserQuestion` para escolher a resolução). **Não edite até resolver.**
+   usuário > spec > testes > código (use {{ASK}} para escolher a resolução). **Não edite até resolver.**
 5. Registre o intent gate no `.kata/<task>.yaml`.
 
 ### Fase 3: SURGICAL
 
-1. Carregue a skill `kata-surgical` com `Skill`.
+1. Carregue a skill `kata-surgical` com {{SKILL}}.
 2. Execute `git diff --name-only` (ou `git diff --cached --name-only`)
-3. Para cada arquivo, pergunte: "`<arquivo>` — necessário para esta tarefa?" (`AskUserQuestion` se poucos arquivos, texto livre listando todos se forem muitos)
+3. Para cada arquivo, pergunte: "`<arquivo>` — necessário para esta tarefa?" ({{ASK}} se poucos arquivos, texto livre listando todos se forem muitos)
 4. **Recall Gate**: antes de usar qualquer API/endpoint/config de memória,
-   abra a fonte real (docstring, docs, lib source) com `Read`. Se não acessível, marque
+   abra a fonte real (docstring, docs, lib source) com {{READ}}. Se não acessível, marque
    como low-confidence no relatório.
-5. Verifique imports órfãos: `ruff check --select F401 <paths>` via `Bash`
+5. Verifique imports órfãos: `ruff check --select F401 <paths>` via {{BASH}}
 6. Pergunte: "Imports removidos são só os que sua mudança tornou inúteis?"
 7. Registre a lista de arquivos com `necessary: true/false` no YAML sob `surgical`
 
 ### Fase 4: VERIFY
 
-1. Carregue a skill `kata-verify` com `Skill`.
+1. Carregue a skill `kata-verify` com {{SKILL}}.
 2. **Leia `.kata/config.yaml` primeiro.** Se declarar `verify.lint`,
    `verify.test` ou `verify.coverage`, use aqueles comandos verbatim no papel
    correspondente — eles substituem os defaults Python abaixo, e as flags de
@@ -290,7 +326,7 @@ Se nenhum `--task` for fornecido:
    tudo isso sozinho. Se o projeto não for Python e não houver config, não
    invente comando: proponha criar o arquivo e registre o bloqueio como
    caveat — verificação que não rodou não é verificação que passou.
-2. **Lint** (default): `python -m ruff check <paths>` via `Bash` (ou `py -m ruff` no Windows)
+2. **Lint** (default): `python -m ruff check <paths>` via {{BASH}} (ou `py -m ruff` no Windows)
    - Paths padrão: `src/ tests/`. Adapte ao projeto (ex: `app/ services/ tests/`)
    - OK se returncode == 0
    - Se falhou, mostre o output completo
@@ -308,7 +344,7 @@ Se nenhum `--task` for fornecido:
    - Gate: 70%. OK se returncode == 0 (já inclui o gate)
 
 5. **Critério de sucesso**: confronte o critério declarado no THINK (`done`)
-   com o resultado final e pergunte ao usuário via `AskUserQuestion`
+   com o resultado final e pergunte ao usuário via {{ASK}}
    "O critério de sucesso da tarefa está satisfeito?"
    - Em modo `--check-only`, assuma satisfeito
 
@@ -332,12 +368,12 @@ depois de "corrigidos" num único ponto.
 
 1. Determine se um defeito foi corrigido. Se o intent gate registrou
    discordância (`intent.all_agree: false`), a resposta já é sim. Caso
-   contrário, pergunte ao usuário com `AskUserQuestion`.
+   contrário, pergunte ao usuário com {{ASK}}.
 2. Se não houve correção de defeito, grave `twins.defect_fixed: false` e siga
    para o ARTIFACT. **Gravar a resposta importa**: é a única evidência de que
    a pergunta foi feita, e sem ela o gate TWINS não consegue distinguir "não
    houve defeito" de "ninguém verificou".
-3. Se houve, pergunte qual padrão buscar (regex) e rode a busca com `Grep`
+3. Se houve, pergunte qual padrão buscar (regex) e rode a busca com {{GREP}}
    no projeto inteiro.
 4. Mostre as ocorrências, pergunte se deseja corrigi-las agora, e registre:
 
@@ -354,7 +390,7 @@ twins:
 
 ### Fase 4.5: ARTIFACT
 
-1. Carregue a skill `kata-artifact` com `Skill`.
+1. Carregue a skill `kata-artifact` com {{SKILL}}.
 2. Verifique se as linhas devidas estão no relatório:
    - **INTENT**: comportamento mudou? Intent gate está registrado?
    - **AUTH**: ação irreversível? Autorização do usuário documentada?
@@ -365,9 +401,9 @@ twins:
 
 ### Fase 5: REPORT
 
-1. Carregue a skill `kata-report` com `Skill`.
+1. Carregue a skill `kata-report` com {{SKILL}}.
 2. O relatório é gerado automaticamente ao final do ciclo completo.
-3. Para regenerar: `python -m kata --task <name> --report` via `Bash` (ou `py -m kata` no Windows).
+3. Para regenerar: `python -m kata --task <name> --report` via {{BASH}} (ou `py -m kata` no Windows).
 4. Verifique se o relatório contém:
    - **Outcome first**: primeira linha = resultado
    - **O que foi feito**: problema e arquivos alterados
@@ -382,9 +418,9 @@ twins:
 
 ### Fase 6: JUDGE (opcional — adversarial verification)
 
-1. Carregue a skill `kata-judge` com `Skill`.
+1. Carregue a skill `kata-judge` com {{SKILL}}.
 2. Verifique se `status` é `approved` (julgar só tarefas concluídas).
-3. Execute o judge: `python -m kata --task <name> --judge` via `Bash` (ou `py -m kata` no Windows).
+3. Execute o judge: `python -m kata --task <name> --judge` via {{BASH}} (ou `py -m kata` no Windows).
 4. Interprete o veredito:
    - **VERIFIED** → nenhuma fraude, e o juiz teve como procurar
    - **VERIFIED WITH CAVEATS** → fraudes leves/médias; ressalvas documentadas
@@ -425,7 +461,7 @@ verificações corretas. Detecte automaticamente:
 | `app/` + `services/` | `app/ services/ tests/` | `tests/unit/` | `--cov=app` |
 | `app/` | `app/ tests/` | `tests/` | `--cov=app` |
 
-Se houver `pyproject.toml` ou `setup.cfg`, leia-o (`Read`) para identificar:
+Se houver `pyproject.toml` ou `setup.cfg`, leia-o ({{READ}}) para identificar:
 - `[tool.ruff]` → caminhos padrão
 - `[tool.pytest]` → testpaths
 - `[tool.coverage.run]` → source
@@ -433,7 +469,7 @@ Se houver `pyproject.toml` ou `setup.cfg`, leia-o (`Read`) para identificar:
 ## Persistência
 
 Após **cada fase**, escreva/atualize `.kata/<task>.yaml` com os resultados
-(via `Write`/`Edit`). Isso permite retomar uma tarefa interrompida.
+(via {{WRITE}}/{{EDIT}}). Isso permite retomar uma tarefa interrompida.
 
 Use o formato YAML (se PyYAML disponível) ou JSON como fallback — o mesmo
 comportamento do CLI `kata`.
@@ -450,7 +486,7 @@ podem ser respondidas; se puder perguntar, pergunte normalmente.
 ## Comportamento Importante
 
 - **Propose, don't interrogate**: se o usuário não sabe uma resposta, proponha baseando-se no contexto do código
-- **Investigue unknowns**: se o usuário declara um unknown sobre o código, investigue com `Grep`/`Read` antes de perguntar
+- **Investigue unknowns**: se o usuário declara um unknown sobre o código, investigue com {{GREP}}/{{READ}} antes de perguntar
 - **Seja específico**: rejeite respostas vagas em THINK — peça especificidade
 - **Não pule fases**: cada fase existe por uma razão. Mesmo que pareça redundante, execute-a
 - **Exceção: triviality gate**: se FIT classificar como trivial (1 arquivo, <10 linhas, sem busca), pule THINK/SIMPLIFY/SURGICAL e vá direto a VERIFY + reporte em 2 frases

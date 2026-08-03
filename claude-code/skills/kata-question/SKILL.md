@@ -2,6 +2,7 @@
 name: kata-question
 description: Como perguntar ao usuário e a rota `question` no ciclo Karpathy (kata) para Claude Code. Use quando o kata precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question, AskUserQuestion.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-question.md. Não edite aqui. -->
 
 # Skill: kata-question
 

@@ -1,4 +1,4 @@
-.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code test lint format clean
+.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills test lint format clean
 
 # === Instalação do agente + skills no OpenCode ===
 
@@ -20,16 +20,24 @@ uninstall-claude-code:
 
 reinstall-claude-code: uninstall-claude-code install-claude-code
 
+# === Skills: fonte única em phases/, frontends gerados ===
+
+build-skills:
+	python3 scripts/build_skills.py
+
+check-skills:
+	python3 scripts/build_skills.py --check
+
 # === Desenvolvimento ===
 
 test:
 	python3 -m pytest tests/ -v --cov=kata --cov-report=term-missing
 
 lint:
-	python3 -m ruff check src/ tests/ eval/
+	python3 -m ruff check src/ tests/ eval/ scripts/
 
 format:
-	ruff format src/ tests/ eval/
+	ruff format src/ tests/ eval/ scripts/
 
 clean:
 	rm -rf build/ dist/ *.egg-info src/*.egg-info

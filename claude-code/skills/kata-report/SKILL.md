@@ -2,6 +2,7 @@
 name: kata-report
 description: Fase REPORT do ciclo Karpathy (kata). Gera relatório outcome-first com INTENT/AUTH/PENDING/TWINS lines, caveats honestos, e sem scaffolding do ciclo. Triggers: REPORT, outcome-first, relatório, fable-method step 6, resultado final, INTENT line, AUTH line, PENDING line, TWINS line.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-report.md. Não edite aqui. -->
 
 # Skill: kata-report
 

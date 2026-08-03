@@ -1,8 +1,7 @@
 ---
 name: kata-intent
-description: Fase INTENT do ciclo Karpathy (kata). Use quando o agente @kata estiver na fase 2.5 — verificar intenção entre código, teste e especificação antes de mudar comportamento. Triggers: INTENT, intent gate, intenção, código vs teste, spec, conflito, fable-method.
+description: Fase INTENT do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 2.5 — verificar intenção entre código, teste e especificação antes de mudar comportamento. Triggers: INTENT, intent gate, intenção, código vs teste, spec, conflito, fable-method.
 ---
-<!-- Gerado por scripts/build_skills.py a partir de phases/kata-intent.md. Não edite aqui. -->
 
 # Skill: kata-intent
 
@@ -18,9 +17,9 @@ antes de editar — nunca faça o código concordar com o teste silenciosamente.
 
 ## Ferramentas
 
-- **`read`**: abra o código, o teste e a spec/README/docstring.
-- **`question`** (via `kata-question`): pergunte ao usuário em caso de conflito.
-- **`write` / `edit`**: registre o intent gate em `.kata/<task>.yaml`.
+- **{{READ}}**: abra o código, o teste e a spec/README/docstring.
+- **{{ASK}}** (via `kata-question`): pergunte ao usuário em caso de conflito.
+- **{{WRITE}} / {{EDIT}}**: registre o intent gate em `.kata/<task>.yaml`.
 
 ## Procedimento
 
@@ -55,7 +54,13 @@ Se `code_does`, `check_expects` e `spec_says` não concordam:
 1. **NÃO edite ainda.** O conflito é a descoberta mais importante.
 2. Determine a ordem de autoridade:
    - Declaração explícita do usuário > spec/README > teste > código atual
+<!--only:opencode-->
 3. Pergunte ao usuário ou resolva pela ordem de autoridade.
+<!--/only-->
+<!--only:claude-code-->
+3. Pergunte ao usuário (via {{ASK}}, com as opções sendo as
+   fontes possíveis a seguir) ou resolva pela ordem de autoridade.
+<!--/only-->
 4. Registre a resolução no YAML.
 
 ### 4. Referência: ordem de autoridade

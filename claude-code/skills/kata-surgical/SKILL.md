@@ -2,6 +2,7 @@
 name: kata-surgical
 description: Fase SURGICAL do ciclo Karpathy (kata). Use quando o kata estiver na fase 3 — validar arquivo por arquivo que cada mudança rastreia direto ao pedido, sem efeitos colaterais. Triggers: SURGICAL, cada linha, arquivo, import, diff, rastrear, efeito colateral.
 ---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-surgical.md. Não edite aqui. -->
 
 # Skill: kata-surgical
 

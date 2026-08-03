@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from kata.config import DEFAULT_COVERAGE_PATTERN, VerifyConfig
+
 
 @dataclass
 class VerifyResult:
@@ -189,6 +191,62 @@ def run_coverage(
     )
 
 
+def run_command(cmd: list[str], cwd: Path | None = None) -> VerifyResult:
+    """Executa um comando de verificação declarado pelo projeto alvo.
+
+    Aprova pelo returncode, que é o único contrato que toda ferramenta de
+    lint e de teste respeita — de `ruff` a `go vet`, de `pytest` a `cargo
+    test`. Comando inexistente vira falha com a mensagem do SO, e não
+    exceção: no VERIFY isso tem de aparecer como verificação reprovada,
+    para o ciclo poder reportá-lo; estourar aqui derrubaria a fase inteira.
+    """
+    try:
+        result = _run(cmd, cwd=cwd)
+    except OSError as exc:
+        return VerifyResult(
+            ok=False,
+            output=f"não foi possível executar {' '.join(cmd)}: {exc}",
+            details={"command": " ".join(cmd)},
+        )
+    return VerifyResult(
+        ok=result.returncode == 0,
+        output=result.stdout + result.stderr,
+        details={"command": " ".join(cmd)},
+    )
+
+
+def run_command_coverage(
+    cmd: list[str],
+    pattern: str = DEFAULT_COVERAGE_PATTERN,
+    gate: float = 70.0,
+    cwd: Path | None = None,
+) -> VerifyResult:
+    """Coverage por comando declarado, com o gate conferido aqui.
+
+    Difere de `run_coverage` num ponto que importa: lá o gate é delegado ao
+    `--cov-fail-under` do pytest-cov, que não existe fora do Python. Aqui o
+    percentual é extraído por `pattern` e comparado explicitamente — se o
+    padrão não casar, o resultado é reprovado em vez de virar 0.0% aprovado,
+    porque "não consegui medir" não é "mediu e passou".
+    """
+    result = run_command(cmd, cwd=cwd)
+    match = re.search(pattern, result.output, re.MULTILINE)
+    if match is None:
+        return VerifyResult(
+            ok=False,
+            output=result.output
+            + f"\n(kata: nenhum percentual casou com o padrão {pattern!r})",
+            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+        )
+
+    cov_pct = float(match.group(1))
+    return VerifyResult(
+        ok=result.ok and cov_pct >= gate,
+        output=result.output,
+        details={"coverage_pct": cov_pct, "gate": gate, "command": " ".join(cmd)},
+    )
+
+
 @dataclass
 class SearchMatch:
     """A single match found by pattern search."""
@@ -269,10 +327,17 @@ def run_all(
     cov_source: str = "src",
     gate: float = 70.0,
     cwd: Path | None = None,
+    config: VerifyConfig | None = None,
 ) -> dict[str, VerifyResult]:
-    """Executa todas as verificações: ruff → pytest → coverage.
+    """Executa todas as verificações: lint → test → coverage.
 
-    Otimização: coverage só roda se pytest passar (short-circuit).
+    Otimização: coverage só roda se o teste passar (short-circuit).
+
+    `config` traz os comandos que o projeto alvo declarou em
+    `.kata/config.yaml`. Cada papel declarado é executado verbatim; cada
+    papel omitido cai no default Python (ruff/pytest/pytest-cov) e continua
+    obedecendo aos parâmetros de caminho. Sem config, o comportamento é
+    idêntico ao de antes.
 
     `cov_source` default é "src" — este módulo é genérico e não deve supor
     o nome do pacote de nenhum projeto, inclusive o próprio kata. Quem
@@ -280,21 +345,40 @@ def run_all(
 
     Returns:
         Dicionário com chaves "ruff", "pytest", "coverage" e seus resultados.
+        As chaves são os papéis (lint, teste, coverage) e permanecem com o
+        nome histórico porque são o mesmo vocabulário que o schema da tarefa
+        persiste (`ruff_clean`, `tests_pass`, `coverage_pass`) e que o JUDGE
+        confronta.
     """
+    cfg = config or VerifyConfig()
     results: dict[str, VerifyResult] = {}
 
-    results["ruff"] = run_ruff(paths=ruff_paths, cwd=cwd)
+    if cfg.lint is not None:
+        results["ruff"] = run_command(cfg.lint, cwd=cwd)
+    else:
+        results["ruff"] = run_ruff(paths=ruff_paths, cwd=cwd)
 
-    results["pytest"] = run_pytest(testpaths=test_paths, ignore=ignore, cwd=cwd)
+    if cfg.test is not None:
+        results["pytest"] = run_command(cfg.test, cwd=cwd)
+    else:
+        results["pytest"] = run_pytest(testpaths=test_paths, ignore=ignore, cwd=cwd)
 
     if results["pytest"].ok:
-        results["coverage"] = run_coverage(
-            source=cov_source,
-            testpaths=test_paths,
-            ignore=ignore,
-            gate=gate,
-            cwd=cwd,
-        )
+        if cfg.coverage is not None:
+            results["coverage"] = run_command_coverage(
+                cfg.coverage,
+                pattern=cfg.coverage_pattern,
+                gate=gate,
+                cwd=cwd,
+            )
+        else:
+            results["coverage"] = run_coverage(
+                source=cov_source,
+                testpaths=test_paths,
+                ignore=ignore,
+                gate=gate,
+                cwd=cwd,
+            )
     else:
         results["coverage"] = VerifyResult(
             ok=False,

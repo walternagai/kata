@@ -10,7 +10,10 @@ import pytest
 from kata.judge import (
     JudgeFraud,
     JudgeResult,
+    LanguageProbes,
     _changed_files,
+    _empty_test_bodies,
+    _is_test_file,
     _oversized_untracked,
     _run_git_diff,
     _unreadable_test_files,
@@ -25,6 +28,7 @@ from kata.judge import (
     hunt_weakened_checks,
     is_debris_file,
     judge_task,
+    probes_for,
 )
 from kata.verify import VerifyResult, is_inspectable
 
@@ -685,6 +689,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
             cov_source="app",
             gate=80.0,
             cwd=None,
+            config=None,
         )
 
 
@@ -1082,19 +1087,43 @@ class TestUnreadableTestFiles:
     @pytest.mark.parametrize(
         "path",
         [
-            "src/calculadora.test.js",
-            "internal/soma_test.go",
-            "spec/models/user_spec.rb",
-            "app/Widget.spec.ts",
-            "test_legado.rb",
+            "src/Calculadora.test.php",
+            "Tests/soma_test.swift",
+            "test/calculo_test.exs",
+            "spec/widget_spec.dart",
         ],
     )
-    def test_teste_de_outra_linguagem_e_ilegivel(self, path: str) -> None:
+    def test_linguagem_sem_sondas_e_ilegivel(self, path: str) -> None:
+        """Linguagem fora de _LANGUAGES continua sendo confessada."""
         assert _unreadable_test_files([path]) == [path]
 
     @pytest.mark.parametrize(
         "path",
-        ["tests/test_calculadora.py", "src/soma_test.py", "kata/verify.py"],
+        [
+            "src/calculadora.test.js",
+            "app/Widget.spec.ts",
+            "internal/soma_test.go",
+            "spec/models/user_spec.rb",
+            "src/calculo_test.rs",
+            "src/CalculoTest.java",
+        ],
+    )
+    def test_linguagem_com_sondas_deixa_de_ser_ponto_cego(self, path: str) -> None:
+        """A confissão encolhe sozinha conforme _LANGUAGES cresce.
+
+        Estas eram ilegíveis quando os padrões eram só sintaxe Python; passar
+        a conhecê-las é o ponto do item — e a lista de pontos cegos é derivada
+        de _LANGUAGES, não mantida à mão em paralelo.
+        """
+        assert _unreadable_test_files([path]) == []
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "tests/test_calculadora.py",
+            "src/soma_test.py",
+            "kata/verify.py",
+        ],
     )
     def test_python_e_codigo_comum_nao_entram(self, path: str) -> None:
         assert _unreadable_test_files([path]) == []
@@ -1130,10 +1159,10 @@ class TestBlindSpots:
         self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
-        """Repositório poliglota: os checks Python rodam e passam, e mesmo
-        assim há um teste .js no diff que hunt_weakened_checks não lê."""
+        """Repositório poliglota: os checks rodam e passam, e mesmo assim há
+        no diff um teste de linguagem que hunt_weakened_checks não lê."""
         mock_diff.return_value = ""
-        mock_files.return_value = ["src/soma.js", "src/soma.test.js"]
+        mock_files.return_value = ["src/soma.php", "src/soma.test.php"]
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=True),
             "pytest": VerifyResult(ok=True),
@@ -1142,8 +1171,8 @@ class TestBlindSpots:
             "verify": {"ruff_clean": True, "tests_pass": True},
             "surgical": {
                 "files": [
-                    {"path": "src/soma.js", "necessary": True},
-                    {"path": "src/soma.test.js", "necessary": True},
+                    {"path": "src/soma.php", "necessary": True},
+                    {"path": "src/soma.test.php", "necessary": True},
                 ]
             },
         }
@@ -1151,7 +1180,7 @@ class TestBlindSpots:
 
         assert result.verdict == "UNVERIFIABLE"
         assert result.re_ran_checks == {"ruff": True, "pytest": True}
-        assert any("src/soma.test.js" in b for b in result.blind_spots)
+        assert any("src/soma.test.php" in b for b in result.blind_spots)
 
     def test_checks_reexecutados_e_tudo_python_sai_verified(
         self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
@@ -1206,3 +1235,188 @@ class TestBlindSpots:
 
         assert result.verdict == "VERIFIED WITH CAVEATS"
         assert result.blind_spots != []
+
+
+def _diff_modificado(path: str, *linhas: str) -> str:
+    """Diff de arquivo modificado (sem `new file mode`)."""
+    cabecalho = f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@"
+    return "\n".join([cabecalho, *linhas])
+
+
+def _diff_novo(path: str, *linhas: str) -> str:
+    """Diff de arquivo novo, como o git o emite."""
+    cabecalho = f"diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}"
+    return "\n".join([cabecalho, *linhas])
+
+
+class TestProbesPorLinguagem:
+    """A tabela _LANGUAGES é o que torna o hunter agnóstico de linguagem."""
+
+    def test_extensao_conhecida_tem_sondas(self) -> None:
+        assert probes_for("src/a.js") is not None
+        assert probes_for("src/a.go") is not None
+        assert probes_for("src/a.py") is not None
+
+    def test_extensao_desconhecida_nao_tem(self) -> None:
+        assert probes_for("src/a.php") is None
+        assert probes_for("src/a") is None
+
+    def test_variantes_de_js_compartilham_as_mesmas_sondas(self) -> None:
+        base = probes_for("a.js")
+        for ext in (".jsx", ".mjs", ".cjs", ".ts", ".tsx"):
+            assert probes_for(f"a{ext}") is base
+
+
+class TestHuntWeakenedChecksPoliglota:
+    """O mesmo hunter, agora aplicando a sintaxe certa a cada linguagem."""
+
+    def test_js_expect_removido(self) -> None:
+        diff = _diff_modificado(
+            "src/soma.test.js",
+            "-  expect(soma(1, 2)).toBe(3);",
+            "+  // nada",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("expect() removida" in f.description for f in frauds)
+        assert all(f.severity == "high" for f in frauds)
+
+    def test_js_teste_desativado_com_skip(self) -> None:
+        diff = _diff_modificado("src/soma.test.js", "+  it.skip('soma', () => {")
+        assert any(".skip" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_js_eslint_disable(self) -> None:
+        diff = _diff_modificado("src/soma.test.js", "+  // eslint-disable-next-line")
+        assert any("eslint-disable" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_ts_ignore_suprime_checagem(self) -> None:
+        diff = _diff_modificado("app/widget.spec.ts", "+  // @ts-ignore")
+        assert any("tipo suprimida" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_go_t_error_removido(self) -> None:
+        diff = _diff_modificado(
+            "internal/soma_test.go",
+            '-\t\tt.Errorf("esperava %d", esperado)',
+            "+\t\treturn",
+        )
+        assert any("t.Error" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_go_t_skip_adicionado(self) -> None:
+        diff = _diff_modificado("internal/soma_test.go", '+\tt.Skip("flaky")')
+        assert any("t.Skip" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_ruby_xit(self) -> None:
+        diff = _diff_modificado("spec/soma_spec.rb", "+  xit 'soma' do")
+        assert any("xit" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_rust_ignore(self) -> None:
+        diff = _diff_modificado("src/soma_test.rs", "+    #[ignore]")
+        assert any("#[ignore]" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_java_disabled(self) -> None:
+        diff = _diff_modificado("src/SomaTest.java", "+    @Disabled")
+        assert any("@Disabled" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_linguagem_sem_sondas_nao_gera_fraude(self) -> None:
+        """Silêncio aqui é declarado como ponto cego em judge_task, e não
+        confundido com ausência de fraude."""
+        diff = _diff_modificado("src/soma.test.php", "-  $this->assertEquals(3, $r);")
+        assert hunt_weakened_checks(diff) == []
+
+    def test_padroes_de_python_nao_vazam_para_outra_linguagem(self) -> None:
+        """`pass` é corpo esvaziado em Python e identificador comum alhures.
+
+        Enquanto os padrões eram uma constante só, aplicada a todo arquivo,
+        esta linha viraria fraude de alta severidade num teste Go.
+        """
+        diff = _diff_modificado("internal/soma_test.go", "+\tpass := true")
+        assert hunt_weakened_checks(diff) == []
+
+
+class TestCorpoVazioPorLinguagem:
+    """Teste novo que não faz nada, em arquivo novo, onde tudo é linha '+'."""
+
+    def test_python_corpo_pass(self) -> None:
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            "+    pass",
+        )
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_js_corpo_vazio_multilinha(self) -> None:
+        diff = _diff_novo(
+            "src/soma.test.js",
+            "+it('soma', () => {",
+            "+});",
+        )
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_js_corpo_vazio_na_mesma_linha(self) -> None:
+        diff = _diff_novo("src/soma.test.js", "+it('soma', () => {});")
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_go_corpo_vazio(self) -> None:
+        diff = _diff_novo(
+            "internal/soma_test.go",
+            "+func TestSoma(t *testing.T) {",
+            "+}",
+        )
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_js_com_corpo_de_verdade_nao_acusa(self) -> None:
+        diff = _diff_novo(
+            "src/soma.test.js",
+            "+it('soma', () => {",
+            "+  expect(soma(1, 2)).toBe(3);",
+            "+});",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_comentario_entre_declaracao_e_corpo_e_pulado(self) -> None:
+        """A sintaxe de comentário muda por linguagem — em JS é `//`, e com o
+        `#` de Python a linha não seria pulada e o teste vazio escaparia."""
+        diff = _diff_novo(
+            "src/soma.test.js",
+            "+it('soma', () => {",
+            "+  // TODO: escrever",
+            "+});",
+        )
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+
+class TestIsTestFilePoliglota:
+    """Sem reconhecer o arquivo como teste, dar sondas ao juiz não bastaria."""
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "tests/test_a.py",
+            "test/a_test.go",
+            "spec/a_spec.rb",
+            "src/__tests__/a.js",
+            "src/a.test.js",
+            "app/widget.spec.ts",
+            "pkg/internal/tests/helper.py",
+        ],
+    )
+    def test_reconhece(self, path: str) -> None:
+        assert _is_test_file(path) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        ["src/main.py", "templates/base.html", "src/latest.js", "src/contest.go"],
+    )
+    def test_nao_confunde(self, path: str) -> None:
+        assert _is_test_file(path) is False
+
+
+class TestEmptyTestBodiesSemSondas:
+    """Linguagem com `weakened` mas sem sondas de corpo vazio não é varrida.
+
+    O silêncio é estreito e deliberado: os padrões de modificação daquela
+    linguagem continuam valendo, e só a varredura de arquivo novo é pulada.
+    """
+
+    def test_sem_declaracao_nao_varre(self) -> None:
+        probes = LanguageProbes(weakened=((r"^-.*assert", "x"),))
+        assert _empty_test_bodies(["+func TestA() {", "+}"], probes) == []

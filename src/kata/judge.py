@@ -21,23 +21,145 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from kata.config import VerifyConfig
 from kata.verify import VerifyResult, _run, is_inspectable, run_all, untracked_files
 
-# ── regex patterns ────────────────────────────────────────────────────────
+# ── sondas por linguagem ──────────────────────────────────────────────────
 
-_WEAKENED_PATTERNS: list[tuple[str, str]] = [
-    (r"^-.*assert\s+True\b", "assert True (sempre passa se True for literal)"),
-    (r"^-.*assert\s+False\b", "assert False (sempre falha ou foi removido)"),
-    (r"^\+#\s+.*(?:assert|def test|expect|self\.)", "teste virado em comentário"),
-    (r"^\+\s*pass\s*$", "corpo de teste substituído por pass"),
-    (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
-]
 
-# Extensões cujos testes _WEAKENED_PATTERNS sabe ler. Os padrões acima são
-# sintaxe Python (`assert`, `pass`, o supressor de lint): num teste .js/.go/.rs
-# eles não casam nunca. Sem esta lista, "nenhuma fraude encontrada" viraria uma
-# afirmação sobre código que o hunter jamais conseguiu ler.
-_WEAKENED_PATTERN_EXTS = frozenset({".py"})
+@dataclass(frozen=True)
+class LanguageProbes:
+    """O que o juiz sabe procurar num teste de uma dada linguagem.
+
+    Enquanto os padrões viveram numa constante só, eles eram sintaxe Python
+    (`assert`, `pass`, o supressor de lint) aplicada a qualquer arquivo: num
+    teste .js ou .go não casavam nunca, e "nenhuma fraude encontrada" era uma
+    afirmação sobre código que o hunter jamais tinha conseguido ler.
+
+    Attributes:
+        weakened: (padrão, descrição) para linhas de arquivo *modificado* —
+            enfraquecer pressupõe algo que existia antes.
+        test_declaration: início de uma função/bloco de teste, para achar
+            teste vazio em arquivo *novo*, onde toda linha é '+'.
+        empty_body: corpo vazio, casado na primeira linha significativa
+            depois da declaração.
+        empty_inline: corpo vazio na própria linha da declaração
+            (`it('x', () => {})`), que a varredura linha-a-linha não pega.
+        skippable: linha sem significado (vazia ou comentário) entre a
+            declaração e o corpo. A sintaxe de comentário muda por linguagem.
+    """
+
+    weakened: tuple[tuple[str, str], ...]
+    test_declaration: re.Pattern[str] | None = None
+    empty_body: re.Pattern[str] | None = None
+    empty_inline: re.Pattern[str] | None = None
+    skippable: re.Pattern[str] = re.compile(r"^\+\s*$")
+
+
+_PY_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*assert\s+True\b", "assert True (sempre passa se True for literal)"),
+        (r"^-.*assert\s+False\b", "assert False (sempre falha ou foi removido)"),
+        (r"^\+#\s+.*(?:assert|def test|expect|self\.)", "teste virado em comentário"),
+        (r"^\+\s*pass\s*$", "corpo de teste substituído por pass"),
+        (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
+    ),
+    test_declaration=re.compile(r"^\+\s*(?:async\s+)?def\s+test\w*\s*\("),
+    empty_body=re.compile(r"^\+\s*pass\s*$"),
+    skippable=re.compile(r"^\+\s*(?:#.*)?$"),
+)
+
+_JS_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\bexpect\s*\(", "asserção expect() removida"),
+        (r"^-.*\bassert\b", "asserção assert removida"),
+        (r"^\+.*\b(?:it|test|describe)\.skip\b", "teste desativado com .skip"),
+        (r"^\+.*\bx(?:it|test|describe)\s*\(", "teste desativado (xit/xdescribe)"),
+        (r"^\+\s*//.*(?:expect|assert|it\(|test\()", "teste virado em comentário"),
+        (r"^\+.*eslint-disable", "eslint-disable adicionado — pode esconder erro de lint"),
+        (r"^\+.*@ts-(?:ignore|nocheck)", "checagem de tipo suprimida"),
+    ),
+    test_declaration=re.compile(r"^\+\s*(?:it|test)\s*\("),
+    empty_body=re.compile(r"^\+\s*\}\s*\)"),
+    empty_inline=re.compile(r"\{\s*\}"),
+    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+)
+
+_GO_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\bt\.(?:Error|Fatal|Errorf|Fatalf)\b", "verificação t.Error/t.Fatal removida"),
+        (r"^\+.*\bt\.Skip\b", "teste pulado com t.Skip"),
+        (r"^\+\s*//.*(?:t\.Error|t\.Fatal|func Test)", "teste virado em comentário"),
+        (r"^\+.*//\s*nolint", "nolint adicionado — pode esconder erro de lint"),
+    ),
+    test_declaration=re.compile(r"^\+\s*func\s+Test\w*\s*\("),
+    empty_body=re.compile(r"^\+\s*\}\s*$"),
+    empty_inline=re.compile(r"\{\s*\}"),
+    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+)
+
+_RB_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\b(?:expect|assert\w*)\s*[\s(]", "asserção removida"),
+        (r"^\+.*\b(?:xit|skip)\b", "teste desativado (xit/skip)"),
+        (r"^\+\s*#.*(?:expect|assert|it |def test)", "teste virado em comentário"),
+        (r"^\+.*rubocop:disable", "rubocop:disable adicionado"),
+    ),
+    test_declaration=re.compile(r"^\+\s*(?:it\s|specify\s|def\s+test_)"),
+    empty_body=re.compile(r"^\+\s*end\s*$"),
+    skippable=re.compile(r"^\+\s*(?:#.*)?$"),
+)
+
+_RS_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\bassert(?:_eq|_ne)?!", "asserção assert! removida"),
+        (r"^\+.*#\[ignore\]", "teste desativado com #[ignore]"),
+        (r"^\+\s*//.*assert", "asserção virada em comentário"),
+        (r"^\+.*#\[allow\(", "lint suprimido com #[allow(...)]"),
+    ),
+    test_declaration=re.compile(r"^\+\s*(?:async\s+)?fn\s+\w*test\w*\s*\("),
+    empty_body=re.compile(r"^\+\s*\}\s*$"),
+    empty_inline=re.compile(r"\{\s*\}"),
+    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+)
+
+_JAVA_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\bassert\w*\s*\(", "asserção removida"),
+        (r"^\+.*@(?:Disabled|Ignore)\b", "teste desativado com @Disabled/@Ignore"),
+        (r"^\+\s*//.*(?:assert|@Test)", "teste virado em comentário"),
+        (r"^\+.*@SuppressWarnings", "@SuppressWarnings adicionado"),
+    ),
+    test_declaration=re.compile(r"^\+\s*(?:public\s+)?void\s+\w*[Tt]est\w*\s*\("),
+    empty_body=re.compile(r"^\+\s*\}\s*$"),
+    empty_inline=re.compile(r"\{\s*\}"),
+    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+)
+
+# Extensão → o que o juiz sabe procurar ali. Uma extensão ausente daqui é um
+# ponto cego declarado, não um silêncio: ver `_unreadable_test_files`.
+_LANGUAGES: dict[str, LanguageProbes] = {
+    ".py": _PY_PROBES,
+    ".js": _JS_PROBES,
+    ".jsx": _JS_PROBES,
+    ".mjs": _JS_PROBES,
+    ".cjs": _JS_PROBES,
+    ".ts": _JS_PROBES,
+    ".tsx": _JS_PROBES,
+    ".go": _GO_PROBES,
+    ".rb": _RB_PROBES,
+    ".rs": _RS_PROBES,
+    ".java": _JAVA_PROBES,
+    ".kt": _JAVA_PROBES,
+}
+
+
+def probes_for(filepath: str) -> LanguageProbes | None:
+    """Sondas da linguagem do arquivo, ou None se o juiz não a conhece."""
+    return _LANGUAGES.get(Path(filepath).suffix.lower())
+
+
+# ── outros padrões ────────────────────────────────────────────────────────
 
 _DEBRIS_FILE_PATTERNS = [
     r"\.tmp$",
@@ -53,7 +175,7 @@ _DEBRIS_FILE_PATTERNS = [
 _DEBRIS_LINE_PATTERNS: list[tuple[str, str]] = [
     (r"^\+.*print\(.*debug", "debug print statement"),
     (r"^\+.*console\.log\(.*debug", "debug console.log"),
-    (r"^\+.*#\s*TODO\b", "TODO deixado no código"),
+    (r"^\+.*(?:#|//)\s*TODO\b", "TODO deixado no código"),
 ]
 
 
@@ -225,24 +347,49 @@ def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> l
 # ── fraud hunters ─────────────────────────────────────────────────────────
 
 
-def _is_test_file(filepath: str) -> bool:
-    return filepath.startswith("tests/") or "/test_" in filepath or "_test." in filepath
-
-
 # Convenções de nome de teste em várias linguagens: test_x.py, x_test.go,
 # x.test.js, x.spec.ts, x_spec.rb. Casa no basename e exige separador antes
 # do token, senão "latest.py", "contest.py" e "attempt_parser.py" entram.
 _TEST_BASENAME = re.compile(r"^(?:test|spec)[_.\-]|[_.\-](?:test|spec)s?\.", re.IGNORECASE)
 
+# Java/Kotlin/C# não usam separador: `SomaTest.java`, `WidgetSpec.kt`. Esta
+# regra é deliberadamente sensível a maiúsculas e exige minúscula antes do
+# token — sem isso, "latest.js" e "contest.go" voltariam como falso positivo,
+# que é exatamente o que a regra acima já teve de evitar.
+_TEST_BASENAME_CAMEL = re.compile(r"[a-z](?:Test|Spec)s?\.")
+
+
+def _looks_like_test_name(basename: str) -> bool:
+    """O nome do arquivo, sozinho, anuncia que ele é um teste."""
+    return bool(_TEST_BASENAME.search(basename) or _TEST_BASENAME_CAMEL.search(basename))
+
+
+def _is_test_file(filepath: str) -> bool:
+    """Parece teste, por diretório ou por convenção de nome.
+
+    Governa o que hunt_weakened_checks olha. Enquanto reconhecia só
+    `tests/`, `/test_` e `_test.`, um `src/soma.test.js` não era sequer
+    considerado teste — de modo que dar padrões .js ao juiz não bastaria:
+    ele nunca chegaria a aplicá-los.
+    """
+    if filepath.startswith(("tests/", "test/", "spec/")) or "__tests__/" in filepath:
+        return True
+    if "/tests/" in filepath or "/test/" in filepath or "/spec/" in filepath:
+        return True
+    return _looks_like_test_name(filepath.rsplit("/", 1)[-1])
+
 
 def _unreadable_test_files(changed: list[str]) -> list[str]:
-    """Testes que _WEAKENED_PATTERNS não tem como ler, por serem de outra linguagem.
+    """Testes cuja linguagem o juiz não sabe ler.
 
     Existe para o juiz confessar, não para acusar: num repositório poliglota
-    o ruff e o pytest podem passar e ser re-executados — desarmando o outro
-    ponto cego — enquanto um teste .js do mesmo diff foi esvaziado sem que
-    hunt_weakened_checks pudesse enxergar. "Nenhuma fraude" ali é ausência
-    de leitura, não ausência de fraude.
+    as verificações podem passar e ser re-executadas — desarmando o outro
+    ponto cego — enquanto um teste de linguagem sem sondas foi esvaziado sem
+    que hunt_weakened_checks pudesse enxergar. "Nenhuma fraude" ali é
+    ausência de leitura, não ausência de fraude.
+
+    A lista encolhe sozinha conforme `_LANGUAGES` cresce: a confissão é
+    derivada do que o juiz sabe, e não mantida à mão em paralelo.
 
     Reconhece teste pela convenção do nome, e não por morar em `tests/`:
     incluir todo arquivo do diretório marcaria `tests/fixtures/dados.json`
@@ -253,8 +400,7 @@ def _unreadable_test_files(changed: list[str]) -> list[str]:
     return [
         f
         for f in changed
-        if _TEST_BASENAME.search(f.rsplit("/", 1)[-1])
-        and Path(f).suffix.lower() not in _WEAKENED_PATTERN_EXTS
+        if _looks_like_test_name(f.rsplit("/", 1)[-1]) and probes_for(f) is None
     ]
 
 
@@ -270,29 +416,35 @@ def is_debris_file(filepath: str) -> bool:
     return any(re.search(pat, filepath, re.IGNORECASE) for pat in _DEBRIS_FILE_PATTERNS)
 
 
-_TEST_DECLARATION = re.compile(r"^\+\s*(?:async\s+)?def\s+test\w*\s*\(")
-_ONLY_PASS = re.compile(r"^\+\s*pass\s*$")
-_SKIPPABLE = re.compile(r"^\+\s*(?:#.*)?$")
+def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[str]:
+    """Funções de teste cujo corpo inteiro é vazio.
 
+    Substitui, para arquivos novos, os padrões `weakened` — que pressupõem
+    modificação ("o corpo virou pass" exige que houvesse corpo). Num arquivo
+    novo o que é de fato suspeito é uma função de teste que não faz nada.
+    Discrimina pelo que importa: `pass` como corpo de um `def test_*` é
+    fraude; `pass` num stub de classe ou num `except ...:` é código honesto
+    e não cai aqui.
 
-def _empty_test_bodies(added_lines: list[str]) -> list[str]:
-    """Funções de teste cujo corpo inteiro é `pass`.
-
-    Substitui, para arquivos novos, os padrões de _WEAKENED_PATTERNS — que
-    pressupõem modificação ("o corpo virou pass" exige que houvesse corpo).
-    Num arquivo novo o que é de fato suspeito é uma função de teste que não
-    faz nada. Discrimina pelo que importa: `pass` como corpo de um `def
-    test_*` é fraude; `pass` num stub de classe ou num `except ...:` é
-    código honesto e não cai aqui.
+    Linguagem sem `test_declaration` ou sem `empty_body` não é varrida — o
+    silêncio aqui é estreito e deliberado, e os padrões `weakened` daquela
+    linguagem continuam valendo para arquivos modificados.
     """
+    if probes.test_declaration is None or probes.empty_body is None:
+        return []
+
     achados: list[str] = []
     for i, line in enumerate(added_lines):
-        if not _TEST_DECLARATION.match(line):
+        if not probes.test_declaration.match(line):
+            continue
+        # Corpo vazio na própria linha da declaração: `it('x', () => {})`.
+        if probes.empty_inline is not None and probes.empty_inline.search(line):
+            achados.append(line.lstrip("+").strip())
             continue
         for seguinte in added_lines[i + 1:]:
-            if _SKIPPABLE.match(seguinte):
+            if probes.skippable.match(seguinte):
                 continue
-            if _ONLY_PASS.match(seguinte):
+            if probes.empty_body.match(seguinte):
                 achados.append(line.lstrip("+").strip())
             break
     return achados
@@ -328,11 +480,16 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
             is_new_file = True
         if not current_file or not _is_test_file(current_file):
             continue
+        probes = probes_for(current_file)
+        if probes is None:
+            # Linguagem sem sondas: não há o que aplicar. O silêncio não fica
+            # implícito — _unreadable_test_files o transforma em ponto cego.
+            continue
         if is_new_file:
             if line.startswith("+"):
                 new_test_bodies.setdefault(current_file, []).append(line)
             continue
-        for pattern, desc in _WEAKENED_PATTERNS:
+        for pattern, desc in probes.weakened:
             if re.match(pattern, line):
                 frauds.append(JudgeFraud(
                     type="weakened_checks",
@@ -349,7 +506,10 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
                 break
 
     for path, added in new_test_bodies.items():
-        for vazio in _empty_test_bodies(added):
+        probes = probes_for(path)
+        if probes is None:  # pragma: no cover - filtrado no laço acima
+            continue
+        for vazio in _empty_test_bodies(added, probes):
             frauds.append(JudgeFraud(
                 type="weakened_checks",
                 severity="high",
@@ -477,6 +637,7 @@ def judge_task(
     ignore: list[str] | None = None,
     cov_source: str = "src",
     gate: float = 70.0,
+    config: VerifyConfig | None = None,
 ) -> JudgeResult:
     """Executa verificação adversarial completa em uma tarefa.
 
@@ -513,6 +674,7 @@ def judge_task(
             cov_source=cov_source,
             gate=gate,
             cwd=cwd,
+            config=config,
         )
         for key in claimed_checks:
             if key in results:

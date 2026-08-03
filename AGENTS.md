@@ -44,8 +44,10 @@ scripts/install-claude-code.sh    instala via symlinks em ~/.claude/
 ```
 
 Os dois frontends compartilham o mesmo backend Python: só a camada de
-orquestração/interação muda. Ruff, pytest, coverage e o judge sempre rodam
-pelo pacote `kata`.
+orquestração/interação muda. Lint, teste, coverage e o judge sempre rodam
+pelo pacote `kata` — e os comandos de cada papel saem de `.kata/config.yaml`
+do projeto alvo, com os defaults Python (ruff/pytest/pytest-cov) valendo
+para o que não for declarado.
 
 Diferente do OpenCode, a versão Claude Code é só skills (sem subagente): o
 ciclo pergunta a cada fase, e isso funciona melhor na conversa principal do

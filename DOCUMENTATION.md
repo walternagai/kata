@@ -11,6 +11,7 @@ disciplined development cycle.
 - [Architecture](#architecture)
 - [Installation](#installation)
 - [CLI](#cli)
+  - [Project configuration](#project-configuration)
 - [Development cycle](#development-cycle)
 - [Task files](#task-files)
 - [Python API](#python-api)
@@ -95,8 +96,9 @@ the following situations:
 ```text
 src/kata/
 ├── cli.py       CLI, task persistence, cycle orchestration, and reports
+├── config.py    `.kata/config.yaml` — the target project's own check commands
 ├── fit.py       Diff measurement and triviality gate
-├── verify.py    Ruff, pytest, coverage, and pattern search
+├── verify.py    Lint, test, coverage, and pattern search
 ├── judge.py     Adversarial verification and fraud detection
 ├── __init__.py  Package version
 └── __main__.py python -m kata entry point
@@ -254,7 +256,11 @@ either one, and `--audit` is mutually exclusive with `--init`, `--plan`,
 | `--test-paths PATH ...` | `tests/` | Paths passed to pytest |
 | `--ignore PATH ...` | none | Paths excluded from pytest |
 | `--cov-source VALUE` | auto-detected | Coverage source passed to pytest-cov: read from `[tool.coverage.run] source` in `pyproject.toml`, falling back to `src` |
-| `--gate PERCENT` | `70` | Minimum coverage percentage |
+| `--gate PERCENT` | `verify.gate`, else `70` | Minimum coverage percentage |
+
+These flags configure the **built-in Python defaults**. A role declared in
+`.kata/config.yaml` is run verbatim, so the path flags for that role no
+longer apply — see [Project configuration](#project-configuration).
 
 Example for a project with a different layout:
 
@@ -265,6 +271,45 @@ kata --check-only \
   --cov-source app \
   --gate 80
 ```
+
+### Project configuration
+
+Kata does not assume the project it verifies is a Python project. Whoever knows
+how to check a repository is the repository, so the commands live in
+`.kata/config.yaml` (or `.kata/config.json` where PyYAML is unavailable), next
+to the task files:
+
+```yaml
+verify:
+  lint: npx eslint src tests
+  test: npx vitest run
+  coverage: npx vitest run --coverage
+  coverage_pattern: 'All files\s+\|\s+([\d.]+)'
+  gate: 80
+```
+
+| Key | Meaning |
+|---|---|
+| `lint` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list |
+| `coverage_pattern` | Regex whose first group is the coverage percentage. Default reads the `TOTAL` line pytest-cov prints |
+| `gate` | Minimum coverage percentage. A `--gate` flag overrides it |
+
+Every key is optional. A role that is not declared falls back to the Python
+default for that role (`ruff` / `pytest` / `pytest-cov`) and keeps obeying the
+path flags, so a project can replace only its linter and keep pytest. With no
+file at all, behaviour is identical to before the option existed.
+
+A declared role is run verbatim and judged by its exit code, the one contract
+every lint and test tool honours. Coverage is the exception: the built-in path
+delegates the gate to `--cov-fail-under`, which does not exist outside Python,
+so a declared coverage command has its percentage extracted with
+`coverage_pattern` and compared here. **If the pattern matches nothing, the
+check fails** rather than recording 0.0% as a pass — "could not measure" is not
+"measured and passed".
+
+A config file that exists but is invalid **aborts with exit code 1**. Falling
+back to ruff silently would report the success of a check the project never
+asked for, which is the class of lie the judge exists to hunt.
 
 ### Exit codes
 
@@ -322,13 +367,17 @@ that removed imports are clean and that the diff has no unrelated scope.
 
 Runs the objective checks in this order:
 
-1. `ruff check`;
-2. pytest;
-3. pytest-cov with `--cov-fail-under`;
+1. lint;
+2. test;
+3. coverage against the gate;
 4. the task's success criterion, confronted with the `done` criterion
    declared in THINK.
 
-Coverage is short-circuited when pytest fails. A task is `approved` only when
+Each of the first three runs the command declared in `.kata/config.yaml` for
+that role, or the Python default (`ruff check`, pytest, pytest-cov with
+`--cov-fail-under`) when the role is not declared.
+
+Coverage is short-circuited when the test step fails. A task is `approved` only when
 all checks and the success criterion pass; otherwise it is `rejected`.
 
 The phase enforces a **hard bound** (Fable Step 5): `verify.attempts` counts
@@ -402,9 +451,11 @@ The judge is opt-in. It re-runs claimed checks and returns:
 A **blind spot** is the judge admitting what it could not observe — not an
 accusation, since not having looked is evidence of neither fraud nor honesty.
 Two are detected: the report claims no check the judge knows how to re-run
-(the case for every non-Python toolchain), and the diff touches a test file
-in a language `hunt_weakened_checks` has no patterns for (`x.test.js`,
-`x_test.go`). With no fraud at all, any blind spot yields `UNVERIFIABLE`
+(declaring the project's commands in `.kata/config.yaml` is what disarms
+this one), and the diff touches a test file in a language the judge has no
+probes for. It knows Python, JS/TS, Go, Ruby, Rust and Java/Kotlin; a
+`.php`, `.swift` or `.exs` test is still confessed rather than passed over
+in silence. With no fraud at all, any blind spot yields `UNVERIFIABLE`
 instead of `VERIFIED`: "I could not look" must never be reported as "all
 clear". With fraud present, the fraud decides the verdict and the blind
 spots are still listed.
@@ -530,8 +581,10 @@ TRIVIAL_MAX_LINES: int
 run_ruff(paths=None, cwd=None) -> VerifyResult
 run_pytest(testpaths=None, ignore=None, cwd=None, extra_args=None) -> VerifyResult
 run_coverage(source="src", testpaths=None, ignore=None, gate=70.0, cwd=None)
+run_command(cmd: list[str], cwd=None) -> VerifyResult
+run_command_coverage(cmd, pattern=DEFAULT_COVERAGE_PATTERN, gate=70.0, cwd=None)
 search_pattern(pattern, paths=None, cwd=None) -> SearchResult
-run_all(ruff_paths=None, test_paths=None, ignore=None, cov_source="src", gate=70.0, cwd=None)
+run_all(ruff_paths=None, test_paths=None, ignore=None, cov_source="src", gate=70.0, cwd=None, config=None)
 
 untracked_files(cwd=None) -> list[str]
 is_inspectable(path: Path) -> bool
@@ -550,6 +603,21 @@ gate call a new 200-line module trivial.
 `VerifyResult` contains `ok`, captured `output`, and a `details` dictionary.
 `SearchResult` contains the searched pattern, `SearchMatch` objects, and the
 number of files containing matches.
+
+### `kata.config`
+
+```python
+load_verify_config(cwd=None) -> VerifyConfig
+config_path(cwd=None) -> Path | None
+VerifyConfig(lint, test, coverage, coverage_pattern, gate)
+ConfigError
+DEFAULT_COVERAGE_PATTERN: str
+DEFAULT_GATE: float
+```
+
+`VerifyConfig.customizado` is true when the project declared at least one role.
+`None` in a role means "not declared", which is what keeps the fallback to the
+Python default distinguishable from an explicit choice.
 
 ### `kata.judge`
 

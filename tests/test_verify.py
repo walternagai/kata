@@ -6,11 +6,14 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from kata.config import VerifyConfig
 from kata.verify import (
     MAX_UNTRACKED_FILE_BYTES,
     VerifyResult,
     is_inspectable,
     run_all,
+    run_command,
+    run_command_coverage,
     run_coverage,
     run_pytest,
     run_ruff,
@@ -498,3 +501,139 @@ class TestUntrackedFiles:
         (tmp_path / "ignorado" / "x.py").write_text("z = 1\n", encoding="utf-8")
 
         assert untracked_files(cwd=tmp_path) == [".gitignore"]
+
+
+class TestRunCommand:
+    """Comando declarado pelo projeto: aprova pelo returncode e nada mais."""
+
+    @patch("kata.verify._run")
+    def test_returncode_zero_aprova(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+        r = run_command(["go", "vet", "./..."])
+        assert r.ok is True
+        assert r.details["command"] == "go vet ./..."
+
+    @patch("kata.verify._run")
+    def test_returncode_nao_zero_reprova(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+        r = run_command(["npx", "eslint", "src"])
+        assert r.ok is False
+        assert "boom" in r.output
+
+    @patch("kata.verify._run", side_effect=FileNotFoundError("no such file: golangci-lint"))
+    def test_comando_inexistente_vira_falha_e_nao_excecao(self, mock_run: MagicMock) -> None:
+        """Estourar aqui derrubaria a fase VERIFY inteira. O ciclo precisa
+        poder reportar 'a verificação não rodou' como reprovação."""
+        r = run_command(["golangci-lint", "run"])
+        assert r.ok is False
+        assert "não foi possível executar" in r.output
+
+
+class TestRunCommandCoverage:
+    """Coverage por comando: o gate é conferido aqui, não delegado ao pytest-cov."""
+
+    @patch("kata.verify._run")
+    def test_percentual_acima_do_gate(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="All files |   87.5 |", stderr=""
+        )
+        r = run_command_coverage(
+            ["npx", "vitest", "run", "--coverage"],
+            pattern=r"All files\s+\|\s+([\d.]+)",
+            gate=70.0,
+        )
+        assert r.ok is True
+        assert r.details["coverage_pct"] == 87.5
+
+    @patch("kata.verify._run")
+    def test_percentual_abaixo_do_gate_reprova(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="All files |   41.0 |", stderr=""
+        )
+        r = run_command_coverage(
+            ["npm", "run", "cov"], pattern=r"All files\s+\|\s+([\d.]+)", gate=70.0
+        )
+        assert r.ok is False
+        assert r.details["coverage_pct"] == 41.0
+
+    @patch("kata.verify._run")
+    def test_comando_falhou_reprova_mesmo_com_percentual_alto(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=1, stdout="All files |   99.0 |", stderr=""
+        )
+        r = run_command_coverage(
+            ["npm", "run", "cov"], pattern=r"All files\s+\|\s+([\d.]+)", gate=70.0
+        )
+        assert r.ok is False
+
+    @patch("kata.verify._run")
+    def test_padrao_que_nao_casa_reprova_em_vez_de_virar_zero_aprovado(
+        self, mock_run: MagicMock
+    ) -> None:
+        """"Não consegui medir" não é "mediu e passou" — a mesma doutrina do
+        UNVERIFIABLE, aplicada ao percentual."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="nada aqui", stderr="")
+        r = run_command_coverage(["npm", "run", "cov"], pattern=r"Cobertura: ([\d.]+)")
+        assert r.ok is False
+        assert r.details["coverage_pct"] == 0.0
+        assert "nenhum percentual casou" in r.output
+
+    @patch("kata.verify._run")
+    def test_padrao_default_le_a_linha_total(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="TOTAL    100    5    95%", stderr=""
+        )
+        r = run_command_coverage(["qualquer", "coisa"], gate=70.0)
+        assert r.ok is True
+        assert r.details["coverage_pct"] == 95.0
+
+
+class TestRunAllComConfig:
+    """Papel declarado é executado verbatim; papel omitido cai no default."""
+
+    @patch("kata.verify._run")
+    def test_config_vazia_mantem_o_comportamento_anterior(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="TOTAL 90%", stderr="")
+        run_all(config=VerifyConfig())
+        comandos = [" ".join(c.args[0]) for c in mock_run.call_args_list]
+        assert any("ruff check" in c for c in comandos)
+        assert any("pytest" in c for c in comandos)
+
+    @patch("kata.verify._run")
+    def test_papeis_declarados_substituem_os_defaults(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="All files |  90.0 |", stderr=""
+        )
+        cfg = VerifyConfig(
+            lint=["npx", "eslint", "src"],
+            test=["npx", "vitest", "run"],
+            coverage=["npx", "vitest", "run", "--coverage"],
+            coverage_pattern=r"All files\s+\|\s+([\d.]+)",
+        )
+        results = run_all(config=cfg)
+
+        comandos = [" ".join(c.args[0]) for c in mock_run.call_args_list]
+        assert comandos == [
+            "npx eslint src",
+            "npx vitest run",
+            "npx vitest run --coverage",
+        ]
+        assert all(r.ok for r in results.values())
+        assert results["coverage"].details["coverage_pct"] == 90.0
+
+    @patch("kata.verify._run")
+    def test_papel_parcial_mistura_declarado_e_default(self, mock_run: MagicMock) -> None:
+        """Um projeto Python que só troca o lint continua usando pytest."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="TOTAL 90%", stderr="")
+        run_all(config=VerifyConfig(lint=["flake8", "src"]))
+        comandos = [" ".join(c.args[0]) for c in mock_run.call_args_list]
+        assert comandos[0] == "flake8 src"
+        assert "pytest" in comandos[1]
+
+    @patch("kata.verify._run")
+    def test_teste_declarado_que_falha_pula_o_coverage(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=1, stdout="falhou", stderr="")
+        results = run_all(config=VerifyConfig(test=["npx", "vitest", "run"]))
+        assert results["pytest"].ok is False
+        assert results["coverage"].ok is False
+        assert "skipped" in results["coverage"].output

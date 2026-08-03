@@ -149,7 +149,33 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--test-paths` | `tests/` | Caminhos para pytest |
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
 | `--cov-source` | auto-detectado | Pacote fonte para coverage: lê `[tool.coverage.run] source` do `pyproject.toml`, com fallback `src` |
-| `--gate` | `70` | Gate mínimo de coverage (%) |
+| `--gate` | `verify.gate`, senão `70` | Gate mínimo de coverage (%) |
+
+Essas flags configuram os **defaults Python**. Um papel declarado em
+`.kata/config.yaml` roda verbatim, e as flags de caminho daquele papel
+deixam de valer.
+
+## Projetos que não são Python
+
+Quem sabe verificar um projeto é o projeto. Declare os comandos em
+`.kata/config.yaml`, ao lado dos arquivos de tarefa:
+
+```yaml
+verify:
+  lint: npx eslint src tests
+  test: npx vitest run
+  coverage: npx vitest run --coverage
+  coverage_pattern: 'All files\\s+\\|\\s+([\\d.]+)'
+  gate: 80
+```
+
+Cada papel aceita string ou lista, e todo papel é opcional: o que for
+omitido cai no default Python (ruff/pytest/pytest-cov), então dá para
+trocar só o linter e manter o pytest. Sem o arquivo, nada muda.
+
+O JUDGE segue a mesma linha: ele conhece a sintaxe de teste de Python,
+JS/TS, Go, Ruby, Rust e Java/Kotlin. Linguagem fora dessa lista vira
+ponto cego declarado, não silêncio.
 
 ## Fases do Ciclo
 
@@ -179,8 +205,10 @@ Validar arquivo-por-arquivo que cada mudança rastreia direto ao pedido,
 sem efeitos colaterais.
 
 ### 4. VERIFY
-Rodar ruff + pytest + coverage (gate >= 70%) usando `--cov-fail-under` e
-confrontar o critério `done` declarado no THINK com o resultado final.
+Rodar lint + teste + coverage (gate >= 70%) e confrontar o critério `done`
+declarado no THINK com o resultado final. Os comandos vêm de
+`.kata/config.yaml` quando o projeto os declara; senão, são os defaults
+Python (ruff, pytest, pytest-cov com `--cov-fail-under`).
 **Hard bound** (Fable Step 5): após 3 tentativas falhas, a tarefa é devolvida
 ao usuário (`hand back`) com o que foi tentado, o output real e a hipótese
 atual — em vez de repetir o fix-verify indefinidamente.
@@ -260,7 +288,8 @@ kata/
 ├── src/kata/
 │   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
-│   ├── verify.py               ← Lógica de verificação (ruff/pytest/coverage)
+│   ├── config.py               ← .kata/config.yaml (comandos do projeto alvo)
+│   ├── verify.py               ← Lógica de verificação (lint/teste/coverage)
 │   ├── judge.py                ← Lógica adversarial (caça fraudes)
 │   ├── __init__.py             ← Versão do pacote
 │   └── __main__.py             ← Entry point para `python -m kata`

@@ -29,6 +29,13 @@ from pathlib import Path
 from typing import Any
 
 from kata import __version__
+from kata.config import (
+    DEFAULT_GATE,
+    ConfigError,
+    VerifyConfig,
+    config_path,
+    load_verify_config,
+)
 from kata.fit import diff_stats, is_trivial, untracked_stats
 from kata.judge import JudgeResult, is_debris_file, judge_task
 from kata.verify import VerifyResult, run_all, search_pattern, untracked_files
@@ -259,6 +266,13 @@ def _print_header(text: str) -> None:
     print()
 
 
+# As chaves de verificação são papéis, mas carregam nome de ferramenta Python
+# por serem o mesmo vocabulário que o schema da tarefa persiste (`ruff_clean`,
+# `tests_pass`). Renomear o schema é migração à parte; exibir o papel não é, e
+# "✅ ruff" num projeto JS é ruído que confunde quem lê o veredito.
+_ROLE_LABELS = {"ruff": "lint", "pytest": "teste", "coverage": "coverage"}
+
+
 def _print_judge_verdict(result: JudgeResult) -> None:
     """Imprime o veredito do juiz adversarial."""
     verdict_icon = {
@@ -309,7 +323,7 @@ def _print_judge_verdict(result: JudgeResult) -> None:
         print("  Re-execução:")
         for check, ok in result.re_ran_checks.items():
             status = "✅" if ok else "❌"
-            print(f"    {status} {check}")
+            print(f"    {status} {_ROLE_LABELS.get(check, check)}")
         print()
 
     print("─" * 58)
@@ -615,8 +629,9 @@ def _step_verify(
     ignore: list[str] | None = None,
     cov_source: str = "src",
     gate: float = 70.0,
+    config: VerifyConfig | None = None,
 ) -> dict[str, Any]:
-    """Fase 4: GOAL-DRIVEN — verificação de qualidade (ruff + pytest + coverage)."""
+    """Fase 4: GOAL-DRIVEN — verificação de qualidade (lint + teste + coverage)."""
     _print_header("4. GOAL-DRIVEN — Verificação de qualidade")
     # Parte do verify existente (ex.: attempts de uma execução anterior) para
     # que o contador de tentativas sobreviva entre retomadas da tarefa.
@@ -629,11 +644,12 @@ def _step_verify(
         ignore=ignore,
         cov_source=cov_source,
         gate=gate,
+        config=config,
     )
 
-    # ── ruff ──
+    # ── lint ──
     ruff_res: VerifyResult = results["ruff"]
-    print(f"▶ ruff check {' '.join(ruff_paths) if ruff_paths else 'src/ tests/'}")
+    print(f"▶ {ruff_res.details.get('command', 'lint')}")
     verify["ruff_clean"] = ruff_res.ok
     if ruff_res.ok:
         print("  ✅ limpo")
@@ -643,9 +659,9 @@ def _step_verify(
         for line in ruff_res.output.split("\n"):
             print(f"     {line}")
 
-    # ── pytest ──
+    # ── teste ──
     pytest_res: VerifyResult = results["pytest"]
-    print(f"\n▶ pytest {' '.join(test_paths) if test_paths else 'tests/'}")
+    print(f"\n▶ {pytest_res.details.get('command', 'test')}")
     verify["tests_pass"] = pytest_res.ok
     if pytest_res.ok:
         print("  ✅ passou")
@@ -1383,8 +1399,11 @@ def main() -> None:
     parser.add_argument(
         "--gate",
         type=float,
-        default=70.0,
-        help="Gate mínimo de coverage, em %% (default: %(default)s)",
+        default=None,
+        help=(
+            "Gate mínimo de coverage, em %%. Default: o `verify.gate` de "
+            f".kata/config.yaml, ou {DEFAULT_GATE:.0f}"
+        ),
     )
     parser.add_argument(
         "--judge",
@@ -1418,6 +1437,24 @@ def main() -> None:
         )
 
     _kata_dir().mkdir(parents=True, exist_ok=True)
+
+    # Comandos de verificação declarados pelo projeto alvo. Config quebrada
+    # aborta em vez de cair no default: quem escreveu .kata/config.yaml quis
+    # verificar de um jeito específico, e verificar de outro calado seria
+    # reportar sucesso de algo que o projeto nunca pediu.
+    try:
+        config = load_verify_config()
+    except ConfigError as exc:
+        print(f"⚠  {exc}")
+        sys.exit(1)
+
+    # Precedência do gate: flag explícita > config do projeto > 70%.
+    gate = args.gate if args.gate is not None else config.gate
+    if gate is None:
+        gate = DEFAULT_GATE
+
+    if config.customizado:
+        print(f"▶ verificações de {config_path()} (declaradas pelo projeto)")
 
     # Modo --init
     if args.init:
@@ -1454,7 +1491,8 @@ def main() -> None:
             test_paths=args.test_paths,
             ignore=args.ignore,
             cov_source=args.cov_source,
-            gate=args.gate,
+            gate=gate,
+            config=config,
         )
         _print_judge_verdict(result)
         # Só REFUTED é falha. "VERIFIED WITH CAVEATS" significa que o juiz
@@ -1494,7 +1532,8 @@ def main() -> None:
             test_paths=args.test_paths,
             ignore=args.ignore,
             cov_source=args.cov_source,
-            gate=args.gate,
+            gate=gate,
+            config=config,
         )
         sys.exit(0 if data.get("status") == "approved" else 1)
 
@@ -1545,7 +1584,8 @@ def main() -> None:
         test_paths=args.test_paths,
         ignore=args.ignore,
         cov_source=args.cov_source,
-        gate=args.gate,
+        gate=gate,
+            config=config,
     )
     if not fit_trivial:
         data = _step_twin(task, data)

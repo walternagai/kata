@@ -54,8 +54,9 @@ see [`DOCUMENTATION.md`](DOCUMENTATION.md#cli) for its modes (`--init`, `--plan`
 ```
 src/kata/
 ├── cli.py       CLI, task persistence (.kata/*.yaml), cycle orchestration, reports
+├── config.py    .kata/config.yaml — the target project's own lint/test/coverage commands
 ├── fit.py       diff_stats() / is_trivial() — the fit gate
-├── verify.py    run_ruff / run_pytest / run_coverage / search_pattern / run_all()
+├── verify.py    run_ruff / run_pytest / run_coverage / run_command / search_pattern / run_all()
 ├── judge.py     collect_claims() + six hunt_*() fraud detectors + judge_task()
 ├── __init__.py  package version
 └── __main__.py  python -m kata entry point (excluded from coverage)
@@ -64,12 +65,20 @@ src/kata/
 - `fit.py`: `diff_stats()` inspects unstaged changes first, then staged. `is_trivial()` is true for
   at most 1 changed file and <10 changed lines — this is the triviality gate that lets a task skip
   straight to VERIFY.
-- `verify.py`: independent functions per tool; `run_all()` runs Ruff + pytest, then coverage only if
-  pytest passed (short-circuits on failure). Tests mock `kata.verify._run` (the subprocess wrapper) —
-  never invoke real ruff/pytest inside the unit suite.
+- `config.py`: reads `.kata/config.yaml` in the *target* project — `verify.lint` / `verify.test` /
+  `verify.coverage` (string or list), plus `coverage_pattern` and `gate`. A declared role is run
+  verbatim; an omitted one falls back to the Python default. Invalid config raises `ConfigError` and
+  the CLI exits 1 rather than silently checking something the project never asked for.
+- `verify.py`: independent functions per role; `run_all()` runs lint + test, then coverage only if
+  the test step passed (short-circuits on failure). `run_command()` executes a declared command and
+  judges it by exit code; `run_command_coverage()` extracts the percentage and applies the gate here,
+  because `--cov-fail-under` does not exist outside Python. Tests mock `kata.verify._run` (the
+  subprocess wrapper) — never invoke real ruff/pytest inside the unit suite.
 - `judge.py`: treats a task's `.kata/<task>.yaml` as a set of claims, diffs them against Git reality,
   re-runs claimed checks, and hunts six fraud categories: weakened checks, false completion, scope
-  creep, unauthorized action, spec betrayal, debris. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
+  creep, unauthorized action, spec betrayal, debris. Weakening patterns are per-language
+  (`_LANGUAGES`: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin); a test in an unlisted language becomes a
+  declared blind spot instead of silence. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
   (medium/low findings only), `UNVERIFIABLE` (no fraud, but nothing could be
   observed — nothing re-run, or tests in a language it has no patterns for),
   `REFUTED` (any high-severity finding).

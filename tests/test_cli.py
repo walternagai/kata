@@ -1872,7 +1872,7 @@ class TestMainJudge:
     @patch("kata.cli._kata_dir")
     def test_judge_caveats_is_not_a_failure(
         self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
-        tmp_path, monkeypatch,
+        tmp_path, monkeypatch, capsys,
     ) -> None:
         """Só REFUTED é falha. Equiparar ressalva de baixa severidade a fraude
         grave leva o CI a ignorar o exit code por inútil."""
@@ -1900,6 +1900,9 @@ class TestMainJudge:
             with pytest.raises(SystemExit) as exc:
                 cli.main()
         assert exc.value.code == 0
+        # A re-execução mostra o papel, não a ferramenta: "✅ ruff" num
+        # projeto que roda eslint é ruído para quem lê o veredito.
+        assert "✅ lint" in capsys.readouterr().out
 
     @patch("kata.cli.judge_task")
     @patch("kata.cli._deserialize")
@@ -2758,3 +2761,97 @@ class TestStepTwin:
             result = cli._step_twin("task", data)
         # Non-TTY, so returns defaults even though intent conflict
         assert result["twins"]["searched"] is False
+
+
+class TestConfigDoProjeto:
+    """`.kata/config.yaml` governa como o projeto alvo é verificado."""
+
+    def test_config_quebrada_aborta_em_vez_de_cair_no_default(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """Verificar de outro jeito calado seria reportar sucesso de algo que
+        o projeto nunca pediu — a fraude que o JUDGE existe para caçar."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "config.yaml").write_text(
+            "verify:\n  lint: 42\n", encoding="utf-8"
+        )
+
+        with patch("sys.argv", ["kata", "--check-only"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 1
+        assert "esperava string ou lista" in capsys.readouterr().out
+
+    @patch("kata.cli.run_all")
+    def test_comandos_declarados_chegam_ao_run_all(
+        self, mock_run_all, tmp_path, monkeypatch, capsys
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "config.yaml").write_text(
+            "verify:\n  lint: npx eslint src\n  test: npx vitest run\n  gate: 85\n",
+            encoding="utf-8",
+        )
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, details={"command": "npx eslint src"}),
+            "pytest": VerifyResult(ok=True, details={"command": "npx vitest run"}),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0}),
+        }
+
+        with patch("sys.argv", ["kata", "--check-only"]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+        cfg = mock_run_all.call_args.kwargs["config"]
+        assert cfg.lint == ["npx", "eslint", "src"]
+        assert cfg.test == ["npx", "vitest", "run"]
+        # Gate da config vale quando --gate não foi passado.
+        assert mock_run_all.call_args.kwargs["gate"] == 85.0
+
+        out = capsys.readouterr().out
+        assert "declaradas pelo projeto" in out
+        # O VERIFY anuncia o comando que de fato rodou, não "ruff check src/".
+        assert "npx eslint src" in out
+        assert "npx vitest run" in out
+
+    @patch("kata.cli.run_all")
+    def test_flag_gate_vence_a_config(
+        self, mock_run_all, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "config.yaml").write_text(
+            "verify:\n  gate: 85\n", encoding="utf-8"
+        )
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 95.0}),
+        }
+
+        with patch("sys.argv", ["kata", "--check-only", "--gate", "50"]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+        assert mock_run_all.call_args.kwargs["gate"] == 50.0
+
+    @patch("kata.cli.run_all")
+    def test_sem_config_o_gate_default_continua_setenta(
+        self, mock_run_all, tmp_path, monkeypatch, capsys
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 95.0}),
+        }
+
+        with patch("sys.argv", ["kata", "--check-only"]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+        assert mock_run_all.call_args.kwargs["gate"] == 70.0
+        assert mock_run_all.call_args.kwargs["config"].customizado is False
+        assert "declaradas pelo projeto" not in capsys.readouterr().out

@@ -239,7 +239,20 @@ def run_command_coverage(
             details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
         )
 
-    cov_pct = float(match.group(1))
+    try:
+        cov_pct = float(match.group(1))
+    except ValueError:
+        # O padrão CASOU mas o grupo não é número (ex.: "N/A"). Não conseguiu
+        # medir não é reprovação silenciosa nem 0.0 aprovado: é o mesmo
+        # contrato do padrão que não casa, e estourar aqui derrubaria VERIFY
+        # e JUDGE com traceback em vez de reprovar a checagem.
+        return VerifyResult(
+            ok=False,
+            output=result.output
+            + f"\n(kata: o percentual casado {match.group(1)!r} não é um número)",
+            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+        )
+
     return VerifyResult(
         ok=result.ok and cov_pct >= gate,
         output=result.output,

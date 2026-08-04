@@ -65,7 +65,9 @@ _PY_PROBES = LanguageProbes(
         (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
     ),
     test_declaration=re.compile(r"^\+\s*(?:async\s+)?def\s+test\w*\s*\("),
-    empty_body=re.compile(r"^\+\s*pass\s*$"),
+    # pass com comentário inline também é corpo vazio — R9-6: a fraude mais
+    # comum é o corpo vazio "documentado" por um comentário na mesma linha.
+    empty_body=re.compile(r"^\+\s*pass\s*(?:#.*)?$"),
     skippable=re.compile(r"^\+\s*(?:#.*)?$"),
 )
 
@@ -81,7 +83,9 @@ _JS_PROBES = LanguageProbes(
     ),
     test_declaration=re.compile(r"^\+\s*(?:it|test)\s*\("),
     empty_body=re.compile(r"^\+\s*\}\s*\)"),
-    empty_inline=re.compile(r"\{\s*\}"),
+    # `it('x', () => { /* TODO */ })` — o fechamento inline com comentário
+    # (`/* */` ou `//`) também é corpo vazio (R9-6).
+    empty_inline=re.compile(r"\{\s*(?:(?:/\*.*?\*/)|(?://.*?))?\s*\}"),
     skippable=re.compile(r"^\+\s*(?://.*)?$"),
 )
 
@@ -426,6 +430,13 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[s
     fraude; `pass` num stub de classe ou num `except ...:` é código honesto
     e não cai aqui.
 
+    A varredura ignora apenas as linhas puramente vazias ou de comentário
+    puro (`skippable`) entre a declaração e o corpo. A fraude mais comum é
+    `pass  # noqa` ou `// ...` colados ao corpo — com comentário inline, a
+    linha deixa de casar `skippable` e o corpo vazio escapava (R9-6). Por
+    isso o corpo é decidido por `empty_body`, que também casa o marcador
+    com comentário inline.
+
     Linguagem sem `test_declaration` ou sem `empty_body` não é varrida — o
     silêncio aqui é estreito e deliberado, e os padrões `weakened` daquela
     linguagem continuam valendo para arquivos modificados.
@@ -438,6 +449,8 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[s
         if not probes.test_declaration.match(line):
             continue
         # Corpo vazio na própria linha da declaração: `it('x', () => {})`.
+        # O fechamento pode vir com comentário inline (`{ /* TODO */ }`) —
+        # `\{\s*\}` não casava e o corpo vazio escapava (R9-6).
         if probes.empty_inline is not None and probes.empty_inline.search(line):
             achados.append(line.lstrip("+").strip())
             continue

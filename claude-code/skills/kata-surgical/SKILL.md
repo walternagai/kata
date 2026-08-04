@@ -125,6 +125,9 @@ surgical:
     - path: app/dashboard/pages/Overview.py
       necessary: false  # refactoring não pedido
   removed_imports_clean: true
+  answered: true        # false se a fase foi preenchida com default sem
+                        # ninguém responder (modo não-interativo)
+  skipped: false        # true só nesse caso — ver orquestrador
   notes: |
     Cada arquivo rastreia direto a um FR do PRD.
     Overview.py removido do diff — refactoring não pertence a esta tarefa.

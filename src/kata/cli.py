@@ -480,10 +480,16 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     if not sys.stdin.isatty():
         print("(modo não-interativo — pulando SIMPLIFY)")
+        # `skipped`, não `answered`: nenhum humano respondeu nada aqui. Marcar
+        # como respondido fazia a fase ser saltada para sempre, inclusive num
+        # ciclo interativo posterior na mesma tarefa (mesmo padrão do R7-1
+        # para FIT/THINK/INTENT).
         data["simplify"] = {
             "minimum_code": True,
             "no_single_use_abstractions": True,
             "no_speculative_config": True,
+            "answered": False,
+            "skipped": True,
         }
         return data
 
@@ -531,6 +537,9 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
         simplify["minimum_code"] = True
         simplify["no_single_use_abstractions"] = True
         simplify["no_speculative_config"] = True
+    # Interativo: alguém respondeu — o audit pode graduar como followed.
+    simplify["answered"] = True
+    simplify["skipped"] = False
     data["simplify"] = simplify
     return data
 
@@ -598,7 +607,12 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     if not sys.stdin.isatty():
         print("(modo não-interativo — pulando SURGICAL)")
-        data["surgical"] = {"files": [], "removed_imports_clean": True}
+        data["surgical"] = {
+            "files": [],
+            "removed_imports_clean": True,
+            "answered": False,
+            "skipped": True,
+        }
         return data
 
     files = _changed_paths()
@@ -619,6 +633,9 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
         surgical["removed_imports_clean"] = True
 
     surgical["files"] = file_checks
+    # Interativo: alguém respondeu — o audit pode graduar como followed.
+    surgical["answered"] = True
+    surgical["skipped"] = False
     data["surgical"] = surgical
     return data
 
@@ -1119,10 +1136,11 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
         )
     # Fase preenchida com default em modo não-interativo não foi verificada por
     # ninguém. Um relatório que não diz isso apresenta como cumprido um gate
-    # que só foi contornado.
+    # que só foi contornado. As cinco fases com default headless: FIT, THINK,
+    # INTENT (R7-1) e SIMPLIFY, SURGICAL (R9-2).
     puladas = [
         nome.upper()
-        for nome in ("fit", "think", "intent")
+        for nome in ("fit", "think", "intent", "simplify", "surgical")
         if data.get(nome, {}).get("skipped")
     ]
     if puladas:
@@ -1200,6 +1218,8 @@ def _init_task(task: str) -> None:
             "minimum_code": True,
             "no_single_use_abstractions": True,
             "no_speculative_config": True,
+            "answered": False,
+            "skipped": False,
         },
         "intent": {
             "code_does": "",
@@ -1212,6 +1232,8 @@ def _init_task(task: str) -> None:
         "surgical": {
             "files": [],
             "removed_imports_clean": True,
+            "answered": False,
+            "skipped": False,
         },
         "verify": {
             "ruff_clean": None,
@@ -1255,6 +1277,10 @@ _AUDIT_RISKS: dict[str, str] = {
     "desperdiçado em tarefa trivial ou mal roteada",
     "think": "assumptions nunca declaradas — qualquer solução pode atacar o "
     "problema errado",
+    "simplify": "minimalidade afirmada sem ninguém confrontar o diff com o "
+    "pedido — abstrações especulativas podem passar sem revisão",
+    "surgical": "cada arquivo declarado necessário sem ninguém conferir — "
+    "escopo extra pode entrar sem ser notado",
     "intent": "código, teste e spec podem discordar sem registro — "
     "comportamento muda sem intenção verificada",
     "verify": "sucesso afirmado sem evidência de execução — a tarefa pode "
@@ -1320,6 +1346,15 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
             achados.append(
                 {"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]}
             )
+
+    for fase in ("simplify", "surgical"):
+        bloco = data.get(fase, {})
+        if bloco.get("skipped"):
+            achados.append(
+                {"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]}
+            )
+        elif bloco.get("answered"):
+            achados.append({"fase": fase, "status": "followed", "risco": ""})
 
     verify = data.get("verify", {})
     evidencias = [

@@ -1383,6 +1383,36 @@ class TestCorpoVazioPorLinguagem:
         )
         assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
 
+    def test_python_pass_com_noqa_inline_e_corpo_vazio(self) -> None:
+        """R9-6: `pass  # noqa` é a fraude mais comum — o corpo vazio
+        'documentado' por comentário inline. Antes escapava porque a linha
+        não casava `skippable` nem o `empty_body` antigo."""
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            "+    pass  # noqa: F401",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert len(frauds) == 1
+        assert "corpo vazio" in frauds[0].description
+
+    def test_js_corpo_vazio_na_mesma_linha_com_comentario(self) -> None:
+        """R9-6: corpo vazio com comentário inline na mesma linha — o
+        padrão antigo de fechamento inline não casava o comentario."""
+        diff = _diff_novo("src/soma.test.js", "+it('soma', () => { /* TODO */ });")
+        frauds = hunt_weakened_checks(diff)
+        assert len(frauds) == 1
+        assert "corpo vazio" in frauds[0].description
+
+    def test_js_com_corpo_de_verdade_com_comentario_nao_acusa(self) -> None:
+        """O inline com comentário NÃO pode virar falso positivo quando há
+        corpo de verdade."""
+        diff = _diff_novo(
+            "src/soma.test.js",
+            "+it('soma', () => { /* verifica */ expect(soma(1, 2)).toBe(3); });",
+        )
+        assert hunt_weakened_checks(diff) == []
+
 
 class TestIsTestFilePoliglota:
     """Sem reconhecer o arquivo como teste, dar sondas ao juiz não bastaria."""

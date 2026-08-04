@@ -115,6 +115,9 @@ simplify:
   minimum_code: true
   no_single_use_abstractions: true
   no_speculative_config: true
+  answered: true        # false se a fase foi preenchida com default sem
+                        # ninguém responder (modo não-interativo)
+  skipped: false        # true só nesse caso — ver orquestrador
   notes: |
     Plano revisado — 3 FRs, sem abstrações especulativas.
     Não criar sistema de permissions — user_id já vem do UserStore.

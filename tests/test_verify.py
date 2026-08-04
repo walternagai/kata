@@ -579,6 +579,19 @@ class TestRunCommandCoverage:
         assert "nenhum percentual casou" in r.output
 
     @patch("kata.verify._run")
+    def test_padrao_que_casa_nao_numerico_reprova_em_vez_de_crashar(
+        self, mock_run: MagicMock
+    ) -> None:
+        """R9-1: o padrão CASA mas o grupo não é número — float() levantava
+        ValueError e derrubava VERIFY/JUDGE com traceback. "N/A" tem de ser
+        reprovação nomeada, não crash."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="coverage: N/A", stderr="")
+        r = run_command_coverage(["npm", "run", "cov"], pattern=r"coverage:\s+([\w.]+)")
+        assert r.ok is False
+        assert r.details["coverage_pct"] == 0.0
+        assert "não é um número" in r.output
+
+    @patch("kata.verify._run")
     def test_padrao_default_le_a_linha_total(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(
             returncode=0, stdout="TOTAL    100    5    95%", stderr=""

@@ -158,6 +158,9 @@ simplify:
   minimum_code: true
   no_single_use_abstractions: true
   no_speculative_config: true
+  answered: false       # true ao concluir a fase; false se foi preenchida
+                        # com default sem ninguém responder
+  skipped: false        # true só no modo não-interativo
 intent:
   code_does: ""
   check_expects: ""
@@ -168,6 +171,9 @@ intent:
 surgical:
   files: []
   removed_imports_clean: true
+  answered: false       # true ao concluir a fase; false se foi preenchida
+                        # com default sem ninguém responder
+  skipped: false        # true só no modo não-interativo
 verify:
   ruff_clean: true
   tests_pass: true

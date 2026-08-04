@@ -545,6 +545,9 @@ simplify:
   minimum_code: true
   no_single_use_abstractions: true
   no_speculative_config: true
+  answered: false       # true when the phase was completed; false when it was
+                        # filled with defaults because nobody answered
+  skipped: false        # true only in non-interactive mode
 intent:
   code_does: ""
   check_expects: ""
@@ -555,6 +558,8 @@ intent:
 surgical:
   files: []
   removed_imports_clean: true
+  answered: false       # same convention as simplify
+  skipped: false        # true only in non-interactive mode
 verify:
   ruff_clean: null
   tests_pass: null

@@ -339,6 +339,10 @@ class TestStepSimplify:
         assert result["simplify"]["minimum_code"] is True
         assert result["simplify"]["no_single_use_abstractions"] is True
         assert result["simplify"]["no_speculative_config"] is True
+        # R9-2: o fix R7-1 (skipped, não answered) tem de valer aqui também —
+        # sem isto o guard de um ciclo interativo posterior pularia a fase.
+        assert result["simplify"]["answered"] is False
+        assert result["simplify"]["skipped"] is True
 
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
@@ -434,6 +438,9 @@ class TestStepSurgical:
         result = cli._step_surgical("task", data)
         assert result["surgical"]["files"] == []
         assert result["surgical"]["removed_imports_clean"] is True
+        # R9-2: o fix R7-1 (skipped, não answered) tem de valer aqui também.
+        assert result["surgical"]["answered"] is False
+        assert result["surgical"]["skipped"] is True
 
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
@@ -715,6 +722,28 @@ class TestAuditTask:
         fit = next(a for a in achados if a["fase"] == "fit")
         assert fit["status"] == "faked"
         assert "mal roteada" in fit["risco"]
+
+    def test_simplify_e_surgical_skipped_sao_graduados(self) -> None:
+        """R9-2: SIMPLIFY e SURGICAL preenchidos com default headless têm de
+        aparecer no audit como skipped — antes, o audit nem os graduava e o
+        relatório silenciava duas fases que ninguém respondeu."""
+        data = {
+            "simplify": {"answered": False, "skipped": True},
+            "surgical": {"answered": False, "skipped": True},
+        }
+        achados = cli._audit_task(data)
+        fases = {a["fase"]: a for a in achados}
+        assert fases["simplify"]["status"] == "skipped"
+        assert "minimalidade" in fases["simplify"]["risco"]
+        assert fases["surgical"]["status"] == "skipped"
+        assert "escopo extra" in fases["surgical"]["risco"]
+
+    def test_simplify_e_surgical_respondidos_sao_followed(self) -> None:
+        data = {"simplify": {"answered": True}, "surgical": {"answered": True}}
+        achados = cli._audit_task(data)
+        fases = {a["fase"]: a for a in achados}
+        assert fases["simplify"]["status"] == "followed"
+        assert fases["surgical"]["status"] == "followed"
 
 
 class TestPrintAudit:

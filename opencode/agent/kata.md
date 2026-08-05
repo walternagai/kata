@@ -63,6 +63,7 @@ Mapeamento de ferramentas do OpenCode para cada tarefa do kata:
 | Tarefa | Ferramenta | Uso |
 |--------|------------|-----|
 | Carregar instruções da fase | `skill` | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
+| Carregar adapter de domínio | `skill` | `kata-devops` (e futuros: `kata-data-analysis`, `kata-research`, `kata-docs`) |
 | Perguntar ao usuário | `question` + `kata-question` | Uma pergunta por chamada; consulte a skill para a rota `question` e as regras |
 | Executar comandos | `bash` | `git diff`, `ruff`, `pytest`, `python -m kata --check-only` etc. |
 | Ler arquivos | `read` | Inspecionar diff/código de arquivos específicos |
@@ -136,6 +137,8 @@ Use `.kata/` na raiz do projeto atual. Cada tarefa é um arquivo
 ```yaml
 task: nome-da-tarefa
 status: draft | think-complete | approved | rejected
+domain: coding        # coding | devops | data-analysis | research | docs
+                      # default: coding; outras domains carregam um adapter
 done: ""              # Fable Step 1: critério de sucesso declarado no THINK,
                       # ANTES da evidência; exibido no VERIFY e no relatório
 base_commit: ""       # HEAD do git no início da tarefa; usado pelo JUDGE
@@ -276,6 +279,33 @@ Se nenhum `--task` for fornecido:
 4. Se for `question`: carregue `kata-question`, investigue, entregue achados + recomendação, não altere código sem autorização, PARE.
 5. Se for `plan-first`: execute só THINK, entregue um plano, PARE.
 6. Registre a classificação em `.kata/<task>.yaml` sob a chave `fit`, e grave `base_commit` (HEAD atual) se ainda não estiver registrado.
+
+### Fase 0.5: Domain Adapter
+
+Após o FIT, se o `.kata/<task>.yaml` declarar `domain` diferente de `coding`
+(ex.: `domain: devops`), carregue o adapter correspondente com `skill`:
+
+- `domain: devops` → `kata-devops`
+- `domain: data-analysis` → `kata-data-analysis` (quando existir)
+- `domain: research` → `kata-research` (quando existir)
+- `domain: docs` → `kata-docs` (quando existir)
+
+O adapter define:
+
+1. **Evidência**: o que abrir antes de agir.
+2. **Autoridade**: quem decide o correto no domínio.
+3. **Verify by observation**: como confirmar que a ação funcionou.
+4. **Fraud table**: fraudes específicas do domínio.
+5. **Minimum evidence set (binding)**: checklist obrigatório antes de agir.
+6. **Rotas FIT por shape**: quando cada rota se aplica no domínio.
+
+**Domain skills são opcionais.** Se `skill` falhar:
+
+- Não improvise o conteúdo do adapter.
+- Registre o nome da skill em `preflight.skills_missing`.
+- Aplique o contrato mínimo descrito no adapter (evidência, autoridade,
+  red lines) com o bom senso do domínio.
+- Diga no relatório final que o adapter não carregou.
 
 ### Fase 1: THINK
 

@@ -39,7 +39,7 @@ from kata.config import (
 )
 from kata.fit import diff_stats, is_trivial, untracked_stats
 from kata.judge import JudgeResult, is_debris_file, judge_task
-from kata.skills import InstallStatus, doctor
+from kata.skills import InstallStatus, doctor, doctor_domain
 from kata.verify import VerifyResult, run_all, search_pattern, untracked_files
 
 try:
@@ -1074,6 +1074,10 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     think = data.get("think", {})
 
     print()
+    domain = data.get("domain", "coding")
+    if domain != "coding":
+        print(f"  Domínio: {domain}")
+
     if think.get("problem"):
         print(f"  Problema: {think['problem']}")
 
@@ -1196,6 +1200,7 @@ def _init_task(task: str) -> None:
     template: dict[str, Any] = {
         "task": task,
         "status": "draft",
+        "domain": "coding",
         # Fable Step 1: critério de sucesso declarado no THINK, antes da
         # evidência; exibido no VERIFY e no relatório.
         "done": "",
@@ -1423,6 +1428,20 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
             print(f"  ❌ {e.frontend}: instalação PARCIAL em {e.config_dir}")
             print(f"     {len(e.instaladas)} instalada(s), faltando: {', '.join(e.faltando)}")
     print()
+
+    # Domain skills são opcionais: avisar, mas não reprovar.
+    domain_missing = doctor_domain()
+    domain_warnings = 0
+    for frontend, faltando in domain_missing.items():
+        if faltando:
+            domain_warnings += 1
+            print(f"  ℹ️  {frontend}: domain skills opcionais faltando: {', '.join(faltando)}")
+    if domain_warnings:
+        print("     Domain adapters só são necessárias quando a tarefa usa um")
+        print("     domínio diferente de coding. Instale com `make reinstall` /")
+        print("     `make reinstall-claude-code` se for usar devops/data-analysis/etc.")
+        print()
+
     if parciais:
         print(f"  ⚠  {parciais} frontend(s) com instalação parcial.")
         print("     O ciclo vai tentar carregar a skill que falta, não conseguir,")

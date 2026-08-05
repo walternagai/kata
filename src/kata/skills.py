@@ -35,6 +35,12 @@ PHASE_SKILLS: tuple[str, ...] = (
 
 ORCHESTRATOR_SKILL = "kata"
 
+# Skills de domain adapters. Diferente das fases, elas são opcionais: o ciclo
+# não reprova se estiverem ausentes, porque uma tarefa coding não precisa delas.
+# O doctor as lista como aviso, e o orquestrador só as carrega quando o domínio
+# da tarefa não é coding.
+DOMAIN_SKILLS: tuple[str, ...] = ("kata-devops",)
+
 
 @dataclass(frozen=True)
 class Frontend:
@@ -54,6 +60,9 @@ class Frontend:
         if self.orquestrador_e_skill:
             return (ORCHESTRATOR_SKILL, *PHASE_SKILLS)
         return PHASE_SKILLS
+
+    def domain_skills_esperadas(self) -> tuple[str, ...]:
+        return DOMAIN_SKILLS
 
 
 FRONTENDS: tuple[Frontend, ...] = (
@@ -118,6 +127,26 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
     )
 
 
+def check_domain_skills(frontend: Frontend) -> list[str]:
+    """Lista domain skills opcionais que estão faltando no frontend.
+
+    Diferente de `check_frontend`, esta função nunca reprova: ela só informa
+    que o adapter de um domínio não está disponível. Uma tarefa `coding`
+    continua funcionando normalmente.
+    """
+    raiz = frontend.config_dir() / "skills"
+    return [
+        nome
+        for nome in frontend.domain_skills_esperadas()
+        if not (raiz / nome).exists()
+    ]
+
+
 def doctor() -> list[InstallStatus]:
     """Estado de instalação de todos os frontends conhecidos."""
     return [check_frontend(f) for f in FRONTENDS]
+
+
+def doctor_domain() -> dict[str, list[str]]:
+    """Domain skills opcionais faltando em cada frontend."""
+    return {f.nome: check_domain_skills(f) for f in FRONTENDS}

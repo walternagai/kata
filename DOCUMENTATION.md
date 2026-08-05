@@ -524,6 +524,8 @@ The core schema is:
 ```yaml
 task: improve-parser
 status: draft
+domain: coding    # coding | devops | data-analysis | research | docs
+                  # default is coding; other domains load a domain adapter
 done: ""    # Fable Step 1: done criterion declared in THINK, before the
             # evidence; VERIFY confronts it and the report displays it
 base_commit: ""    # HEAD captured when the task started; lets JUDGE diff
@@ -609,6 +611,37 @@ it the gate cannot tell "no defect was fixed" from "nobody checked".
 Task selection uses the current Git branch when possible. Slashes and
 underscores are normalized to hyphens; for example, `feature/parser_fix`
 becomes `feature-parser-fix`.
+
+## Domain Adapters
+
+Domain adapters extend the cycle to non-coding tasks without changing the
+underlying pipeline. A task declares its domain in `.kata/<task>.yaml`
+(`domain: devops`, for example); the orchestrator loads the adapter via
+`{{LOAD_DOMAIN}}` after FIT and applies its domain-specific evidence set and
+fraud table.
+
+Adapters are optional: a missing adapter does not fail `--doctor` or stop the
+cycle, because the default domain is `coding` and most tasks do not need an
+adapter. When a domain adapter is missing for a non-coding task, the
+orchestrator records the skill name in `preflight.skills_missing` and falls
+back to the adapter's minimal contract.
+
+New adapters follow `domains/TEMPLATE.md` and are generated to both frontends
+by `make build-skills`. Each adapter defines:
+
+- **Domain scope**: what the adapter covers and explicitly does not cover
+- **Evidence**: files and state to inspect before acting
+- **Authority**: who decides correctness in the domain
+- **Verify by observation**: how to confirm an action actually worked
+- **Fraud table**: domain-specific frauds to hunt
+- **Minimum evidence set (binding)**: checklist that must be completed before
+  acting
+- **FIT routes by shape**: which route each task shape should take
+- **Red lines**: actions never allowed without documented human authorization
+
+The only adapter shipped today is `kata-devops` (Docker, Docker Compose,
+Terraform, Nginx, GitHub Actions, deploys and healthchecks). Adapters for
+`data-analysis`, `research` and `docs` are planned.
 
 ## Python API
 

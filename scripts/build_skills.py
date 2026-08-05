@@ -33,6 +33,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 FONTE = REPO / "phases"
+DOMINIOS = REPO / "domains"
 
 # O arquivo da fonte que é o orquestrador, e não uma fase. Tem destino
 # próprio em cada frontend (agente no OpenCode, skill no Claude Code).
@@ -47,6 +48,7 @@ ORQUESTRADOR = "kata"
 # um shell específico.
 REQUIRED_ROLES: frozenset[str] = frozenset({
     "LOAD_PHASE",   # carregar as instruções de uma fase
+    "LOAD_DOMAIN",  # carregar as instruções de um domain adapter
     "ASK",          # perguntar ao usuário
     "RUN",          # executar um comando
     "READ",         # ler um arquivo
@@ -79,6 +81,7 @@ FRONTENDS: dict[str, dict] = {
     "opencode": {
         "roles": {
             "LOAD_PHASE": "`skill`",
+            "LOAD_DOMAIN": "`skill`",
             "ASK": "`question`",
             "RUN": "`bash`",
             "READ": "`read`",
@@ -104,6 +107,7 @@ FRONTENDS: dict[str, dict] = {
     "claude-code": {
         "roles": {
             "LOAD_PHASE": "`Skill`",
+            "LOAD_DOMAIN": "`Skill`",
             "ASK": "`AskUserQuestion`",
             "RUN": "`Bash`",
             "READ": "`Read`",
@@ -225,20 +229,20 @@ def render(fonte: str, frontend: str, origem: str = "<memória>") -> str:
 # Comentário HTML: não aparece no markdown renderizado, mas aparece para quem
 # abre o arquivo — que é justamente quem está prestes a editá-lo à mão.
 _AVISO = (
-    "<!-- Gerado por scripts/build_skills.py a partir de phases/{slug}.md."
+    "<!-- Gerado por scripts/build_skills.py a partir de {origem}."
     " Não edite aqui. -->\n"
 )
 
 _FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
 
-def _com_aviso(texto: str, slug: str) -> str:
+def _com_aviso(texto: str, origem_relativa: str) -> str:
     """Insere o aviso de arquivo gerado logo após o frontmatter.
 
     Depois, e não antes: o frontmatter tem de ser a primeira coisa do arquivo
     ou os hosts não o reconhecem, e a skill perde nome e descrição.
     """
-    aviso = _AVISO.format(slug=slug)
+    aviso = _AVISO.format(origem=origem_relativa)
     m = _FRONTMATTER.match(texto)
     if m is None:
         return aviso + texto
@@ -255,7 +259,14 @@ def _destino(slug: str, frontend: str) -> Path:
 def _fontes() -> list[Path]:
     if not FONTE.is_dir():
         raise SystemExit(f"fonte não encontrada: {FONTE}")
-    return sorted(FONTE.glob("*.md"))
+    fontes = sorted(FONTE.glob("*.md"))
+    if DOMINIOS.is_dir():
+        # TEMPLATE.md é documentação do schema de adapters, não uma skill
+        # instalável.
+        fontes.extend(
+            p for p in sorted(DOMINIOS.glob("*.md")) if p.stem != "TEMPLATE"
+        )
+    return fontes
 
 
 def build(check: bool = False) -> int:
@@ -268,7 +279,8 @@ def build(check: bool = False) -> int:
         fonte = caminho.read_text(encoding="utf-8")
         for frontend in FRONTENDS:
             saida = _com_aviso(
-                render(fonte, frontend, origem=str(caminho.relative_to(REPO))), slug
+                render(fonte, frontend, origem=str(caminho.relative_to(REPO))),
+                str(caminho.relative_to(REPO)),
             )
             destino = _destino(slug, frontend)
             atual = destino.read_text(encoding="utf-8") if destino.exists() else None

@@ -276,6 +276,11 @@ migrar tarefas existentes:
 ln -s .karpathy .kata   # symlink preserva acesso ao legado
 ```
 
+Tarefas podem declarar um domínio (`coding`, `devops`, `data-analysis`,
+`research`, `docs`). O domínio padrão é `coding`; outros domínios carregam um
+adapter gerado automaticamente para OpenCode e Claude Code a partir de
+`domains/`.
+
 ## Estrutura
 
 ```

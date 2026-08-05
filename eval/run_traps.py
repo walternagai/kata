@@ -20,6 +20,8 @@ from pathlib import Path
 
 import yaml
 
+from kata.judge import baseline_ref
+
 SCENARIOS_DIR = Path(__file__).parent / "scenarios"
 KATA_CLI = [sys.executable, "-m", "kata"]
 
@@ -102,6 +104,7 @@ def _aplica_baseline(path: Path, baseline: Path, task: str, git) -> None:
     sha = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=True
     ).stdout.strip()
+    git("update-ref", baseline_ref(task), sha)
 
     for arquivo, conteudo in posterior.items():
         arquivo.write_bytes(conteudo)
@@ -171,7 +174,17 @@ def load_ground_truth(scenario_dir: Path) -> dict:
     path = scenario_dir / "ground_truth.yaml"
     try:
         with open(path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+            data = yaml.safe_load(f) or {}
+        if not isinstance(data, dict):
+            raise ScenarioError("ground_truth.yaml deve conter um mapa")
+        verdicts = {"VERIFIED", "VERIFIED WITH CAVEATS", "UNVERIFIABLE", "REFUTED"}
+        if data.get("expected_verdict") not in verdicts:
+            raise ScenarioError(
+                "ground_truth.yaml deve declarar expected_verdict válido"
+            )
+        if not isinstance(data.get("expected_frauds", []), list):
+            raise ScenarioError("expected_frauds deve ser uma lista")
+        return data
     except (OSError, yaml.YAMLError) as exc:
         raise ScenarioError(f"ground_truth.yaml ilegível: {exc}") from exc
 
@@ -243,13 +256,23 @@ def evaluate(scenario_dir: Path, ground_truth: dict, judge_output: dict) -> tupl
     passed = True
     messages: list[str] = []
 
-    expected_verdict = ground_truth.get("expected_verdict", "")
+    expected_verdict = ground_truth["expected_verdict"]
     stdout = judge_output.get("stdout", "")
 
-    if expected_verdict and expected_verdict not in stdout:
+    verdict_match = re.search(r"KATA JUDGE — (.+)", stdout)
+    actual_verdict = verdict_match.group(1).strip() if verdict_match else ""
+    if actual_verdict != expected_verdict:
         passed = False
         messages.append(
-            f"  ❌ Veredito esperado '{expected_verdict}' não encontrado no output"
+            f"  ❌ Veredito esperado '{expected_verdict}', obtido '{actual_verdict or 'ausente'}'"
+        )
+
+    expected_returncode = 1 if expected_verdict == "REFUTED" else 0
+    if judge_output.get("returncode") != expected_returncode:
+        passed = False
+        messages.append(
+            f"  ❌ Código de saída esperado {expected_returncode}, "
+            f"obtido {judge_output.get('returncode')}"
         )
 
     problemas = _match_frauds(ground_truth.get("expected_frauds", []), parse_frauds(stdout))

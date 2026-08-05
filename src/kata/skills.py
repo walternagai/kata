@@ -86,11 +86,15 @@ class InstallStatus:
     config_dir: Path
     instaladas: list[str] = field(default_factory=list)
     faltando: list[str] = field(default_factory=list)
+    agente_esperado: bool = False
+    agente_instalado: bool = True
 
     @property
     def ausente(self) -> bool:
         """Nenhuma skill instalada — o frontend simplesmente não é usado."""
-        return not self.instaladas
+        return not self.instaladas and (
+            not self.agente_esperado or not self.agente_instalado
+        )
 
     @property
     def parcial(self) -> bool:
@@ -100,11 +104,18 @@ class InstallStatus:
         OpenCode não perde nada; quem tem 9 das 10 skills roda o ciclo e
         perde uma fase sem ser avisado.
         """
-        return bool(self.instaladas) and bool(self.faltando)
+        return (
+            (bool(self.instaladas) or self.agente_instalado)
+            and (bool(self.faltando) or (self.agente_esperado and not self.agente_instalado))
+        )
 
     @property
     def completo(self) -> bool:
-        return bool(self.instaladas) and not self.faltando
+        return (
+            bool(self.instaladas)
+            and not self.faltando
+            and (not self.agente_esperado or self.agente_instalado)
+        )
 
 
 def check_frontend(frontend: Frontend) -> InstallStatus:
@@ -119,11 +130,19 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
             instaladas.append(nome)
         else:
             faltando.append(nome)
+    agente_esperado = not frontend.orquestrador_e_skill
+    agente_instalado = (
+        (raiz.parent / "agent" / "kata.md").is_file()
+        if agente_esperado
+        else True
+    )
     return InstallStatus(
         frontend=frontend.nome,
         config_dir=frontend.config_dir(),
         instaladas=instaladas,
         faltando=faltando,
+        agente_esperado=agente_esperado,
+        agente_instalado=agente_instalado,
     )
 
 

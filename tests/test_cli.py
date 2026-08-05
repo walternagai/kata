@@ -1305,6 +1305,15 @@ class TestStepArtifact:
         result = cli._step_artifact("task", data)
         assert result["artifact"]["intent_owed"] is False
 
+    @patch("kata.cli._detect_auth_owed", return_value=True)
+    @patch("kata.cli.sys.stdin")
+    def test_artifact_auth_requires_quote_for_real_line(self, mock_stdin, mock_auth) -> None:
+        mock_stdin.isatty.return_value = False
+        data = {"auth": {"action_taken": True, "authorized": True, "quote": ""}}
+        result = cli._step_artifact("task", data)
+        assert result["artifact"]["auth_owed"] is True
+        assert result["artifact"]["auth_present"] is False
+
     @patch("kata.cli._changed_paths", return_value=[])
     @patch("kata.cli.sys.stdin")
     def test_artifact_non_tty_empty_data(self, mock_stdin, mock_changed, capsys) -> None:
@@ -1539,7 +1548,7 @@ class TestStepFit:
     ) -> None:
         mock_stdin.isatty.return_value = True
         mock_diff_stats.return_value = (["src/foo.py"], 3)
-        mock_input.side_effect = ["1", "bugfix simples"]
+        mock_input.side_effect = ["s", "1", "bugfix simples"]
         data: dict = {}
         result = cli._step_fit("task", data)
         assert result["fit"]["trivial"] is True
@@ -1554,7 +1563,7 @@ class TestStepFit:
     ) -> None:
         mock_stdin.isatty.return_value = True
         mock_diff_stats.return_value = ([], 0)
-        mock_input.side_effect = ["2", "precisa de planejamento"]
+        mock_input.side_effect = ["s", "2", "precisa de planejamento"]
         data: dict = {}
         result = cli._step_fit("task", data)
         assert result["fit"]["trivial"] is True
@@ -2103,6 +2112,12 @@ class TestTaskFlagRejectsPathTraversal:
                 cli.main()
         assert exc.value.code == 1
         assert not (tmp_path.parent / "escaped-init.yaml").exists()
+
+    def test_config_is_reserved_for_project_configuration(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            cli._task_path("config")
+        assert exc.value.code == 1
 
 
 class TestHasDeployDocs:
@@ -2783,6 +2798,22 @@ class TestStepTwin:
         assert result["twins"]["searched"] is False
         mock_search.assert_not_called()
 
+    @patch("kata.cli.search_pattern")
+    @patch("kata.cli.sys.stdin")
+    def test_busca_invalida_nao_e_registrada_como_concluida(
+        self, mock_stdin, mock_search
+    ) -> None:
+        from kata.verify import SearchResult
+
+        mock_stdin.isatty.return_value = True
+        mock_search.return_value = SearchResult(pattern="[", error="regex inválida")
+        data = {"status": "approved", "intent": {"all_agree": False}}
+        with patch("builtins.input", return_value="["):
+            result = cli._step_twin("task", data)
+
+        assert result["twins"]["searched"] is False
+        assert result["twins"]["fix_applied"] is False
+
     def test_intent_conflict_triggers_twin(self) -> None:
         data = {"status": "approved", "intent": {"all_agree": False}}
         with patch("kata.cli.sys.stdin") as mock_stdin:
@@ -2901,6 +2932,8 @@ class TestDoctor:
         monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
         self._instala(tmp_path / "oc", PHASE_SKILLS)
+        (tmp_path / "oc" / "agent").mkdir(parents=True)
+        (tmp_path / "oc" / "agent" / "kata.md").write_text("agent", encoding="utf-8")
         self._instala(tmp_path / "cc", [*PHASE_SKILLS, ORCHESTRATOR_SKILL])
 
         with patch("sys.argv", ["kata", "--doctor"]):

@@ -47,6 +47,8 @@ class TestCheckFrontend:
 
     def test_tudo_instalado_e_completo(self, oc, tmp_path) -> None:
         _instala(tmp_path, PHASE_SKILLS)
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
         e = check_frontend(oc)
         assert e.completo is True
         assert e.parcial is False

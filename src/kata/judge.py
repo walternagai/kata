@@ -16,6 +16,7 @@ porque não teve como procurar. Ver `judge_task`.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,6 +62,8 @@ _PY_PROBES = LanguageProbes(
         (r"^-.*assert\s+True\b", "assert True (sempre passa se True for literal)"),
         (r"^-.*assert\s+False\b", "assert False (sempre falha ou foi removido)"),
         (r"^\+#\s+.*(?:assert|def test|expect|self\.)", "teste virado em comentário"),
+        (r"^\+.*assert\s+True\b", "assert True adicionado — pode neutralizar a asserção"),
+        (r"^\+.*pytest\.skip\b", "teste desativado com pytest.skip"),
         (r"^\+\s*pass\s*$", "corpo de teste substituído por pass"),
         (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
     ),
@@ -269,9 +272,54 @@ def collect_unverifiable_claims(task_data: dict[str, Any]) -> list[str]:
 # ── git helpers ───────────────────────────────────────────────────────────
 
 
+_BASELINE_REF_PREFIX = "refs/kata/base/"
+
+
+def baseline_ref(task: str) -> str:
+    """Nomeia a ref Git que ancora o baseline de uma tarefa."""
+    digest = hashlib.sha256(task.encode("utf-8")).hexdigest()
+    return f"{_BASELINE_REF_PREFIX}{digest}"
+
+
+def record_baseline_ref(task: str, commit: str, cwd: Path | None = None) -> bool:
+    """Registra o baseline fora do YAML, em metadata do Git."""
+    try:
+        result = _run(["git", "update-ref", baseline_ref(task), commit], cwd=cwd)
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
+def _read_baseline_ref(task: str, cwd: Path | None = None) -> str | None:
+    """Lê o baseline ancorado no Git, se houver."""
+    try:
+        result = _run(["git", "rev-parse", "--verify", baseline_ref(task)], cwd=cwd)
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value or None
+
+
 def _base_commit_resolves(base_commit: str, cwd: Path | None = None) -> bool:
     """Confirma que base_commit ainda existe no histórico (não foi rebaseado/podado)."""
     result = _run(["git", "cat-file", "-e", f"{base_commit}^{{commit}}"], cwd=cwd)
+    return result.returncode == 0
+
+
+def _resolve_commit(base_commit: str, cwd: Path | None = None) -> str | None:
+    """Expande um commit válido para seu SHA completo."""
+    result = _run(["git", "rev-parse", "--verify", f"{base_commit}^{{commit}}"], cwd=cwd)
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value or None
+
+
+def _base_commit_is_ancestor(base_commit: str, cwd: Path | None = None) -> bool:
+    """Confirma que o baseline está no caminho histórico do HEAD atual."""
+    result = _run(["git", "merge-base", "--is-ancestor", base_commit, "HEAD"], cwd=cwd)
     return result.returncode == 0
 
 
@@ -314,9 +362,9 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
     staged e unstaged de uma vez, então continua funcionando depois que a
     tarefa é commitada (o caso normal de uma tarefa "concluída").
 
-    Sem base_commit (tarefas antigas, ou geradas fora do ciclo FIT), cai
-    no comportamento anterior: unstaged, com fallback para staged — que
-    só enxerga mudanças ainda não commitadas.
+    Sem base_commit (tarefas antigas, ou geradas fora do ciclo FIT), usa o
+    diff contra HEAD para incluir staged e unstaged, com fallback para
+    repositórios sem commit.
 
     Em ambos os casos, o conteúdo dos arquivos untracked é anexado como
     diff sintético: `git diff` nunca os mostra, e sem isso um arquivo novo
@@ -325,9 +373,11 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
         diff = _run(["git", "diff", base_commit], cwd=cwd).stdout
     else:
-        result = _run(["git", "diff"], cwd=cwd)
-        if not result.stdout.strip():
-            result = _run(["git", "diff", "--cached"], cwd=cwd)
+        result = _run(["git", "diff", "HEAD"], cwd=cwd)
+        if result.returncode != 0:
+            result = _run(["git", "diff"], cwd=cwd)
+            if not result.stdout.strip():
+                result = _run(["git", "diff", "--cached"], cwd=cwd)
         diff = result.stdout
 
     untracked = _untracked_diff(untracked_files(cwd=cwd), cwd=cwd)
@@ -339,9 +389,11 @@ def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> l
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
         result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
     else:
-        result = _run(["git", "diff", "--name-only"], cwd=cwd)
-        if not result.stdout.strip():
-            result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
+        result = _run(["git", "diff", "HEAD", "--name-only"], cwd=cwd)
+        if result.returncode != 0:
+            result = _run(["git", "diff", "--name-only"], cwd=cwd)
+            if not result.stdout.strip():
+                result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
 
     tracked = [f for f in result.stdout.strip().split("\n") if f.strip()]
     seen = set(tracked)
@@ -401,10 +453,51 @@ def _unreadable_test_files(changed: list[str]) -> list[str]:
     aparece sempre é uma ressalva que ninguém lê. O preço é não flagrar
     `__tests__/index.js`, que não traz token nenhum no nome.
     """
+    non_executable = {".json", ".jsonl", ".toml", ".txt", ".yaml", ".yml"}
     return [
         f
         for f in changed
-        if _looks_like_test_name(f.rsplit("/", 1)[-1]) and probes_for(f) is None
+        if _is_test_file(f)
+        and Path(f).suffix.lower() not in non_executable
+        and probes_for(f) is None
+    ]
+
+
+def _ignored_files(cwd: Path | None = None) -> list[str]:
+    """Lista arquivos ignorados que podem conter código ou testes alterados."""
+    result = _run(
+        ["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
+        cwd=cwd,
+    )
+    return [f for f in result.stdout.strip().split("\n") if f.strip()]
+
+
+def _ignored_code_files(files: list[str]) -> list[str]:
+    """Remove caches conhecidos e preserva candidatos relevantes para revisão."""
+    noise = {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        ".venv",
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+        "venv",
+    }
+    source_dirs = {"app", "lib", "scripts", "src", "test", "tests", "spec", "__tests__"}
+    return [
+        f
+        for f in files
+        if not noise.intersection(Path(f).parts)
+        and not any(part.endswith(".egg-info") for part in Path(f).parts)
+        and (
+            Path(f).suffix.lower() in _LANGUAGES
+            or _is_test_file(f)
+            or source_dirs.intersection(Path(f).parts)
+        )
     ]
 
 
@@ -661,9 +754,44 @@ def judge_task(
     5. Registra o que não conseguiu observar (pontos cegos)
     6. Entrega veredito
     """
+    blind_spots: list[str] = []
+    baseline_frauds: list[JudgeFraud] = []
     base_commit = task_data.get("base_commit")
-    diff = _run_git_diff(cwd=cwd, base_commit=base_commit)
-    changed = _changed_files(cwd=cwd, base_commit=base_commit)
+    task_name = task_data.get("task")
+    diff_base = base_commit
+
+    if isinstance(task_name, str) and base_commit:
+        anchor = _read_baseline_ref(task_name, cwd=cwd)
+        if anchor is None:
+            blind_spots.append(
+                "baseline declarado no YAML não tem âncora independente no Git"
+            )
+        else:
+            yaml_commit = _resolve_commit(str(base_commit), cwd=cwd)
+            if yaml_commit != anchor:
+                baseline_frauds.append(JudgeFraud(
+                    type="baseline_tampering",
+                    severity="high",
+                    description="baseline do YAML diverge da âncora Git registrada no início",
+                    evidence=f"YAML={base_commit} | Git={anchor}",
+                ))
+            diff_base = anchor
+
+    if diff_base:
+        if not _base_commit_resolves(str(diff_base), cwd=cwd):
+            blind_spots.append("baseline não resolve mais no histórico Git")
+            diff_base = None
+        elif not _base_commit_is_ancestor(str(diff_base), cwd=cwd):
+            baseline_frauds.append(JudgeFraud(
+                type="baseline_tampering",
+                severity="high",
+                description="baseline não é ancestral do HEAD atual",
+                evidence=str(diff_base),
+            ))
+            diff_base = None
+
+    diff = _run_git_diff(cwd=cwd, base_commit=diff_base)
+    changed = _changed_files(cwd=cwd, base_commit=diff_base)
     claims = collect_claims(task_data)
     unverifiable = collect_unverifiable_claims(task_data)
 
@@ -694,7 +822,7 @@ def judge_task(
                 verify_results[key] = results[key]
                 re_ran[key] = results[key].ok
 
-    frauds: list[JudgeFraud] = []
+    frauds: list[JudgeFraud] = [*baseline_frauds]
     frauds.extend(hunt_weakened_checks(diff))
     frauds.extend(hunt_false_completion(task_data, verify_results))
     frauds.extend(hunt_scope_creep(task_data, changed))
@@ -702,10 +830,6 @@ def judge_task(
     frauds.extend(hunt_spec_betrayal(task_data))
     frauds.extend(hunt_debris(diff, changed))
 
-    # Pontos cegos: o que o juiz não teve como observar. Separados das
-    # caveats porque governam o veredito, e das fraudes porque não são
-    # acusação — não observar não é evidência de fraude nem de honestidade.
-    blind_spots: list[str] = []
     if not claimed_checks:
         blind_spots.append(
             "nenhuma verificação re-executada — o relatório não afirma nenhum "
@@ -716,6 +840,12 @@ def judge_task(
         blind_spots.append(
             f"{len(unreadable)} arquivo(s) de teste sem padrão de enfraquecimento "
             "para a linguagem: " + ", ".join(unreadable[:5])
+        )
+    ignored = _ignored_code_files(_ignored_files(cwd=cwd))
+    if ignored:
+        blind_spots.append(
+            f"{len(ignored)} arquivo(s) ignorado(s) com aparência de código/teste "
+            "não puderam ser comparados com o baseline: " + ", ".join(ignored[:5])
         )
 
     high = [f for f in frauds if f.severity == "high"]

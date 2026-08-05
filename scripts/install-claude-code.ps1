@@ -54,10 +54,15 @@ function Add-ToManifest([string]$Path) {
     }
 }
 
-function Test-ManagedPath([string]$Path) {
+function Test-ManagedPath([string]$Path, [string]$ExpectedSource = "") {
     $item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
     if ($null -eq $item) { return $true }                                    # não existe: livre
-    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $true }  # link nosso
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        if ([string]::IsNullOrWhiteSpace($ExpectedSource)) { return $false }
+        $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue).Path
+        $expected = (Resolve-Path -LiteralPath $ExpectedSource -ErrorAction SilentlyContinue).Path
+        return $resolved -and $expected -and $resolved -ieq $expected
+    }
     if ((Get-Manifest) -contains $Path) { return $true }                     # cópia nossa
     # Compatibilidade com instalações anteriores, que marcavam o diretório.
     return ($item -is [IO.DirectoryInfo]) -and
@@ -67,10 +72,10 @@ function Test-ManagedPath([string]$Path) {
 # Remove apenas o que o instalador criou. A versão anterior fazia
 # `Remove-Item -Recurse` em qualquer coisa que estivesse no destino,
 # apagando sem aviso um diretório do usuário — inclusive no -Uninstall.
-function Remove-ManagedPath([string]$Path) {
+function Remove-ManagedPath([string]$Path, [string]$ExpectedSource = "") {
     $item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
     if ($null -eq $item) { return }
-    if (-not (Test-ManagedPath $Path)) {
+    if (-not (Test-ManagedPath $Path $ExpectedSource)) {
         Write-Warning "'$Path' não foi criado pelo instalador. Preservado — remova à mão se quiser."
         return
     }
@@ -82,10 +87,10 @@ function Remove-ManagedPath([string]$Path) {
 }
 
 function Install-Entry([string]$Source, [string]$Target, [bool]$IsDirectory) {
-    if (-not (Test-ManagedPath $Target)) {
+    if (-not (Test-ManagedPath $Target $Source)) {
         throw "'$Target' já existe e não foi criado pelo instalador. Remova ou renomeie e rode de novo."
     }
-    Remove-ManagedPath $Target
+    Remove-ManagedPath $Target $Source
     $parent = Split-Path -Parent $Target
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
 
@@ -111,7 +116,7 @@ function Install-Entry([string]$Source, [string]$Target, [bool]$IsDirectory) {
 if ($Uninstall) {
     Write-Host "Removendo kata de $configRoot/skills..."
     foreach ($skill in $skills) {
-        Remove-ManagedPath (Join-Path $configRoot "skills/$skill")
+        Remove-ManagedPath (Join-Path $configRoot "skills/$skill") (Join-Path $kataRoot "claude-code/skills/$skill")
     }
     # O manifesto registra cópias; depois de removê-las ele não deve
     # sobreviver apontando para caminhos que já não existem.

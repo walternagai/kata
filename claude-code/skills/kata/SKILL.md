@@ -141,7 +141,9 @@ domain: coding        # coding | devops | data-analysis | research | docs
 done: ""              # Fable Step 1: critério de sucesso declarado no THINK,
                       # ANTES da evidência; exibido no VERIFY e no relatório
 base_commit: ""       # HEAD do git no início da tarefa; usado pelo JUDGE
-                       # para comparar mesmo depois que a tarefa é commitada
+                        # para comparar mesmo depois que a tarefa é commitada.
+                        # O CLI também ancora este SHA em refs/kata/base/*;
+                        # divergência entre YAML e Git invalida o JUDGE.
 fit:
   trivial: false
   route: code-loop     # code-loop | plan-first | question | research | inference
@@ -272,7 +274,8 @@ Se nenhum `--task` for fornecido:
 ### Fase 0: FIT
 
 1. Carregue a skill `kata-fit` com `Skill`.
-2. Execute `git diff --stat` via `Bash` para medir o volume de alterações.
+2. Execute `git diff HEAD --stat` via `Bash` para incluir alterações staged e
+   unstaged; se não houver HEAD, use os diffs local e staged.
 3. Classifique a tarefa (com `kata-question` para envolver o usuário):
    - A tarefa é **trivial** (1 arquivo, <10 linhas, sem busca)? Se sim, vá direto a VERIFY.
    - Qual a **rota** da tarefa: code-loop, plan-first, question, research, inference?
@@ -436,6 +439,9 @@ twins:
   fix_applied: false
 ```
 
+O CLI não edita as ocorrências do TWIN CHECK. `fix_applied: true` só pode ser
+gravado por um host que tenha feito e verificado a edição de fato.
+
 ### Fase 4.5: ARTIFACT
 
 1. Carregue a skill `kata-artifact` com `Skill`.
@@ -473,9 +479,12 @@ twins:
    - **VERIFIED** → nenhuma fraude, e o juiz teve como procurar
    - **VERIFIED WITH CAVEATS** → fraudes leves/médias; ressalvas documentadas
    - **UNVERIFIABLE** → nenhuma fraude, mas o juiz não teve como observar
-     (nada re-executado, ou teste em linguagem que ele não lê). Não
-     reporte como sucesso: diga ao usuário o que ficou sem verificação
+      (nada re-executado, ou teste em linguagem que ele não lê). Não
+      reporte como sucesso: diga ao usuário o que ficou sem verificação
    - **REFUTED** → fraude de alta severidade; ciclo precisa ser revisto
+   - O baseline precisa resolver, ser ancestral do HEAD e coincidir com a
+     âncora Git criada no início; se a âncora faltar, o resultado é no máximo
+     UNVERIFIABLE.
 5. Se REFUTED, investigue as fraudes apontadas:
    - **Weakened checks**: revise asserts removidos/relaxados em testes
    - **False completion**: re-execução falhou — corrija e reexecute

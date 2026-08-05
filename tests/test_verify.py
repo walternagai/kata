@@ -8,8 +8,10 @@ from unittest.mock import MagicMock, patch
 
 from kata.config import VerifyConfig
 from kata.verify import (
+    COMMAND_TIMEOUT_SECONDS,
     MAX_UNTRACKED_FILE_BYTES,
     VerifyResult,
+    _run,
     is_inspectable,
     run_all,
     run_command,
@@ -87,7 +89,11 @@ class TestRun:
         result = _run(["echo", "hello"])
         assert result.stdout == "hello\n"
         mock_subprocess_run.assert_called_once_with(
-            ["echo", "hello"], capture_output=True, text=True, cwd=None
+            ["echo", "hello"],
+            capture_output=True,
+            text=True,
+            cwd=None,
+            timeout=COMMAND_TIMEOUT_SECONDS,
         )
 
     @patch("kata.verify.subprocess.run")
@@ -102,8 +108,18 @@ class TestRun:
         cwd = Path("/tmp")
         _run(["ls"], cwd=cwd)
         mock_subprocess_run.assert_called_once_with(
-            ["ls"], capture_output=True, text=True, cwd=cwd
+            ["ls"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=COMMAND_TIMEOUT_SECONDS,
         )
+
+    @patch("kata.verify.subprocess.run", side_effect=subprocess.TimeoutExpired("sleep", 300))
+    def test_run_timeout_vira_falha_observavel(self, mock_subprocess_run: MagicMock) -> None:
+        result = _run(["sleep", "999"])
+        assert result.returncode == 124
+        assert "excedeu" in result.stderr
 
 
 class TestRunPytest:
@@ -184,6 +200,7 @@ class TestRunCoverage:
         result = run_coverage()
         assert result.ok is False
         assert result.details["coverage_pct"] == 0.0
+        assert "TOTAL" in result.output
 
     @patch("kata.verify._run")
     def test_coverage_pct_with_branch_columns(self, mock_run: MagicMock) -> None:
@@ -436,6 +453,15 @@ class TestSearchPattern:
         assert r.pattern == "test"
         assert r.matches == []
         assert r.total_files == 0
+        assert r.error == ""
+
+    @patch("kata.verify._run")
+    def test_busca_invalida_expoe_erro(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=2, stdout="", stderr="regex inválida"
+        )
+        result = search_pattern("[")
+        assert result.error == "regex inválida"
 
 
 class TestIsInspectable:
@@ -590,6 +616,13 @@ class TestRunCommandCoverage:
         assert r.ok is False
         assert r.details["coverage_pct"] == 0.0
         assert "não é um número" in r.output
+
+    @patch("kata.verify._run")
+    def test_padrao_invalido_reprova_em_vez_de_crashar(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="coverage: 90", stderr="")
+        r = run_command_coverage(["npm", "run", "cov"], pattern="[")
+        assert r.ok is False
+        assert "padrão de coverage inválido" in r.output
 
     @patch("kata.verify._run")
     def test_padrao_default_le_a_linha_total(self, mock_run: MagicMock) -> None:

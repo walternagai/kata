@@ -57,10 +57,9 @@ def untracked_stats(cwd: Path | None = None) -> tuple[list[str], int]:
 def diff_stats(cwd: Path | None = None) -> tuple[list[str], int]:
     """Analisa o diff git atual e retorna (lista de arquivos, linhas totais).
 
-    Tenta diff unstaged primeiro; se vazio, tenta staged. Arquivos untracked
-    são somados sempre, e não como último fallback: eles nunca aparecem em
-    `git diff`, então tratá-los como alternativa aos rastreados esconderia
-    todo arquivo novo assim que houvesse qualquer modificação.
+    Tenta o diff contra HEAD para incluir alterações staged e unstaged de uma
+    vez. Em repositório sem commit, cai para unstaged e staged. Arquivos
+    untracked são somados sempre, e não como último fallback.
 
     Args:
         cwd: Diretório de execução. Default: CWD atual.
@@ -68,11 +67,16 @@ def diff_stats(cwd: Path | None = None) -> tuple[list[str], int]:
     Returns:
         Tupla (lista de paths de arquivos alterados, total de linhas alteradas).
     """
-    result = _run(["git", "diff", "--name-only"], cwd=cwd)
+    result = _run(["git", "diff", "HEAD", "--name-only"], cwd=cwd)
     files_text = result.stdout.strip()
-    cmd_stat = ["git", "diff", "--stat"]
+    cmd_stat = ["git", "diff", "HEAD", "--stat"]
 
-    if not files_text:
+    if result.returncode != 0:
+        result = _run(["git", "diff", "--name-only"], cwd=cwd)
+        files_text = result.stdout.strip()
+        cmd_stat = ["git", "diff", "--stat"]
+
+    if result.returncode != 0 or not files_text:
         result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
         files_text = result.stdout.strip()
         cmd_stat = ["git", "diff", "--cached", "--stat"]

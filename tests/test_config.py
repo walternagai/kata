@@ -143,14 +143,31 @@ class TestErros:
         with pytest.raises(ConfigError, match="`verify` deve ser um mapa"):
             load_verify_config(cwd=tmp_path)
 
+    @pytest.mark.parametrize("valor", ["false", "[]", "''"])
+    def test_verify_tipo_vazio_nao_cai_em_default(self, tmp_path, valor) -> None:
+        _escreve(tmp_path, f"verify: {valor}\n")
+        with pytest.raises(ConfigError, match="`verify` deve ser um mapa"):
+            load_verify_config(cwd=tmp_path)
+
     def test_gate_nao_numerico(self, tmp_path) -> None:
         _escreve(tmp_path, "verify:\n  gate: muito\n")
         with pytest.raises(ConfigError, match="`verify.gate` deve ser número"):
             load_verify_config(cwd=tmp_path)
 
+    @pytest.mark.parametrize("gate", [-1, 101, "NaN"])
+    def test_gate_fora_do_intervalo_reprova(self, tmp_path, gate) -> None:
+        _escreve(tmp_path, f"verify:\n  gate: {gate}\n")
+        with pytest.raises(ConfigError, match="deve ser número|entre 0 e 100"):
+            load_verify_config(cwd=tmp_path)
+
     def test_pattern_nao_string(self, tmp_path) -> None:
         _escreve(tmp_path, "verify:\n  coverage_pattern: 42\n")
         with pytest.raises(ConfigError, match="coverage_pattern` deve ser string"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_pattern_invalido_reprova_no_carregamento(self, tmp_path) -> None:
+        _escreve(tmp_path, "verify:\n  coverage_pattern: '['\n")
+        with pytest.raises(ConfigError, match="coverage_pattern.*inválido"):
             load_verify_config(cwd=tmp_path)
 
     def test_yaml_ilegivel(self, tmp_path) -> None:

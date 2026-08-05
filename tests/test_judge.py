@@ -18,6 +18,7 @@ from kata.judge import (
     _run_git_diff,
     _unreadable_test_files,
     _untracked_diff,
+    baseline_ref,
     collect_claims,
     collect_unverifiable_claims,
     hunt_debris,
@@ -29,6 +30,7 @@ from kata.judge import (
     is_debris_file,
     judge_task,
     probes_for,
+    record_baseline_ref,
 )
 from kata.verify import VerifyResult, is_inspectable
 
@@ -705,12 +707,13 @@ class TestRunGitDiff:
         )
         diff = _run_git_diff()
         assert "diff --git" in diff
-        assert mock_run.call_args_list[0][0][0] == ["git", "diff"]
+        assert mock_run.call_args_list[0][0][0] == ["git", "diff", "HEAD"]
 
     @patch("kata.judge._run")
     def test_git_diff_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         from kata.judge import _run_git_diff
         mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no HEAD"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="diff --git a/staged.py b/staged.py\n", stderr=""
@@ -718,7 +721,7 @@ class TestRunGitDiff:
         ]
         diff = _run_git_diff()
         assert "staged.py" in diff
-        assert mock_run.call_args_list[1][0][0] == ["git", "diff", "--cached"]
+        assert mock_run.call_args_list[2][0][0] == ["git", "diff", "--cached"]
 
     @patch("kata.judge._run")
     def test_base_commit_used_when_it_resolves(
@@ -754,7 +757,7 @@ class TestRunGitDiff:
         ]
         diff = _run_git_diff(base_commit="deadbeef")
         assert "local.py" in diff
-        assert mock_run.call_args_list[1][0][0] == ["git", "diff"]
+        assert mock_run.call_args_list[1][0][0] == ["git", "diff", "HEAD"]
 
 
 @patch("kata.judge.untracked_files", return_value=[])
@@ -772,6 +775,7 @@ class TestChangedFiles:
     @patch("kata.judge._run")
     def test_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no HEAD"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(
                 args=[], returncode=0, stdout="staged.py\n", stderr=""
@@ -870,6 +874,34 @@ class TestJudgeTaskDetectsCommittedFraud:
         result = judge_task(task_data, cwd=tmp_path)
         assert any(f.type == "weakened_checks" for f in result.frauds)
         assert result.verdict == "REFUTED"
+
+    def test_baseline_yaml_adulterado_e_refutado(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._make_repo(tmp_path)
+        test_file = tmp_path / "tests"
+        test_file.mkdir()
+        alvo = test_file / "test_foo.py"
+        alvo.write_text("def test_foo():\n    assert True\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "clean baseline"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        assert record_baseline_ref("tarefa", base, cwd=tmp_path) is True
+
+        alvo.write_text("def test_foo():\n    pass\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "weaken test"], cwd=tmp_path, check=True)
+        atual = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        result = judge_task(
+            {"task": "tarefa", "base_commit": atual, "verify": {}}, cwd=tmp_path
+        )
+        assert result.verdict == "REFUTED"
+        assert any(f.type == "baseline_tampering" for f in result.frauds)
+        assert baseline_ref("tarefa").startswith("refs/kata/base/")
 
 
 class TestIsDebrisFile:

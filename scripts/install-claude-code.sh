@@ -38,15 +38,22 @@ usage() {
     exit 1
 }
 
-# Só é nosso o que é symlink. Qualquer outra coisa no destino é do usuário:
-# `ln -sfn` sobre um diretório real não substitui nada — cria o link DENTRO
-# dele (skills/kata-fit/kata-fit), e o instalador ainda reportaria sucesso.
+# Só é nosso o que aponta para a fonte esperada. Um symlink de terceiros não
+# pode ser substituído nem removido pelo instalador.
+is_our_link() {
+    local alvo="$1"
+    local fonte="$2"
+    [[ -L "$alvo" ]] || return 1
+    [[ "$(readlink -f "$alvo" 2>/dev/null)" == "$(readlink -f "$fonte" 2>/dev/null)" ]]
+}
+
 check_targets() {
     local problema=0
     for skill in "${SKILLS[@]}"; do
         local alvo="$CONFIG_DIR/skills/$skill"
-        if [[ -e "$alvo" && ! -L "$alvo" ]]; then
-            echo "  ❌ $alvo já existe e não é symlink"
+        local fonte="$KATA_DIR/claude-code/skills/$skill"
+        if [[ -e "$alvo" || -L "$alvo" ]] && ! is_our_link "$alvo" "$fonte"; then
+            echo "  ❌ $alvo já existe e não foi criado pelo Kata"
             problema=1
         fi
     done
@@ -76,10 +83,10 @@ uninstall() {
     echo "Removendo kata de $CONFIG_DIR/skills..."
 
     for skill in "${SKILLS[@]}"; do
-        if [[ -L "$CONFIG_DIR/skills/$skill" ]]; then
+        if is_our_link "$CONFIG_DIR/skills/$skill" "$KATA_DIR/claude-code/skills/$skill"; then
             rm "$CONFIG_DIR/skills/$skill"
             echo "  ✅ removido skills/$skill"
-        elif [[ -L "$CONFIG_DIR/skills/$skill/$skill" ]]; then
+        elif is_our_link "$CONFIG_DIR/skills/$skill/$skill" "$KATA_DIR/claude-code/skills/$skill"; then
             # Órfão de uma instalação anterior, quando `ln -sfn` aninhava o
             # link dentro do diretório existente. Remover o symlink não toca
             # no alvo nem no que o usuário guardou no diretório.

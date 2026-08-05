@@ -33,7 +33,27 @@ class VerifyResult:
 
 def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     """Executa um comando e captura saída."""
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+    try:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=COMMAND_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode(errors="replace")
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode(errors="replace")
+        return subprocess.CompletedProcess(
+            cmd,
+            124,
+            stdout=stdout,
+            stderr=f"{stderr}\n(kata: comando excedeu {COMMAND_TIMEOUT_SECONDS}s)",
+        )
 
 
 # Teto único para leitura de arquivo untracked. Acima disto, `kata.judge` não
@@ -41,6 +61,7 @@ def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess
 # baratinho. Ordens de grandeza acima de qualquer arquivo de código, ordens de
 # grandeza abaixo de um dataset ou log.
 MAX_UNTRACKED_FILE_BYTES = 256 * 1024
+COMMAND_TIMEOUT_SECONDS = 300
 
 
 def is_inspectable(path: Path) -> bool:
@@ -174,10 +195,14 @@ def run_coverage(
     # número de colunas fazia o regex falhar calado e gravar 0.0 junto de
     # coverage_pass=True — um YAML internamente contraditório que o JUDGE
     # depois lê como verdade.
-    cov_pct = 0.0
     match = re.search(r"^TOTAL\s+.*?(\d+(?:\.\d+)?)%", result.stdout, re.MULTILINE)
-    if match:
-        cov_pct = float(match.group(1))
+    if match is None:
+        return VerifyResult(
+            ok=False,
+            output=result.stdout + result.stderr + "\n(kata: linha TOTAL de coverage ausente)",
+            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+        )
+    cov_pct = float(match.group(1))
 
     passed = result.returncode == 0
     return VerifyResult(
@@ -230,7 +255,14 @@ def run_command_coverage(
     porque "não consegui medir" não é "mediu e passou".
     """
     result = run_command(cmd, cwd=cwd)
-    match = re.search(pattern, result.output, re.MULTILINE)
+    try:
+        match = re.search(pattern, result.output, re.MULTILINE)
+    except re.error as exc:
+        return VerifyResult(
+            ok=False,
+            output=result.output + f"\n(kata: padrão de coverage inválido: {exc})",
+            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+        )
     if match is None:
         return VerifyResult(
             ok=False,
@@ -276,6 +308,7 @@ class SearchResult:
     pattern: str
     matches: list[SearchMatch] = field(default_factory=list)
     total_files: int = 0
+    error: str = ""
 
 
 def search_pattern(
@@ -330,7 +363,15 @@ def search_pattern(
             content = parts[2] if len(parts) > 2 else ""
             matches.append(SearchMatch(file=fpath, line=lineno, content=content.strip()))
 
-    return SearchResult(pattern=pattern, matches=matches, total_files=len(seen_files))
+    error = ""
+    if result.returncode not in (0, 1):
+        error = result.stderr.strip() or f"busca terminou com código {result.returncode}"
+    return SearchResult(
+        pattern=pattern,
+        matches=matches,
+        total_files=len(seen_files),
+        error=error,
+    )
 
 
 def run_all(

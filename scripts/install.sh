@@ -39,18 +39,27 @@ usage() {
     exit 1
 }
 
-# Só é nosso o que é symlink. Sobre um diretório real, `ln -sfn` cria o link
-# DENTRO dele (skills/kata-fit/kata-fit) e reportaria sucesso; sobre um
-# arquivo real, `ln -sf` substitui o arquivo do usuário sem aviso.
+# Só é nosso o que aponta para a fonte esperada. Um symlink de terceiros não
+# pode ser substituído nem removido pelo instalador.
+is_our_link() {
+    local alvo="$1"
+    local fonte="$2"
+    [[ -L "$alvo" ]] || return 1
+    [[ "$(readlink -f "$alvo" 2>/dev/null)" == "$(readlink -f "$fonte" 2>/dev/null)" ]]
+}
+
 check_targets() {
     local problema=0
+    local fontes=("$KATA_DIR/opencode/agent/$AGENT_FILE")
     local alvos=("$CONFIG_DIR/agent/$AGENT_FILE")
     for skill in "${SKILLS[@]}"; do
+        fontes+=("$KATA_DIR/opencode/skills/$skill")
         alvos+=("$CONFIG_DIR/skills/$skill")
     done
-    for alvo in "${alvos[@]}"; do
-        if [[ -e "$alvo" && ! -L "$alvo" ]]; then
-            echo "  ❌ $alvo já existe e não é symlink"
+    for i in "${!alvos[@]}"; do
+        local alvo="${alvos[$i]}"
+        if [[ -e "$alvo" || -L "$alvo" ]] && ! is_our_link "$alvo" "${fontes[$i]}"; then
+            echo "  ❌ $alvo já existe e não foi criado pelo Kata"
             problema=1
         fi
     done
@@ -86,7 +95,7 @@ uninstall() {
     echo "Removendo kata de $CONFIG_DIR..."
 
     # Agente
-    if [[ -L "$CONFIG_DIR/agent/$AGENT_FILE" ]]; then
+    if is_our_link "$CONFIG_DIR/agent/$AGENT_FILE" "$KATA_DIR/opencode/agent/$AGENT_FILE"; then
         rm "$CONFIG_DIR/agent/$AGENT_FILE"
         echo "  ✅ removido agent/$AGENT_FILE"
     else
@@ -95,10 +104,10 @@ uninstall() {
 
     # Skills
     for skill in "${SKILLS[@]}"; do
-        if [[ -L "$CONFIG_DIR/skills/$skill" ]]; then
+        if is_our_link "$CONFIG_DIR/skills/$skill" "$KATA_DIR/opencode/skills/$skill"; then
             rm "$CONFIG_DIR/skills/$skill"
             echo "  ✅ removido skills/$skill"
-        elif [[ -L "$CONFIG_DIR/skills/$skill/$skill" ]]; then
+        elif is_our_link "$CONFIG_DIR/skills/$skill/$skill" "$KATA_DIR/opencode/skills/$skill"; then
             # Órfão de instalação anterior, quando `ln -sfn` aninhava o link
             # dentro do diretório existente.
             rm "$CONFIG_DIR/skills/$skill/$skill"

@@ -319,6 +319,10 @@ A config file that exists but is invalid **aborts with exit code 1**. Falling
 back to ruff silently would report the success of a check the project never
 asked for, which is the class of lie the judge exists to hunt.
 
+Commands are executed with a 300-second timeout, but without sandboxing. Treat
+`.kata/config.yaml` as trusted project configuration. The task name `config` is
+reserved for this file and cannot be used as a task name.
+
 ### Exit codes
 
 - `0`: the requested operation passed;
@@ -490,10 +494,17 @@ The judge is opt-in. It re-runs claimed checks and returns:
 
 A **blind spot** is the judge admitting what it could not observe — not an
 accusation, since not having looked is evidence of neither fraud nor honesty.
-Two are detected: the report claims no check the judge knows how to re-run
-(declaring the project's commands in `.kata/config.yaml` is what disarms
-this one), and the diff touches a test file in a language the judge has no
-probes for. It knows Python, JS/TS, Go, Ruby, Rust and Java/Kotlin; a
+Three are detected: the report claims no check the judge knows how to re-run,
+the diff touches a test file in a language the judge has no probes for, or an
+ignored source/test candidate is outside Git's diff. The task's `base_commit`
+must resolve and be an ancestor of the current `HEAD`. Tasks created by the
+CLI also have an independent `refs/kata/base/<hash>` anchor; a mismatch is a
+high-severity `baseline_tampering` finding, while a missing anchor is a blind
+spot.
+
+The first blind spot is disarmed by declaring the project's commands in
+`.kata/config.yaml`. The second knows Python, JS/TS, Go, Ruby, Rust and
+Java/Kotlin; a
 `.php`, `.swift` or `.exs` test is still confessed rather than passed over
 in silence. With no fraud at all, any blind spot yields `UNVERIFIABLE`
 instead of `VERIFIED`: "I could not look" must never be reported as "all
@@ -529,7 +540,8 @@ domain: coding    # coding | devops | data-analysis | research | docs
 done: ""    # Fable Step 1: done criterion declared in THINK, before the
             # evidence; VERIFY confronts it and the report displays it
 base_commit: ""    # HEAD captured when the task started; lets JUDGE diff
-                    # against it even after the task has been committed
+                    # against it even after the task has been committed.
+                    # The CLI also stores an independent Git ref anchor.
 fit:
   trivial: false
   route: code-loop

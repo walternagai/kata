@@ -76,7 +76,7 @@ def test_refuses_to_touch_a_real_directory(script, env_var, src, tmp_path) -> No
     result = _run(script, env_var, tmp_path)
 
     assert result.returncode != 0
-    assert "não é symlink" in result.stdout
+    assert "não foi criado pelo Kata" in result.stdout
     assert (alvo / "SKILL.md").read_text(encoding="utf-8") == "customização do usuário"
     assert list(alvo.glob("**/*")) == [alvo / "SKILL.md"]  # nada aninhado
     assert _links(tmp_path) == []  # pré-voo: nenhuma mutação parcial
@@ -92,6 +92,22 @@ def test_refuses_to_overwrite_a_real_file(script, env_var, src, tmp_path) -> Non
 
     assert result.returncode != 0
     assert (skills / "kata-judge").read_text(encoding="utf-8") == "arquivo do usuário"
+
+
+@pytest.mark.parametrize("script,env_var,src", INSTALADORES)
+def test_refuses_to_replace_foreign_symlink(script, env_var, src, tmp_path) -> None:
+    skills = tmp_path / "skills"
+    skills.mkdir(parents=True)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    alvo = skills / "kata-judge"
+    alvo.symlink_to(foreign, target_is_directory=True)
+
+    result = _run(script, env_var, tmp_path)
+
+    assert result.returncode != 0
+    assert alvo.is_symlink()
+    assert alvo.resolve() == foreign
 
 
 @pytest.mark.parametrize("script,env_var,src", INSTALADORES)

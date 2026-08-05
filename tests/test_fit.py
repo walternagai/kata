@@ -140,6 +140,17 @@ class TestUntrackedIsNotInvisible:
         assert sorted(files) == ["README.md", "novo.py"]
         assert lines >= 2
 
+    def test_staged_e_unstaged_sao_unidos(self, tmp_path) -> None:
+        self._repo(tmp_path)
+        (tmp_path / "README.md").write_text("staged\n", encoding="utf-8")
+        subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
+        (tmp_path / "rastreado.py").write_text("x = 2\n", encoding="utf-8")
+
+        files, lines = diff_stats(cwd=tmp_path)
+
+        assert sorted(files) == ["README.md", "rastreado.py"]
+        assert lines >= 2
+
     def test_single_small_new_file_stays_trivial(self, tmp_path) -> None:
         """O gate não pode passar a recusar tudo: um arquivo novo e curto
         continua trivial."""

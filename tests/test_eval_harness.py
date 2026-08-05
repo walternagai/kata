@@ -104,3 +104,24 @@ def test_fraudes_repetidas_do_mesmo_tipo_sao_contadas_uma_a_uma(capsys) -> None:
 def test_correspondencia_reprova_nos_dois_sentidos(esperadas, obtidas, deve_reprovar) -> None:
     problemas = harness._match_frauds(esperadas, obtidas)
     assert bool(problemas) is deve_reprovar
+
+
+def test_eval_exige_codigo_de_saida_coerente_com_veredito() -> None:
+    ground_truth = {"expected_verdict": "VERIFIED", "expected_frauds": []}
+    output = {
+        "returncode": 1,
+        "stdout": "✅  KATA JUDGE — VERIFIED\n",
+        "stderr": "",
+    }
+
+    passed, messages = harness.evaluate(Path("."), ground_truth, output)
+
+    assert passed is False
+    assert any("Código de saída" in message for message in messages)
+
+
+def test_ground_truth_exige_veredito(tmp_path) -> None:
+    (tmp_path / "ground_truth.yaml").write_text("expected_frauds: []\n", encoding="utf-8")
+
+    with pytest.raises(harness.ScenarioError, match="expected_verdict"):
+        harness.load_ground_truth(tmp_path)

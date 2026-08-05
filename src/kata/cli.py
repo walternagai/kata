@@ -23,9 +23,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +40,12 @@ from kata.config import (
     load_verify_config,
 )
 from kata.fit import diff_stats, is_trivial, untracked_stats
-from kata.judge import JudgeResult, is_debris_file, judge_task
+from kata.judge import (
+    JudgeResult,
+    is_debris_file,
+    judge_task,
+    record_baseline_ref,
+)
 from kata.skills import InstallStatus, doctor, doctor_domain
 from kata.verify import VerifyResult, run_all, search_pattern, untracked_files
 
@@ -79,6 +86,24 @@ def _serialize(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
+def _save_task(path: Path, data: dict[str, Any]) -> None:
+    """Persiste a tarefa com replace atômico para permitir retomada segura."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(_serialize(data))
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
 def _deserialize(text: str) -> dict[str, Any]:
     if _HAS_YAML:
         return yaml.safe_load(text) or {}
@@ -108,6 +133,8 @@ def _detect_cov_source() -> str:
                 .get("run", {})
                 .get("source", [])
             )
+            if isinstance(sources, str):
+                return sources
             if sources:
                 return sources[0]
         except Exception:
@@ -138,6 +165,8 @@ def _is_invalid_task_name(task: str) -> bool:
         return True
     if task.endswith(_SERIALIZATION_EXTS):
         return True
+    if task == "config":
+        return True
     return "/" in task or "\\" in task or ".." in task
 
 
@@ -152,7 +181,7 @@ def _validate_task_name(task: str) -> None:
             f"⚠  Nome de tarefa inválido: '{task}'. "
             "Não pode ser vazio, conter espaços, começar com '.', "
             f"terminar em {' ou '.join(_SERIALIZATION_EXTS)}, "
-            "nem conter '/', '\\' ou '..'."
+            "nem ser 'config' ou conter '/', '\\' ou '..'."
         )
         sys.exit(1)
 
@@ -185,7 +214,9 @@ def _pick_task() -> str:
     if not sys.stdin.isatty():
         return "untitled"
     branch_task = _detect_task_from_branch()
-    existing = sorted(p.stem for p in _kata_dir().glob(f"*{_ext()}"))
+    existing = sorted(
+        p.stem for p in _kata_dir().glob(f"*{_ext()}") if p.stem != "config"
+    )
     if branch_task and branch_task in existing:
         return branch_task
     if existing:
@@ -225,16 +256,17 @@ def _run_git(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 def _changed_paths() -> list[str]:
     """Arquivos que a tarefa alterou, segundo o git.
 
-    Unstaged, com fallback para staged — e os untracked somados sempre, não
-    como último fallback. Arquivos novos nunca aparecem em `git diff`, então
-    tratá-los como alternativa aos rastreados fazia todo arquivo novo
-    desaparecer assim que houvesse qualquer modificação em arquivo já
-    rastreado.
+    Usa diff contra HEAD para incluir staged e unstaged, com fallback para
+    repositórios sem commit. Untracked são somados sempre, porque arquivos
+    novos nunca aparecem em `git diff`.
     """
-    rastreados = [
-        f for f in _run_git(["git", "diff", "--name-only"]).stdout.strip().split("\n") if f.strip()
-    ]
-    if not rastreados:
+    result = _run_git(["git", "diff", "HEAD", "--name-only"])
+    if result.returncode == 0:
+        rastreados = [f for f in result.stdout.strip().split("\n") if f.strip()]
+    else:
+        result = _run_git(["git", "diff", "--name-only"])
+        rastreados = [f for f in result.stdout.strip().split("\n") if f.strip()]
+    if result.returncode != 0 or not rastreados:
         rastreados = [
             f
             for f in _run_git(["git", "diff", "--cached", "--name-only"]).stdout.strip().split("\n")
@@ -336,7 +368,7 @@ def _print_judge_verdict(result: JudgeResult) -> None:
 # ── step implementations ────────────────────────────────────────────────
 
 
-def _capture_base_commit(data: dict[str, Any]) -> dict[str, Any]:
+def _capture_base_commit(data: dict[str, Any], task: str | None = None) -> dict[str, Any]:
     """Registra o HEAD do git no início da tarefa, uma única vez.
 
     O JUDGE usa esse commit como ponto de comparação. Sem ele, o JUDGE só
@@ -350,6 +382,8 @@ def _capture_base_commit(data: dict[str, Any]) -> dict[str, Any]:
     sha = result.stdout.strip()
     if result.returncode == 0 and sha:
         data["base_commit"] = sha
+        if task:
+            record_baseline_ref(task, sha, cwd=_cwd())
     return data
 
 
@@ -386,6 +420,12 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
     print(f"  diff: {len(files)} arquivo(s), {lines} linha(s) alteradas")
     if trivial:
         print("  ↳ tarefa parece trivial (<=1 arquivo, <10 linhas)")
+        trivial = _confirm(
+            "  A mudança não altera comportamento e não exige pesquisa?",
+            default=False,
+        )
+        if not trivial:
+            print("  ↳ gates completos serão mantidos por segurança")
     else:
         print("  ↳ tarefa não-trivial")
 
@@ -495,12 +535,18 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     # Mostra diff stat
     has_changes = False
-    result = _run_git(["git", "diff", "--stat"])
-    if result.stdout.strip():
+    result = _run_git(["git", "diff", "HEAD", "--stat"])
+    if result.returncode == 0 and result.stdout.strip():
         print("git diff --stat:")
         print(result.stdout)
         has_changes = True
-    else:
+    elif result.returncode != 0:
+        result = _run_git(["git", "diff", "--stat"])
+        if result.stdout.strip():
+            print("git diff --stat:")
+            print(result.stdout)
+            has_changes = True
+    if not has_changes:
         result = _run_git(["git", "diff", "--cached", "--stat"])
         if result.stdout.strip():
             print("git diff --cached --stat (staged):")
@@ -798,6 +844,19 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
     print(f"\n  Buscando '{pattern}' no projeto...")
     search_result = search_pattern(pattern, cwd=_cwd())
 
+    if search_result.error:
+        print(f"  ❌ Busca inválida ou interrompida: {search_result.error}")
+        data["twins"] = {
+            "pattern": pattern,
+            "result": search_result.error,
+            "searched": False,
+            "defect_fixed": True,
+            "matches_count": 0,
+            "files_count": 0,
+            "fix_applied": False,
+        }
+        return data
+
     if search_result.matches:
         print(f"\n  ✅ Encontrado em {search_result.total_files} arquivo(s):")
         for match in search_result.matches[:20]:
@@ -810,6 +869,9 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
     fix_others = False
     if search_result.matches:
         fix_others = _confirm("  Corrigir as demais ocorrências agora?", default=False)
+        if fix_others:
+            print("  ⚠  O CLI não edita ocorrências; a correção não foi aplicada.")
+            fix_others = False
 
     result_str = (
         f"{search_result.total_files} arquivo(s), "
@@ -920,19 +982,19 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     # INTENT: devida se a tarefa alterou algum arquivo que não é documentação
     intent_owed = _detect_intent_owed(data)
-    intent_present = bool(intent.get("answered")) and intent.get("code_does", "") != ""
+    intent_present = bool(_format_intent_line(intent))
 
     # AUTH: devida se ação irreversível foi tomada
     auth_owed = _detect_auth_owed(data)
-    auth_present = bool(data.get("auth", {}).get("authorized"))
+    auth_present = bool(_format_auth_line(data.get("auth", {})))
 
     # PENDING: devida se docs prescrevem follow-up e não foi tomado
     pending_owed = _detect_pending_owed(data)
-    pending_present = bool(data.get("pending", {}).get("documented"))
+    pending_present = bool(_format_pending_line(data.get("pending", {})))
 
     # TWINS: devida se defeito foi corrigido
     twins_owed = _detect_twins_owed(data)
-    twins_present = bool(data.get("twins", {}).get("searched"))
+    twins_present = bool(_format_twins_line(data.get("twins", {})))
 
     checks: dict[str, Any] = {
         "intent_owed": intent_owed,
@@ -987,12 +1049,10 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
         # Recompute present flags after user input so YAML reflects reality.
         intent = data.get("intent", {})
-        checks["intent_present"] = (
-            bool(intent.get("answered")) and intent.get("code_does", "") != ""
-        )
-        checks["auth_present"] = bool(data.get("auth", {}).get("authorized"))
-        checks["pending_present"] = bool(data.get("pending", {}).get("documented"))
-        checks["twins_present"] = bool(data.get("twins", {}).get("searched"))
+        checks["intent_present"] = bool(_format_intent_line(intent))
+        checks["auth_present"] = bool(_format_auth_line(data.get("auth", {})))
+        checks["pending_present"] = bool(_format_pending_line(data.get("pending", {})))
+        checks["twins_present"] = bool(_format_twins_line(data.get("twins", {})))
     else:
         print("  ✅ Todas as linhas devidas estão presentes")
 
@@ -1160,6 +1220,10 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
         caveats.append("INTENT não documentada — comportamento alterado sem registro de intenção")
     if artifact.get("auth_owed") and not artifact.get("auth_present"):
         caveats.append("AÇÃO EXTERNA sem autorização documentada (AUTH ausente)")
+    if artifact.get("pending_owed") and not artifact.get("pending_present"):
+        caveats.append("PENDING não documentada — follow-up prescrito sem registro")
+    if artifact.get("twins_owed") and not artifact.get("twins_present"):
+        caveats.append("TWINS não documentada — busca de recorrência ausente")
 
     if caveats:
         print()
@@ -1190,12 +1254,12 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
 # ── init ────────────────────────────────────────────────────────────────
 
 
-def _init_task(task: str) -> None:
+def _init_task(task: str) -> bool:
     """Cria template .kata/<task>.yaml para uma nova tarefa."""
     path = _task_path(task)
     if path.exists():
         print(f"⚠  {path} já existe. Use o modo interativo para continuar.")
-        return
+        return False
 
     template: dict[str, Any] = {
         "task": task,
@@ -1266,9 +1330,10 @@ def _init_task(task: str) -> None:
             "twins_owed": False, "twins_present": False,
         },
     }
-    template = _capture_base_commit(template)
-    path.write_text(_serialize(template), encoding="utf-8")
+    template = _capture_base_commit(template, task=task)
+    _save_task(path, template)
     print(f"✅  {path} criado. Preencha as respostas com o modo interativo.")
+    return True
 
 
 # ── audit ────────────────────────────────────────────────────────────────
@@ -1426,7 +1491,10 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
         else:
             parciais += 1
             print(f"  ❌ {e.frontend}: instalação PARCIAL em {e.config_dir}")
-            print(f"     {len(e.instaladas)} instalada(s), faltando: {', '.join(e.faltando)}")
+            faltando = list(e.faltando)
+            if e.agente_esperado and not e.agente_instalado:
+                faltando.append("agent/kata.md")
+            print(f"     {len(e.instaladas)} instalada(s), faltando: {', '.join(faltando)}")
     print()
 
     # Domain skills são opcionais: avisar, mas não reprovar.
@@ -1577,7 +1645,18 @@ def main() -> None:
 
     # Modo --init
     if args.init:
-        _init_task(args.init)
+        created = _init_task(args.init)
+        path = _task_path(args.init)
+        if not created or not path.exists():
+            return
+        data = _deserialize(path.read_text(encoding="utf-8"))
+        data = _capture_base_commit(data, task=args.init)
+        _save_task(path, data)
+        data = _step_fit(args.init, data)
+        _save_task(path, data)
+        data = _step_think(args.init, data)
+        _save_task(path, data)
+        print(f"\n📝  FIT + THINK salvos em {path}")
         return
 
     # Modo --report (outcome-first)
@@ -1672,29 +1751,37 @@ def main() -> None:
         if path.exists()
         else {"task": task, "status": "draft"}
     )
-    data = _capture_base_commit(data)
+    data = _capture_base_commit(data, task=task)
+    _save_task(path, data)
 
     data = _step_fit(task, data)
-    data = _step_think(task, data)
+    _save_task(path, data)
 
     fit_route = data.get("fit", {}).get("route", "code-loop")
     fit_trivial = data.get("fit", {}).get("trivial", False)
 
+    if not fit_trivial or args.plan or fit_route in {"question", "plan-first"}:
+        data = _step_think(task, data)
+        _save_task(path, data)
+
     if fit_route == "question":
-        path.write_text(_serialize(data), encoding="utf-8")
+        _save_task(path, data)
         print(f"\n📝  Resultado salvo em {path}")
         return
 
     if args.plan or fit_route == "plan-first":
-        path.write_text(_serialize(data), encoding="utf-8")
+        _save_task(path, data)
         print(f"\n📝  Plano salvo em {path}")
         print("    Próximas fases: SIMPLIFY → SURGICAL → VERIFY")
         return
 
     if not fit_trivial:
         data = _step_simplify(task, data)
+        _save_task(path, data)
         data = _step_intent(task, data)
+        _save_task(path, data)
         data = _step_surgical(task, data)
+        _save_task(path, data)
 
     data = _step_verify(
         task,
@@ -1706,12 +1793,15 @@ def main() -> None:
         gate=gate,
             config=config,
     )
+    _save_task(path, data)
     if not fit_trivial:
         data = _step_twin(task, data)
+        _save_task(path, data)
     data = _step_artifact(task, data)
+    _save_task(path, data)
     _step_report(task, data)
 
-    path.write_text(_serialize(data), encoding="utf-8")
+    _save_task(path, data)
     print(f"\n📝  Resultado salvo em {path}")
 
     if data.get("status") == "rejected":

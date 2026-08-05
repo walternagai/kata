@@ -26,6 +26,8 @@ dividida. Um papel não declarado cai no default Python daquele papel.
 from __future__ import annotations
 
 import json
+import math
+import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
@@ -131,17 +133,27 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
     if not isinstance(dados, dict):
         raise ConfigError(f"{caminho}: esperava um mapa no topo")
 
-    verify = dados.get("verify") or {}
+    verify = dados.get("verify")
+    if verify is None:
+        verify = {}
     if not isinstance(verify, dict):
         raise ConfigError(f"{caminho}: `verify` deve ser um mapa")
 
     gate = verify.get("gate")
-    if gate is not None and not isinstance(gate, (int, float)):
+    if gate is not None and (
+        isinstance(gate, bool) or not isinstance(gate, (int, float))
+    ):
         raise ConfigError(f"{caminho}: `verify.gate` deve ser número")
+    if gate is not None and (not math.isfinite(float(gate)) or not 0 <= gate <= 100):
+        raise ConfigError(f"{caminho}: `verify.gate` deve estar entre 0 e 100")
 
     pattern = verify.get("coverage_pattern", DEFAULT_COVERAGE_PATTERN)
     if not isinstance(pattern, str):
         raise ConfigError(f"{caminho}: `verify.coverage_pattern` deve ser string")
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        raise ConfigError(f"{caminho}: `verify.coverage_pattern` inválido ({exc})") from exc
 
     return VerifyConfig(
         lint=_parse_command(verify.get("lint"), "lint"),

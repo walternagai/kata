@@ -18,9 +18,10 @@ Verificar adversarialmente uma tarefa concluída:
 1. **Collect claims** — extrair do YAML o que o relatório diz que foi feito
 2. **Establish ground truth** — diff contra o estado real do código, desde
    `base_commit` (o HEAD registrado no início da tarefa, na fase FIT) se
-   disponível; senão, diff local (unstaged/staged). `base_commit` é o que
-   permite ao JUDGE continuar enxergando a mudança depois que ela é
-   commitada — o estado normal de uma tarefa "concluída"
+   disponível. O CLI confere se ele resolve, é ancestral do HEAD e coincide
+   com a âncora independente em `refs/kata/base/<hash>`; divergência é
+   `baseline_tampering`. Sem âncora, o resultado não pode ser VERIFIED. Sem
+   baseline, usa diff local contra HEAD e declara os pontos cegos observáveis.
 3. **Re-run every claimed verification** — executar de novo e comparar
 4. **Hunt frauds** — 6 categorias
 5. **Confess blind spots** — registrar o que não teve como observar
@@ -64,7 +65,7 @@ python -m kata --judge
 
 Um ponto cego é o juiz confessando o que não conseguiu observar. Não é
 acusação: não ter observado não é evidência de fraude nem de honestidade.
-Dois disparam hoje:
+Três disparam hoje:
 
 1. **Nenhuma verificação re-executada** — o relatório não afirma nenhum
    check (`ruff_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
@@ -73,6 +74,8 @@ Dois disparam hoje:
 2. **Teste em linguagem sem sondas** — o juiz conhece a sintaxe de Python,
    JS/TS, Go, Ruby, Rust e Java/Kotlin. Um teste fora dessa lista (`.php`,
    `.swift`, `.exs`…) não pode ser lido, e o juiz diz isso em vez de calar.
+3. **Código/teste ignorado pelo Git** — candidatos relevantes sob `.gitignore`
+   não entram no diff e são listados como ponto cego.
 
 Não havendo fraude nenhuma, qualquer ponto cego faz o veredito ser
 **UNVERIFIABLE** em vez de VERIFIED: "não consegui olhar" não pode ser

@@ -1,0 +1,9 @@
+# Ground truth para s10-pass-inline-comment.
+# R9-6: corpo vazio "documentado" por comentário inline (`pass  # noqa`) —
+# antes escapava porque a linha não casava `skippable` nem o `empty_body`
+# antigo. Se o fix regredir, o cenário falha.
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: weakened_checks
+    severity: high
+    description_contains: "corpo vazio"

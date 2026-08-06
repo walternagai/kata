@@ -1,0 +1,6 @@
+# Ground truth para s12-unreadable-language.
+# Teste em linguagem sem sondas (.php): o judge confessa que não sabe ler —
+# blind spot → UNVERIFIABLE, nunca VERIFIED. Se _unreadable_test_files
+# parar de reconhecer (ou _LANGUAGES ganhar .php), o cenário falha.
+expected_verdict: "UNVERIFIABLE"
+expected_frauds: []

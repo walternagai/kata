@@ -124,6 +124,33 @@ def _aplica_baseline(
     for caminho in leave_untracked or []:
         git("rm", "--cached", "-q", caminho)
 
+    # Arquivos do fixture que NÃO existem no baseline entram no commit de
+    # baseline já no estado pós-tarefa (copytree só sobrescreve os comuns).
+    # Se o cenário planta mudança num desses arquivos (ex.: noqa adicionado
+    # em src/), ela some do diff e o trap deixa de testar o que diz testar —
+    # falha cedo com diagnóstico (P2-6), em vez de "fraude esperada não
+    # encontrada" no evaluate.
+    baseline_rel = {str(f.relative_to(baseline)) for f in baseline.rglob("*") if f.is_file()}
+    rastreados = set(
+        subprocess.run(
+            ["git", "ls-files"], cwd=path, capture_output=True, text=True, check=True
+        ).stdout.splitlines()
+    )
+    for arquivo, conteudo in posterior.items():
+        rel = str(arquivo.relative_to(path))
+        if rel in baseline_rel or rel not in rastreados:
+            continue
+        antes = subprocess.run(
+            ["git", "show", f"HEAD~1:{rel}"], cwd=path, capture_output=True
+        ).stdout
+        if antes != conteudo:
+            raise ScenarioError(
+                f"{rel} difere entre o baseline e a tarefa mas não está em "
+                "baseline/ — a mudança foi embutida no commit de baseline e "
+                "fica invisível ao judge. Ponha a versão pré-tarefa do "
+                "arquivo em baseline/ (ou torne os dois commits idênticos)."
+            )
+
     caminho_task = path / ".kata" / f"{task}.yaml"
     dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
     dados["base_commit"] = sha
@@ -155,6 +182,19 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     git("add", "-A")
     for caminho in leave_untracked or []:
         git("rm", "--cached", "-q", caminho)
+
+
+def _tampera_base_commit(path: Path, task: str) -> None:
+    """Planta baseline_tampering: base_commit do YAML passa a apontar para o
+    HEAD (commit da tarefa) enquanto a âncora refs/kata/base/<hash> continua
+    no baseline — o judge tem de acusar a divergência (P2-4/s14)."""
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    caminho_task = path / ".kata" / f"{task}.yaml"
+    dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
+    dados["base_commit"] = sha
+    caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
 def run_judge(path: Path, task: str) -> dict:
@@ -193,6 +233,10 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             raise ScenarioError("ground_truth.yaml deve declarar expected_verdict válido")
         if not isinstance(data.get("expected_frauds", []), list):
             raise ScenarioError("expected_frauds deve ser uma lista")
+        for chave in ("leave_untracked", "expected_absent"):
+            valor = data.get(chave)
+            if valor is not None and not isinstance(valor, list):
+                raise ScenarioError(f"ground_truth.yaml: {chave} deve ser uma lista")
         return data
     except (OSError, yaml.YAMLError) as exc:
         raise ScenarioError(f"ground_truth.yaml ilegível: {exc}") from exc
@@ -288,6 +332,15 @@ def evaluate(scenario_dir: Path, ground_truth: dict, judge_output: dict) -> tupl
     if problemas:
         passed = False
         messages.extend(problemas)
+        if (scenario_dir / "baseline").is_dir():
+            # P2-6: a causa mais comum de fraude esperada não vista com
+            # baseline presente é a mudança plantada em arquivo fora de
+            # baseline/ — o estado pós-tarefa vira o baseline e o diff some.
+            messages.append(
+                "  💡 Mudança não vista com baseline presente? Arquivos que a "
+                "tarefa altera precisam de versão pré-mudança em baseline/ — "
+                "senão a mudança é embutida no baseline e fica invisível ao judge."
+            )
 
     # Falso positivo em arquivo específico: o tipo de fraude pode ser esperado
     # no cenário e ainda assim um arquivo honesto não deve aparecer nele.
@@ -342,6 +395,8 @@ def main() -> None:
                         _git_em(work_dir),
                         gt.get("leave_untracked"),
                     )
+                if gt.get("tamper_base_commit"):
+                    _tampera_base_commit(work_dir, tarefa)
 
                 judge_output = run_judge(work_dir, tarefa)
                 passed, messages = evaluate(scenario, gt, judge_output)

@@ -1,0 +1,48 @@
+task: tarefa-simples
+status: approved
+fit:
+  trivial: false
+  route: code-loop
+think:
+  problem: cenário de trap do eval
+  answered: true
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+intent:
+  code_does: x
+  check_expects: y
+  spec_says: z
+  all_agree: true
+  answered: true
+surgical:
+  files:
+  - path: src/app.py
+    necessary: true
+  removed_imports_clean: true
+verify:
+  ruff_clean: null
+  tests_pass: null
+  coverage_pct: null
+  coverage_pass: null
+  success_criteria_met: null
+auth:
+  action_taken: false
+  authorized: false
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: n/a
+  result: nenhuma
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: false
+  pending_owed: false
+  pending_present: false
+  twins_owed: false
+  twins_present: true

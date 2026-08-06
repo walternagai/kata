@@ -62,6 +62,9 @@ Um diretório `baseline/` resolve isso. Se existir, o harness:
 
 Coloque em `baseline/` só os arquivos que a tarefa alterou, na versão anterior à
 mudança. O SHA não pode vir pronto no fixture: só existe em tempo de execução.
+Mudança plantada em arquivo que NÃO está em `baseline/` some do diff (o estado
+pós-tarefa vira o baseline) — o harness falha cedo com diagnóstico quando
+acontece.
 
 ## Ground truth schema
 
@@ -79,7 +82,13 @@ expected_absent:                     # texto que NÃO deve aparecer no output;
                                      # é honesto
 leave_untracked:                     # tirados do índice após `git add -A`,
   - tests/test_servico.py            # para exercitar a cegueira a untracked
+tamper_base_commit: true             # opcional: reescreve base_commit do YAML
+                                     # para o HEAD após gravar a âncora —
+                                     # planta baseline_tampering (s14)
 ```
+
+`leave_untracked` e `expected_absent` têm de ser listas — string vira iteração
+por caractere com diagnóstico enganoso, e o harness reprova no carregamento.
 
 O `baseline/` não é declarado aqui — o harness detecta o diretório.
 

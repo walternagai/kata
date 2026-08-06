@@ -1,0 +1,7 @@
+# Ground truth para s13-unverifiable.
+# Tarefa que não afirma nenhuma verificação reproduzível: o judge não tem o
+# que re-executar — ponto cego confessado ("nenhuma verificação re-executada")
+# → UNVERIFIABLE, nunca VERIFIED. Se o veredito regredir para VERIFIED, o
+# cenário falha.
+expected_verdict: "UNVERIFIABLE"
+expected_frauds: []

@@ -1,0 +1,9 @@
+# Ground truth para s11-assert-true-new-file.
+# R10-10: teste NOVO com corpo só `assert True` — os padrões `weakened` só
+# rodavam em arquivo modificado e o no-op mais comum escapava. Se o
+# noop_body regredir, o cenário falha.
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: weakened_checks
+    severity: high
+    description_contains: "assert True"

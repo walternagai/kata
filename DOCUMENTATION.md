@@ -808,13 +808,15 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and the frauds the judge must find. Eight scenarios (s01–s06,
-s08–s09) plant a fraud the judge must catch; `s07` is an entirely honest task
-that must come back `VERIFIED`, and `s06` doubles as a guard against refusing
-legitimate work, planting real debris beside files whose names merely look
-like debris. A judge that refuses legitimate work is as broken as one that
-misses fraud, and unit tests are poor at catching it, because they test what
-the author thought to test.
+the verdict and the frauds the judge must find. Eleven scenarios (s01–s06,
+s08–s11, s14) plant a fraud the judge must catch; `s07` is an entirely honest
+task that must come back `VERIFIED`, and `s12`/`s13` expect `UNVERIFIABLE`
+(blind spots, no fraud). `s06` doubles as a guard against refusing legitimate
+work, planting real debris beside files whose names merely look like debris,
+and `s14` plants `baseline_tampering` (the harness rewrites `base_commit` in
+the YAML after recording the Git anchor). A judge that refuses legitimate
+work is as broken as one that misses fraud, and unit tests are poor at
+catching it, because they test what the author thought to test.
 
 See [`eval/README.md`](eval/README.md) for the scenario schema and for the
 rule that a new scenario must be shown to fail when its defect is

@@ -130,3 +130,41 @@ def test_ground_truth_exige_veredito(tmp_path) -> None:
 
     with pytest.raises(harness.ScenarioError, match="expected_verdict"):
         harness.load_ground_truth(tmp_path)
+
+
+def test_ground_truth_rejeita_leave_untracked_nao_lista(tmp_path) -> None:
+    """P2-5: string viraria iteração por caractere no git rm --cached —
+    erro nomeado no load, não diagnóstico enganoso."""
+    (tmp_path / "ground_truth.yaml").write_text(
+        "expected_verdict: REFUTED\nleave_untracked: tests/test_x.py\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(harness.ScenarioError, match="leave_untracked"):
+        harness.load_ground_truth(tmp_path)
+
+
+def test_ground_truth_rejeita_expected_absent_nao_lista(tmp_path) -> None:
+    (tmp_path / "ground_truth.yaml").write_text(
+        "expected_verdict: VERIFIED\nexpected_absent: scratch\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(harness.ScenarioError, match="expected_absent"):
+        harness.load_ground_truth(tmp_path)
+
+
+def test_fraude_ausente_com_baseline_sugere_a_convencao(tmp_path) -> None:
+    """P2-6: fraude esperada não vista com baseline presente merece o
+    diagnóstico da convenção, não só 'não encontrada'."""
+    (tmp_path / "baseline").mkdir()
+    ground_truth = {
+        "expected_verdict": "REFUTED",
+        "expected_frauds": [{"type": "weakened_checks", "severity": "high"}],
+    }
+    output = {"returncode": 1, "stdout": "✅  KATA JUDGE — REFUTED\n", "stderr": ""}
+
+    passed, messages = harness.evaluate(tmp_path, ground_truth, output)
+
+    assert passed is False
+    assert any("baseline/" in message for message in messages)

@@ -1,0 +1,51 @@
+task: fix-divide-by-zero
+status: approved
+fit:
+  trivial: false
+  route: code-loop
+think:
+  problem: "divide() raises ValueError on zero divisor, need to handle gracefully"
+  assumptions: []
+  alternatives: []
+  unknowns: ""
+  answered: true
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+intent:
+  code_does: "divide() raises ValueError on b=0"
+  check_expects: "test_divide expects ValueError to be caught"
+  spec_says: "divide should return float for valid inputs"
+  all_agree: true
+  answered: true
+surgical:
+  files:
+    - path: src/calculator.py
+      necessary: true
+    - path: tests/test_calculator.py
+      necessary: true
+  removed_imports_clean: true
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 95.0
+  coverage_pass: true
+  success_criteria_met: true
+auth:
+  action_taken: false
+  authorized: false
+pending:
+  action: ""
+  documented: false
+twins:
+  searched: false
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: false
+  pending_owed: false
+  pending_present: false
+  twins_owed: true
+  twins_present: false

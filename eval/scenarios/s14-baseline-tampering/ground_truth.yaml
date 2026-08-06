@@ -1,0 +1,12 @@
+# Ground truth para s14-baseline-tampering.
+# A âncora refs/kata/base/<hash> é registrada no baseline; o harness então
+# adulterA o YAML para base_commit = HEAD (commit da tarefa) — divergência
+# YAML↔âncora que o judge tem de acusar como baseline_tampering (high →
+# REFUTED). A mudança em si é honesta; a única fraude é a adulteração.
+# Se a checagem de divergência regredir, o cenário falha.
+tamper_base_commit: true
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: baseline_tampering
+    severity: high
+    description_contains: "diverge"

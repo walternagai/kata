@@ -61,11 +61,12 @@ REQUIRED_ROLES: frozenset[str] = frozenset(
 )
 
 # Como o frontend se apresenta. Não é capacidade: é nome, e não muda o que
-# o ciclo pode fazer.
+# o ciclo pode fazer. AGENTE_CAP morreu por desuso (nenhuma fonte a usava) e
+# foi removida — uma variável de identidade que nada renderiza é custo morto
+# para quem implementa frontend novo (R10-28).
 REQUIRED_IDENTITY: frozenset[str] = frozenset(
     {
         "AGENTE",
-        "AGENTE_CAP",
         "AGENTE_CAP_MIN",
         "FRONTEND_NOME",
         "ESTE_ORQUESTRADOR",
@@ -103,7 +104,6 @@ FRONTENDS: dict[str, dict] = {
         },
         "identity": {
             "AGENTE": "o agente @kata",
-            "AGENTE_CAP": "O agente",
             "AGENTE_CAP_MIN": "o agente",
             "FRONTEND_NOME": "OpenCode",
             "ESTE_ORQUESTRADOR": "O prompt do agente",
@@ -129,7 +129,6 @@ FRONTENDS: dict[str, dict] = {
         },
         "identity": {
             "AGENTE": "o kata",
-            "AGENTE_CAP": "A skill",
             "AGENTE_CAP_MIN": "a skill",
             "FRONTEND_NOME": "Claude Code",
             "ESTE_ORQUESTRADOR": "Esta skill",

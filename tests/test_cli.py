@@ -1012,37 +1012,26 @@ class TestJsonFallback:
 class TestChangedPathsSeesUntracked:
     """Repo git de verdade: o defeito era o comando que nunca era chamado."""
 
-    def _repo(self, tmp_path) -> None:
-        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
-        (tmp_path / "README.md").write_text("base\n", encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
-
-    def test_untracked_survives_a_modified_file(self, tmp_path, monkeypatch) -> None:
+    def test_untracked_survives_a_modified_file(self, repo_git, tmp_path, monkeypatch) -> None:
         """Untracked era o terceiro fallback, então bastava um arquivo
         modificado para os arquivos novos sumirem da lista."""
         monkeypatch.chdir(tmp_path)
-        self._repo(tmp_path)
         (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
         (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
 
         assert sorted(cli._changed_paths()) == ["README.md", "novo.py"]
 
-    def test_untracked_debris_is_reported(self, tmp_path, monkeypatch) -> None:
+    def test_untracked_debris_is_reported(self, repo_git, tmp_path, monkeypatch) -> None:
         """Detrito recém-criado e ainda não adicionado ao índice é o caso
         mais comum, e era o único invisível."""
         monkeypatch.chdir(tmp_path)
-        self._repo(tmp_path)
         (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
         (tmp_path / "saida.tmp").write_text("lixo\n", encoding="utf-8")
 
         assert cli._detect_scratch_files() == ["saida.tmp"]
 
-    def test_no_duplicates_when_nothing_is_untracked(self, tmp_path, monkeypatch) -> None:
+    def test_no_duplicates_when_nothing_is_untracked(self, repo_git, tmp_path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
-        self._repo(tmp_path)
         (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
 
         assert cli._changed_paths() == ["README.md"]
@@ -2967,6 +2956,9 @@ class TestStepTwin:
             result = cli._step_twin("task", data)
         # Non-TTY, so returns defaults even though intent conflict
         assert result["twins"]["searched"] is False
+        # R10-13: nada foi confirmado — defect_fixed falso, senão o audit
+        # graduaria a tarefa como faked por uma busca que ninguém pôde fazer.
+        assert result["twins"]["defect_fixed"] is False
 
 
 class TestConfigDoProjeto:

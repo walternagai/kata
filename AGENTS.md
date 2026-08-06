@@ -80,7 +80,7 @@ Na fonte, o que muda por frontend se escreve de três formas:
   capacidade como `only:` obriga um terceiro host com a mesma forma a ser
   adicionado a cada bloco à mão — a duplicata voltando por outra porta.
 
-Cuidado com concordância: `{{ESTE_ORQUESTRADOR}}` e `{{AGENTE_CAP}}` mudam de
+Cuidado com concordância: `{{ESTE_ORQUESTRADOR}}` e `{{AGENTE_CAP_MIN}}` mudam de
 gênero entre os frontends ("O prompt do agente" / "Esta skill"), e o
 adjetivo seguinte tem de concordar com os dois. Quando não der, escreva a
 frase sem a variável — "o orquestrador" descreve ambos e não flexiona.

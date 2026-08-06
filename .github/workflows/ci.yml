@@ -47,6 +47,11 @@ jobs:
 
       # O gate de coverage (fail_under = 70) vem de pyproject.toml e é
       # aplicado pelo pytest-cov, então `make test` já reprova sozinho.
+      # O guarda de drift de phases/ existe como teste (test_skills_build);
+      # o alvo do Makefile verifica o gerado em si e ficava fora do CI (R10-32).
+      - name: Skills em dia
+        run: make check-skills
+
       - name: Test
         run: make test
 

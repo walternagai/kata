@@ -547,17 +547,25 @@ class TestHuntDebris:
 
 
 @patch("kata.judge.untracked_files", return_value=[])
+@patch("kata.judge._ignored_files", return_value=[])
 @patch("kata.judge._changed_files")
 @patch("kata.judge._run_git_diff")
 @patch("kata.judge.run_all")
 class TestJudgeTask:
-    """Testa judge_task end-to-end."""
+    """Testa judge_task end-to-end.
+
+    `_ignored_files` é mockado de propósito: o caminho real roda
+    `git ls-files --others --ignored` na árvore do repo de desenvolvimento, e
+    um ignorado com aparência de código quebraria testes que assertam
+    `blind_spots == []` sem ter nada a ver com eles (R10-30).
+    """
 
     def test_sem_claims_e_unverifiable_nao_verified(
         self,
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """Tarefa que não afirma nenhum check reproduzível não pode sair VERIFIED.
@@ -579,6 +587,7 @@ class TestJudgeTask:
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """R10-17: `verify: true` no YAML (escrito à mão) crashava o judge
@@ -596,6 +605,7 @@ class TestJudgeTask:
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -628,6 +638,7 @@ class TestJudgeTask:
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -645,6 +656,7 @@ class TestJudgeTask:
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = """
@@ -666,6 +678,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -681,6 +694,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = '+    print("debug")\n'
@@ -695,6 +709,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -710,6 +725,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -725,6 +741,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -748,6 +765,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -766,6 +784,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -924,14 +943,10 @@ class TestJudgeTaskDetectsCommittedFraud:
     (o estado normal de uma tarefa "concluída") só é detectada quando
     base_commit está disponível — sem ele, o judge fica cego."""
 
-    def _make_repo(self, tmp_path) -> None:
-        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
-
-    def test_committed_fraud_invisible_without_base_commit(self, tmp_path, monkeypatch) -> None:
+    def test_committed_fraud_invisible_without_base_commit(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
-        self._make_repo(tmp_path)
         test_file = tmp_path / "tests"
         test_file.mkdir()
         (test_file / "test_foo.py").write_text(
@@ -949,9 +964,10 @@ class TestJudgeTaskDetectsCommittedFraud:
         result = judge_task(task_data, cwd=tmp_path)
         assert not any(f.type == "weakened_checks" for f in result.frauds)
 
-    def test_committed_fraud_detected_with_base_commit(self, tmp_path, monkeypatch) -> None:
+    def test_committed_fraud_detected_with_base_commit(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
-        self._make_repo(tmp_path)
         test_file = tmp_path / "tests"
         test_file.mkdir()
         (test_file / "test_foo.py").write_text(
@@ -978,9 +994,8 @@ class TestJudgeTaskDetectsCommittedFraud:
         assert any(f.type == "weakened_checks" for f in result.frauds)
         assert result.verdict == "REFUTED"
 
-    def test_baseline_yaml_adulterado_e_refutado(self, tmp_path, monkeypatch) -> None:
+    def test_baseline_yaml_adulterado_e_refutado(self, repo_git, tmp_path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
-        self._make_repo(tmp_path)
         test_file = tmp_path / "tests"
         test_file.mkdir()
         alvo = test_file / "test_foo.py"
@@ -1172,35 +1187,24 @@ class TestJudgeSeesUntrackedFiles:
     base_commit — não enxerga untracked, então uma fraude podia entrar
     inteira num arquivo nunca adicionado ao índice."""
 
-    def _make_repo(self, tmp_path) -> None:
-        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
-        (tmp_path / "README.md").write_text("base\n", encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=tmp_path, check=True)
-
-    def test_untracked_file_listed_as_changed(self, tmp_path, monkeypatch) -> None:
+    def test_untracked_file_listed_as_changed(self, repo_git, tmp_path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
-        self._make_repo(tmp_path)
         (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
 
         assert _changed_files(cwd=tmp_path) == ["novo.py"]
 
-    def test_untracked_content_reaches_the_diff(self, tmp_path, monkeypatch) -> None:
+    def test_untracked_content_reaches_the_diff(self, repo_git, tmp_path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
-        self._make_repo(tmp_path)
         (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
 
         diff = _run_git_diff(cwd=tmp_path)
         assert "diff --git a/novo.py b/novo.py" in diff
         assert "+x = 1" in diff
 
-    def test_untracked_weakened_test_is_caught(self, tmp_path, monkeypatch) -> None:
+    def test_untracked_weakened_test_is_caught(self, repo_git, tmp_path, monkeypatch) -> None:
         """O caso que motiva a correção: um teste inteiro escrito com o
         corpo trocado por `pass`, deixado untracked, era invisível."""
         monkeypatch.chdir(tmp_path)
-        self._make_repo(tmp_path)
         tests_dir = tmp_path / "tests"
         tests_dir.mkdir()
         (tests_dir / "test_fake.py").write_text(
@@ -1213,9 +1217,10 @@ class TestJudgeSeesUntrackedFiles:
         assert any(f.type == "weakened_checks" for f in result.frauds)
         assert result.verdict == "REFUTED"
 
-    def test_untracked_binary_file_does_not_break_the_diff(self, tmp_path, monkeypatch) -> None:
+    def test_untracked_binary_file_does_not_break_the_diff(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
-        self._make_repo(tmp_path)
         (tmp_path / "blob.bin").write_bytes(b"\xff\xfe\x00binary")
 
         diff = _run_git_diff(cwd=tmp_path)
@@ -1330,17 +1335,23 @@ class TestIgnoredCodeFiles:
 
 
 @patch("kata.judge.untracked_files", return_value=[])
+@patch("kata.judge._ignored_files", return_value=[])
 @patch("kata.judge._changed_files")
 @patch("kata.judge._run_git_diff")
 @patch("kata.judge.run_all")
 class TestBlindSpots:
-    """O juiz confessa o que não conseguiu observar, e o veredito reflete isso."""
+    """O juiz confessa o que não conseguiu observar, e o veredito reflete isso.
+
+    `_ignored_files` mockado pelo mesmo motivo do TestJudgeTask (R10-30): o
+    caminho real lê o git do repo de desenvolvimento.
+    """
 
     def test_teste_ilegivel_derruba_o_verified_limpo(
         self,
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """Repositório poliglota: os checks rodam e passam, e mesmo assim há
@@ -1371,6 +1382,7 @@ class TestBlindSpots:
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """O caminho honesto continua VERIFIED — a correção não pode
@@ -1401,6 +1413,7 @@ class TestBlindSpots:
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """UNVERIFIABLE não pode mascarar REFUTED: quando o juiz achou fraude,
@@ -1419,6 +1432,7 @@ class TestBlindSpots:
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
         mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""

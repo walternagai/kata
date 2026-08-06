@@ -193,6 +193,7 @@ simplify:
   minimum_code: true
   no_single_use_abstractions: true
   no_speculative_config: true
+  notes: ""            # observações opcionais do SIMPLIFY (só se preenchidas)
   answered: false       # true ao concluir a fase; false se foi preenchida
                         # com default sem ninguém responder
   skipped: false        # true só no modo não-interativo
@@ -201,6 +202,8 @@ intent:
   check_expects: ""
   spec_says: ""
   all_agree: true
+  conflict_resolution: ""  # como o conflito código/teste/spec foi resolvido
+                        # (só se all_agree for false)
   answered: false
   skipped: false
 surgical:

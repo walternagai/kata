@@ -113,18 +113,9 @@ class TestUntrackedIsNotInvisible:
     triviality gate. Mock não serve aqui: o defeito era exatamente o comando
     que nunca era chamado."""
 
-    def _repo(self, tmp_path) -> None:
-        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.email", "t@t.com"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
-        (tmp_path / "README.md").write_text("base\n", encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
-
-    def test_new_module_is_not_trivial(self, tmp_path) -> None:
+    def test_new_module_is_not_trivial(self, repo_git, tmp_path) -> None:
         """Criar um módulo de 200 linhas aparecia como diff vazio, e o
         triviality gate mandava pular SIMPLIFY, INTENT e SURGICAL."""
-        self._repo(tmp_path)
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "servico.py").write_text(
             "\n".join(f"def f{i}(): return {i}" for i in range(200)) + "\n", encoding="utf-8"
@@ -136,10 +127,9 @@ class TestUntrackedIsNotInvisible:
         assert lines == 200
         assert is_trivial(files, lines) is False
 
-    def test_untracked_counted_alongside_modified(self, tmp_path) -> None:
+    def test_untracked_counted_alongside_modified(self, repo_git, tmp_path) -> None:
         """Untracked é somado, não usado como fallback: um arquivo modificado
         não pode fazer os novos desaparecerem."""
-        self._repo(tmp_path)
         (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
         (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
 
@@ -148,8 +138,7 @@ class TestUntrackedIsNotInvisible:
         assert sorted(files) == ["README.md", "novo.py"]
         assert lines >= 2
 
-    def test_staged_e_unstaged_sao_unidos(self, tmp_path) -> None:
-        self._repo(tmp_path)
+    def test_staged_e_unstaged_sao_unidos(self, repo_git, tmp_path) -> None:
         (tmp_path / "README.md").write_text("staged\n", encoding="utf-8")
         subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
         (tmp_path / "rastreado.py").write_text("x = 2\n", encoding="utf-8")
@@ -159,20 +148,18 @@ class TestUntrackedIsNotInvisible:
         assert sorted(files) == ["README.md", "rastreado.py"]
         assert lines >= 2
 
-    def test_single_small_new_file_stays_trivial(self, tmp_path) -> None:
+    def test_single_small_new_file_stays_trivial(self, repo_git, tmp_path) -> None:
         """O gate não pode passar a recusar tudo: um arquivo novo e curto
         continua trivial."""
-        self._repo(tmp_path)
         (tmp_path / "nota.txt").write_text("uma linha\n", encoding="utf-8")
 
         files, lines = diff_stats(cwd=tmp_path)
 
         assert is_trivial(files, lines) is True
 
-    def test_binary_file_counts_as_non_trivial(self, tmp_path) -> None:
+    def test_binary_file_counts_as_non_trivial(self, repo_git, tmp_path) -> None:
         """Antes contava 0 linhas, e com um arquivo só isso virava "trivial".
         O que não pode ser lido não pode ser declarado trivial."""
-        self._repo(tmp_path)
         (tmp_path / "blob.bin").write_bytes(b"\xff\xfe\x00binario")
 
         files, lines = untracked_stats(cwd=tmp_path)
@@ -181,11 +168,10 @@ class TestUntrackedIsNotInvisible:
         assert lines >= TRIVIAL_MAX_LINES
         assert is_trivial(files, lines) is False
 
-    def test_oversized_file_counts_as_non_trivial(self, tmp_path) -> None:
+    def test_oversized_file_counts_as_non_trivial(self, repo_git, tmp_path) -> None:
         """Grande demais para contar linha por linha, e grande demais para ser
         trivial. Pular — o que o judge faz, porque precisa do conteúdo — daria
         0 linha e reabriria a cegueira do triviality gate."""
-        self._repo(tmp_path)
         grande = tmp_path / "dados.csv"
         grande.write_text("x,y\n" * 200_000, encoding="utf-8")
         assert grande.stat().st_size > MAX_UNTRACKED_FILE_BYTES
@@ -196,10 +182,9 @@ class TestUntrackedIsNotInvisible:
         assert lines >= TRIVIAL_MAX_LINES
         assert is_trivial(files, lines) is False
 
-    def test_oversized_file_is_not_read(self, tmp_path, monkeypatch) -> None:
+    def test_oversized_file_is_not_read(self, repo_git, tmp_path, monkeypatch) -> None:
         """A contagem tem de vir do tamanho, não da leitura: ler é justamente
         o que o teto evita."""
-        self._repo(tmp_path)
         (tmp_path / "dados.csv").write_text("x,y\n" * 200_000, encoding="utf-8")
 
         def recusa(*args, **kwargs):

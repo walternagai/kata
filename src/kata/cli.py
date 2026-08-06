@@ -839,11 +839,14 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     if not sys.stdin.isatty():
+        # Mesmo contrato dos ramos de erro e padrão vazio (R10-13): nada foi
+        # confirmado — `defect_fixed: True` aqui faria o audit graduar a
+        # tarefa como faked por uma busca que ninguém pôde fazer.
         data["twins"] = {
             "searched": False,
             "pattern": "",
             "result": "",
-            "defect_fixed": True,
+            "defect_fixed": False,
         }
         return data
 
@@ -1310,6 +1313,7 @@ def _init_task(task: str) -> bool:
             "minimum_code": True,
             "no_single_use_abstractions": True,
             "no_speculative_config": True,
+            "notes": "",
             "answered": False,
             "skipped": False,
         },
@@ -1318,6 +1322,7 @@ def _init_task(task: str) -> bool:
             "check_expects": "",
             "spec_says": "",
             "all_agree": True,
+            "conflict_resolution": "",
             "answered": False,
             "skipped": False,
         },

@@ -96,6 +96,46 @@ def _chaves_lidas_pelo_codigo() -> set[str]:
     return lidas
 
 
+def _chaves_escritas_pelo_codigo() -> set[str]:
+    """Chaves que o CLI grava no YAML da tarefa (direção de escrita).
+
+    A direção de leitura não vê chaves que o código grava mas nunca lê:
+    `intent.conflict_resolution` e `simplify.notes` sumiram do schema
+    documentado sem ninguém notar (R10-32). Um agente seguindo a skill
+    documentada não grava o que o schema não lista.
+    """
+    fonte = (REPO / "src" / "kata" / "cli.py").read_text(encoding="utf-8")
+    escritas: set[str] = set()
+
+    # data["secao"] = { "chave": ..., ... } — bloco inteiro.
+    for secao, corpo in re.findall(r'data\["(\w+)"\]\s*=\s*\{([^}]*)\}', fonte, re.DOTALL):
+        for chave in re.findall(r'"(\w+)"\s*:', corpo):
+            escritas.add(f"{secao}.{chave}")
+
+    # Escrita incremental numa seção da tarefa (`verify["ruff_clean"] = ...`,
+    # `simplify["notes"] = ...`) e top-level (`data["status"] = ...`).
+    # Locais de UI (`checks["intent_present"]`) ficam de fora: não são schema.
+    _SECOES = {
+        "fit",
+        "think",
+        "intent",
+        "simplify",
+        "surgical",
+        "verify",
+        "twins",
+        "preflight",
+        "artifact",
+        "auth",
+        "pending",
+    }
+    for secao, chave in re.findall(r'\b(\w+)\["(\w+)"\]\s*=', fonte):
+        if secao in {"data", "task_data"}:
+            escritas.add(chave)
+        elif secao in _SECOES:
+            escritas.add(f"{secao}.{chave}")
+    return escritas
+
+
 @pytest.mark.parametrize("arquivo", ORQUESTRADORES)
 def test_schema_documentado_cobre_o_que_o_codigo_le(arquivo: str) -> None:
     documentadas = _chaves(_schema_documentado(arquivo))
@@ -104,6 +144,21 @@ def test_schema_documentado_cobre_o_que_o_codigo_le(arquivo: str) -> None:
         f"{arquivo} não documenta chaves que o código lê: {faltando}. "
         "Um agente seguindo esta skill não vai gravá-las, e o gate "
         "correspondente nunca vai disparar."
+    )
+
+
+@pytest.mark.parametrize("arquivo", ORQUESTRADORES)
+def test_schema_documentado_cobre_o_que_o_cli_escreve(arquivo: str) -> None:
+    """Direção de escrita (R10-32): chaves que o CLI grava no YAML da tarefa
+    têm de estar no schema documentado. `intent.conflict_resolution` e
+    `simplify.notes` sumiram da documentação sem ninguém notar — a direção de
+    leitura não as pega porque o código nunca as lê."""
+    documentadas = _chaves(_schema_documentado(arquivo))
+    faltando = sorted(k for k in _chaves_escritas_pelo_codigo() if k not in documentadas)
+    assert not faltando, (
+        f"{arquivo} não documenta chaves que o CLI escreve: {faltando}. "
+        "Um agente seguindo esta skill não vai gravá-las, e o YAML gerado "
+        "diverge do schema."
     )
 
 

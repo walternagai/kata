@@ -154,10 +154,18 @@ class TestErros:
         with pytest.raises(ConfigError, match="`verify.gate` deve ser número"):
             load_verify_config(cwd=tmp_path)
 
-    @pytest.mark.parametrize("gate", [-1, 101, "NaN"])
+    @pytest.mark.parametrize("gate", [-1, 101])
     def test_gate_fora_do_intervalo_reprova(self, tmp_path, gate) -> None:
         _escreve(tmp_path, f"verify:\n  gate: {gate}\n")
-        with pytest.raises(ConfigError, match="deve ser número|entre 0 e 100"):
+        with pytest.raises(ConfigError, match="entre 0 e 100"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_gate_nan_reprova(self, tmp_path) -> None:
+        """NaN passa da checagem de tipo (é float) e cai na de finitude —
+        mensagem própria, não o match alternativo que aceitaria o erro errado
+        (R10-28)."""
+        _escreve(tmp_path, "verify:\n  gate: .nan\n")
+        with pytest.raises(ConfigError, match="entre 0 e 100"):
             load_verify_config(cwd=tmp_path)
 
     def test_pattern_nao_string(self, tmp_path) -> None:

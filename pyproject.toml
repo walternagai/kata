@@ -47,7 +47,10 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["kata"]
+# build_skills/run_traps entram na medição pelo nome de módulo importado
+# (scripts/ e eval/ não são pacotes) — regressão no builder ou no harness
+# de traps tem de derrubar o gate (R10-26).
+source = ["kata", "build_skills", "run_traps"]
 omit = [
     "tests/*",
     "*/__main__.py",

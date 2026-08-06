@@ -240,7 +240,7 @@ reports a summary at the end.
 | Command | Description |
 |---|---|
 | `kata` | Select or create a task and run the complete interactive cycle |
-| `kata --init TASK` | Create a task file from the default template |
+| `kata --init TASK` | Create a task file and run FIT + THINK (interactive in a terminal, defaults headless) |
 | `kata --task TASK` | Resume a specific task |
 | `kata --plan [--task TASK]` | Run FIT and THINK, save the plan, and stop |
 | `kata --check-only` | Run Ruff, pytest, and coverage without task interaction |

@@ -140,6 +140,10 @@ if ($Uninstall) {
     Remove-ManagedPath $agentTarget $agentSource
     foreach ($skill in $skills) {
         Remove-ManagedPath (Join-Path $configRoot "skills/$skill") (Join-Path $kataRoot "opencode/skills/$skill")
+        # Órfão de instalações antigas: link aninhado dentro de diretório
+        # real (equivalente ao `ln -sfn` do sh) — o paridade com o uninstall
+        # .sh (R10-32).
+        Remove-ManagedPath (Join-Path $configRoot "skills/$skill/$skill") (Join-Path $kataRoot "opencode/skills/$skill")
     }
     # O manifesto registra cópias; depois de removê-las ele não deve
     # sobreviver apontando para caminhos que já não existem.
@@ -150,6 +154,19 @@ if ($Uninstall) {
 
 if (-not (Test-Path -LiteralPath $agentSource -PathType Leaf)) {
     throw "Agente não encontrado: $agentSource"
+}
+
+# Preflight (paridade com o check_targets do install.sh): nada é mutado
+# antes de conferir TODOS os destinos — sem isto, um destino bloqueado no
+# meio deixava o agente instalado e as skills parciais (R10-32).
+$destinos = @(@($agentTarget, $agentSource))
+foreach ($skill in $skills) {
+    $destinos += , @((Join-Path $configRoot "skills/$skill"), (Join-Path $kataRoot "opencode/skills/$skill"))
+}
+foreach ($par in $destinos) {
+    if (-not (Test-ManagedPath $par[0] $par[1])) {
+        throw "'$($par[0])' já existe e não foi criado pelo instalador. Remova ou renomeie e rode de novo."
+    }
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $configRoot "agent") | Out-Null

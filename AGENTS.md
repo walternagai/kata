@@ -40,6 +40,9 @@ claude-code/    skills para o Claude Code
   skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
   skills/kata-*/SKILL.md as mesmas 11 skills (mesmo procedimento,
                          nomes de ferramenta do host — não são texto idêntico)
+domains/        adapters de domínio opcionais, fonte única como phases/
+                (TEMPLATE.md documenta o schema; kata-devops.md é o primeiro
+                adapter — gerados como skills e opcionais no --doctor)
 eval/           cenários de trap adversarial (python3 eval/run_traps.py)
 scripts/install.sh                instala via symlinks em ~/.config/opencode/
 scripts/install-claude-code.sh    instala via symlinks em ~/.claude/

@@ -78,9 +78,10 @@ the following situations:
 - **Documentation-only changes**: docs-only tasks are recognized and are not
   asked the INTENT question, keeping the gate silent where no behavior changed.
 - **Adversarial verification of finished work**: `kata --judge` re-runs every
-  claimed check and hunts the six fraud categories (weakened checks, false
+  claimed check and hunts seven fraud categories (weakened checks, false
   completion, scope creep, unauthorized actions, specification betrayal,
-  debris) before a merge or hand-over.
+  debris, and baseline tampering — the YAML's `base_commit` diverging from the
+  Git anchor recorded when the task started) before a merge or hand-over.
 - **Auditing tasks after the fact**: `kata --audit` grades each phase of a
   completed task as followed, skipped, or faked, and names the concrete risk
   each skip or fake created — useful for review queues and hand-overs.
@@ -115,7 +116,8 @@ opencode/                         GENERATED — do not edit by hand
 
 claude-code/                      GENERATED — do not edit by hand
 └── skills/kata-*/SKILL.md        kata orchestrator skill + the same 10
-                                   phase-specific skills
+                                   phase-specific skills + the kata-devops
+                                   domain adapter
 
 tests/                            Unit tests for the Python implementation
 eval/                             Adversarial trap scenarios
@@ -134,7 +136,8 @@ phase orchestration, report formatting, and exit codes.
 
 #### `kata.fit`
 
-`diff_stats()` inspects unstaged changes first and staged changes second.
+`diff_stats()` diffs against `HEAD` first (staged and unstaged in one pass),
+falling back to unstaged, then staged, in a repository without commits.
 `is_trivial()` returns true for at most one changed file and fewer than ten
 changed lines.
 
@@ -204,8 +207,8 @@ agent or skill entries.
 
 ### Claude Code skills
 
-Install the `kata` skill and its 10 phase skills into Claude Code, also
-through symlinks:
+Install the `kata` skill, its 10 phase skills, and the `kata-devops` domain
+adapter into Claude Code, also through symlinks:
 
 ```bash
 make install-claude-code
@@ -247,7 +250,7 @@ reports a summary at the end.
 | `kata --report --task TASK` | Regenerate the outcome-first report |
 | `kata --judge --task TASK` | Run adversarial verification |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
-| `kata --doctor` | Check whether the phase skills are installed in each frontend |
+| `kata --doctor` | Check whether the phase skills are installed in each frontend (missing domain adapters are optional warnings) |
 | `kata --version` | Print the package version |
 
 The `--plan`, `--check-only`, `--judge`, `--report`, and `--audit`
@@ -442,8 +445,9 @@ The audit mode (`kata --audit [--task TASK]`) grades each phase of a task as:
   `think.problem` is not empty);
 - **skipped**: the phase has `skipped: true` (documented);
 - **faked**: the phase has `answered: true` but default/empty content — the
-  R7-1 pattern — or VERIFY claims success without corresponding evidence, or
-  TWINS declares a defect without a search;
+  R7-1 pattern (for SIMPLIFY/SURGICAL, `answered: true` without the content
+  keys at all is equally faked) — or VERIFY claims success without
+  corresponding evidence, or TWINS declares a defect without a search;
 - **degraded**: `preflight.skills_missing` is not empty — one or more phases
   ran without their own skill loaded, so whatever the other grades read was
   written without those instructions.
@@ -474,6 +478,10 @@ reserved for a frontend that has some skills but not all: someone who never
 installed a frontend loses nothing, while someone with 9 of the 10 skills
 runs the whole cycle and silently loses a phase. With no frontend installed
 at all, `--doctor` says so and exits `0` — the `kata` CLI works without any.
+
+Domain adapters are optional and never fail `--doctor`: a missing `kata-devops`
+is reported as a hint (installable with `make reinstall` /
+`make reinstall-claude-code`) because a `coding` task does not need it.
 
 When a skill fails to load mid-cycle, the orchestrator is instructed not to
 improvise: it falls back to a per-phase minimum contract documented in the
@@ -559,6 +567,7 @@ simplify:
   minimum_code: true
   no_single_use_abstractions: true
   no_speculative_config: true
+  notes: ""             # optional SIMPLIFY observations (only when filled)
   answered: false       # true when the phase was completed; false when it was
                         # filled with defaults because nobody answered
   skipped: false        # true only in non-interactive mode
@@ -567,6 +576,8 @@ intent:
   check_expects: ""
   spec_says: ""
   all_agree: true
+  conflict_resolution: ""  # how the code/test/spec conflict was resolved
+                        # (only when all_agree is false)
   answered: false
   skipped: false
 surgical:

@@ -137,6 +137,7 @@ kata --plan --task minha-tarefa # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
 kata --task minha-tarefa --report  # Relatório outcome-first
 kata --doctor                      # As skills de fase estão instaladas?
+                                   # (parcial sai 1; domain adapters ausentes só avisam)
 kata --task minha-tarefa --audit   # Gradua fases (followed/skipped/faked)
 kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 ```
@@ -149,7 +150,7 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes) |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
-| `--doctor` | `False` | Confere se as skills de fase estão instaladas em cada frontend |
+| `--doctor` | `False` | Confere as skills de fase por frontend; domain adapters ausentes só avisam |
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
 | `--test-paths` | `tests/` | Caminhos para pytest |
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
@@ -298,6 +299,9 @@ kata/
 │                                         orquestrador)
 ├── claude-code/                       ← GERADO (make build-skills)
 │   └── skills/kata-*/SKILL.md         ← 12 skills (orquestrador kata + as 11 acima)
+├── domains/                           ← FONTE ÚNICA dos domain adapters
+│   ├── TEMPLATE.md                    ← schema de um adapter (não gera skill)
+│   └── kata-devops.md                 ← primeiro adapter (gera a skill)
 ├── src/kata/
 │   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)

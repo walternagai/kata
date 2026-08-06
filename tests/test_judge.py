@@ -1623,6 +1623,115 @@ class TestCorpoVazioPorLinguagem:
         )
         assert hunt_weakened_checks(diff) == []
 
+    def test_python_assert_true_no_corpo_em_arquivo_novo(self) -> None:
+        """R10-10: `assert True` como corpo de teste NOVO é no-op — os
+        padrões `weakened` só rodavam em arquivo modificado e a fraude mais
+        comum (teste novo que não verifica nada) escapava."""
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            "+    assert True",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert len(frauds) == 1
+        assert "assert True" in frauds[0].description
+
+    def test_python_assert_true_com_comentario_em_arquivo_novo(self) -> None:
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            "+    assert True  # sempre passa",
+        )
+        assert any("assert True" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_python_pytest_skip_em_arquivo_novo(self) -> None:
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            '+    pytest.skip("flaky")',
+        )
+        assert any("pytest.skip" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_python_skip_condicional_em_arquivo_novo_nao_acusa(self) -> None:
+        """Skip condicional é uso legítimo mesmo em arquivo novo — o mesmo
+        cuidado do R10-8 aplicado ao corpo."""
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            '+    if not HAS_DEPS: pytest.skip("deps ausentes")',
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_python_corpo_vazio_na_mesma_linha(self) -> None:
+        """P1-3: `def test_x(): pass` de uma linha — Python não tinha
+        empty_inline e o corpo vazio escapava."""
+        diff = _diff_novo("tests/test_soma.py", "+def test_soma(): pass")
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_python_print_pass_na_mesma_linha_nao_acusa(self) -> None:
+        """`print("pass")` termina a linha com `pass` entre aspas — não é
+        corpo vazio, e o empty_inline não pode casar."""
+        diff = _diff_novo("tests/test_soma.py", '+def test_soma(): print("pass")')
+        assert hunt_weakened_checks(diff) == []
+
+    def test_js_skip_em_arquivo_novo(self) -> None:
+        """P1-1: `it.skip` em arquivo novo — a declaração nem era varrida
+        (test_declaration só casava `it(`)."""
+        diff = _diff_novo("src/soma.test.js", "+it.skip('soma', () => {});")
+        frauds = hunt_weakened_checks(diff)
+        assert len(frauds) == 1
+        assert "desativado" in frauds[0].description
+
+    def test_js_xit_em_arquivo_novo(self) -> None:
+        diff = _diff_novo("src/soma.test.js", "+xit('soma', () => {});")
+        assert any("desativado" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_js_skip_com_corpo_de_verdade_em_arquivo_novo(self) -> None:
+        """O corpo não importa: um teste `.skip` é desativado inteiro."""
+        diff = _diff_novo(
+            "src/soma.test.js",
+            "+it.skip('soma', () => { expect(soma(1, 2)).toBe(3); });",
+        )
+        assert any("desativado" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_js_comentario_em_bloco_entre_declaracao_e_corpo(self) -> None:
+        """P1-2: `/* */` como única linha do corpo escapava — skippable só
+        casava `//`. A classe do R9-6, em forma de comentário de bloco."""
+        diff = _diff_novo(
+            "src/soma.test.js",
+            "+it('soma', () => {",
+            "+  /* TODO: escrever */",
+            "+});",
+        )
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_go_t_skip_em_arquivo_novo(self) -> None:
+        diff = _diff_novo(
+            "internal/soma_test.go",
+            "+func TestSoma(t *testing.T) {",
+            '+\tt.Skip("flaky")',
+            "+}",
+        )
+        assert any("t.Skip" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_go_t_skip_condicional_em_arquivo_novo_nao_acusa(self) -> None:
+        diff = _diff_novo(
+            "internal/soma_test.go",
+            "+func TestSoma(t *testing.T) {",
+            '+	if !hasDeps { t.Skip("no deps") }',
+            "+}",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_ruby_corpo_vazio_inline(self) -> None:
+        """P1-3: Ruby sem empty_inline — `it 'x' { }` de uma linha escapava."""
+        diff = _diff_novo("spec/soma_spec.rb", "+it 'soma' { }")
+        assert any("corpo vazio" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_ruby_xit_em_arquivo_novo(self) -> None:
+        diff = _diff_novo("spec/soma_spec.rb", "+xit 'soma' do", "+end")
+        assert any("desativado" in f.description for f in hunt_weakened_checks(diff))
+
 
 class TestIsTestFilePoliglota:
     """Sem reconhecer o arquivo como teste, dar sondas ao juiz não bastaria."""

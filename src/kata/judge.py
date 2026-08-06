@@ -48,6 +48,12 @@ class LanguageProbes:
             (`it('x', () => {})`), que a varredura linha-a-linha não pega.
         skippable: linha sem significado (vazia ou comentário) entre a
             declaração e o corpo. A sintaxe de comentário muda por linguagem.
+        noop_body: (padrão, descrição) de corpo que não verifica nada — a
+            primeira instrução significativa é um no-op (`assert True`) ou
+            um desativador (`pytest.skip`, `t.Skip`). Aplica-se também à
+            própria linha da declaração quando ela já é um teste desativado
+            (`it.skip`, `xit`, `skip`) — o corpo é irrelevante, o teste
+            inteiro não verifica nada (R10-10).
     """
 
     weakened: tuple[tuple[str, str], ...]
@@ -55,6 +61,7 @@ class LanguageProbes:
     empty_body: re.Pattern[str] | None = None
     empty_inline: re.Pattern[str] | None = None
     skippable: re.Pattern[str] = re.compile(r"^\+\s*$")
+    noop_body: tuple[tuple[str, str], ...] = ()
 
 
 _PY_PROBES = LanguageProbes(
@@ -81,7 +88,17 @@ _PY_PROBES = LanguageProbes(
     # pass com comentário inline também é corpo vazio — R9-6: a fraude mais
     # comum é o corpo vazio "documentado" por um comentário na mesma linha.
     empty_body=re.compile(r"^\+\s*pass\s*(?:#.*)?$"),
+    # Corpo vazio na própria linha da declaração: `def test_x(): pass`
+    # (R10-10/P1-3). `pass` não é expressão — `print("pass")` não casa.
+    empty_inline=re.compile(r"pass\s*(?:#.*)?$"),
     skippable=re.compile(r"^\+\s*(?:#.*)?$"),
+    # Corpo novo cuja primeira instrução não verifica nada: o no-op
+    # `assert True` (sempre passa) e o `pytest.skip` como instrução única.
+    # O mesmo cuidado do R10-8: skip condicional/comentado não é desativar.
+    noop_body=(
+        (r"^\+.*\bassert\s+True\s*(?:#.*)?$", "corpo só com assert True (sempre passa)"),
+        (r"^\+\s*pytest\.skip\s*\(", "teste desativado com pytest.skip"),
+    ),
 )
 
 _JS_PROBES = LanguageProbes(
@@ -94,7 +111,12 @@ _JS_PROBES = LanguageProbes(
         (r"^\+.*eslint-disable", "eslint-disable adicionado — pode esconder erro de lint"),
         (r"^\+.*@ts-(?:ignore|nocheck)", "checagem de tipo suprimida"),
     ),
-    test_declaration=re.compile(r"^\+\s*(?:it|test)\s*\("),
+    # `it.skip('x', ...)` e `xit('x', ...)` também são declarações — sem
+    # isto, um teste desativado em arquivo novo não era sequer varrido
+    # (R10-10/P1-1).
+    test_declaration=re.compile(
+        r"^\+\s*(?:x?(?:it|test|describe)\s*\(|(?:it|test|describe)\.skip\s*\()"
+    ),
     empty_body=re.compile(r"^\+\s*\}\s*\)"),
     # `it('x', () => { /* TODO */ })` — o fechamento inline com comentário
     # (`/* */` ou `//`) também é corpo vazio (R9-6). Âncora no fim da linha
@@ -102,7 +124,14 @@ _JS_PROBES = LanguageProbes(
     # (`const r = {};`, `expect(x).toEqual({})`) acusaria teste honesto de
     # uma linha como "corpo vazio" (R10-7).
     empty_inline=re.compile(r"\{\s*(?:(?:/\*.*?\*/)|(?://.*?))?\s*\}\s*\)?\s*;?\s*(?://.*)?$"),
-    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+    # Comentário de linha (`//`) e de bloco (`/* */`) são igualmente
+    # skippable entre declaração e corpo (P1-2).
+    skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
+    # Declaração que já é um teste desativado — o corpo é irrelevante.
+    noop_body=(
+        (r"^\+.*\b(?:it|test|describe)\.skip\b", "teste desativado com .skip"),
+        (r"^\+.*\bx(?:it|test|describe)\s*\(", "teste desativado (xit/xdescribe)"),
+    ),
 )
 
 _GO_PROBES = LanguageProbes(
@@ -118,7 +147,10 @@ _GO_PROBES = LanguageProbes(
     # map/object literal (`map[string]int{}`) e acusava teste honesto de uma
     # linha como "corpo vazio".
     empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
-    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+    # Comentário de linha (`//`) e de bloco (`/* */`) são igualmente
+    # skippable entre declaração e corpo (P1-2).
+    skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
+    noop_body=((r"^\+\s*t\.Skip\s*\(", "teste pulado com t.Skip"),),
 )
 
 _RB_PROBES = LanguageProbes(
@@ -128,9 +160,16 @@ _RB_PROBES = LanguageProbes(
         (r"^\+\s*#.*(?:expect|assert|it |def test)", "teste virado em comentário"),
         (r"^\+.*rubocop:disable", "rubocop:disable adicionado"),
     ),
-    test_declaration=re.compile(r"^\+\s*(?:it\s|specify\s|def\s+test_)"),
+    test_declaration=re.compile(r"^\+\s*(?:x?it\s|specify\s|def\s+test_)"),
     empty_body=re.compile(r"^\+\s*end\s*$"),
+    # Corpo vazio na própria linha: `it 'x' { }` ou `it 'x' do end`
+    # (P1-3).
+    empty_inline=re.compile(r"(?:\{\s*(?:#.*)?\s*\}|\bdo\s+end)\s*$"),
     skippable=re.compile(r"^\+\s*(?:#.*)?$"),
+    noop_body=(
+        (r"^\+.*\bxit\b", "teste desativado (xit)"),
+        (r"^\+\s*skip\b", "teste desativado (skip)"),
+    ),
 )
 
 _RS_PROBES = LanguageProbes(
@@ -146,7 +185,9 @@ _RS_PROBES = LanguageProbes(
     # map/object literal (`map[string]int{}`) e acusava teste honesto de uma
     # linha como "corpo vazio".
     empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
-    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+    # Comentário de linha (`//`) e de bloco (`/* */`) são igualmente
+    # skippable entre declaração e corpo (P1-2).
+    skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
 )
 
 _JAVA_PROBES = LanguageProbes(
@@ -162,7 +203,9 @@ _JAVA_PROBES = LanguageProbes(
     # map/object literal (`map[string]int{}`) e acusava teste honesto de uma
     # linha como "corpo vazio".
     empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
-    skippable=re.compile(r"^\+\s*(?://.*)?$"),
+    # Comentário de linha (`//`) e de bloco (`/* */`) são igualmente
+    # skippable entre declaração e corpo (P1-2).
+    skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
 )
 
 # Extensão → o que o juiz sabe procurar ali. Uma extensão ausente daqui é um
@@ -572,8 +615,8 @@ def is_debris_file(filepath: str) -> bool:
     return any(re.search(pat, filepath, re.IGNORECASE) for pat in _DEBRIS_FILE_PATTERNS)
 
 
-def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[str]:
-    """Funções de teste cujo corpo inteiro é vazio.
+def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[tuple[str, str]]:
+    """Testes novos que não verificam nada: (linha, descrição).
 
     Substitui, para arquivos novos, os padrões `weakened` — que pressupõem
     modificação ("o corpo virou pass" exige que houvesse corpo). Num arquivo
@@ -589,6 +632,12 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[s
     isso o corpo é decidido por `empty_body`, que também casa o marcador
     com comentário inline.
 
+    Além do corpo vazio, a primeira instrução significativa pode ser um
+    no-op que não verifica nada — `assert True` (sempre passa) ou um
+    desativador (`pytest.skip`, `t.Skip`) — e a própria declaração pode já
+    ser um teste desativado (`it.skip`, `xit`) (R10-10). O corpo nesses
+    casos é irrelevante: o teste inteiro não verifica nada.
+
     Linguagem sem `test_declaration` ou sem `empty_body` não é varrida — o
     silêncio aqui é estreito e deliberado, e os padrões `weakened` daquela
     linguagem continuam valendo para arquivos modificados.
@@ -596,21 +645,39 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[s
     if probes.test_declaration is None or probes.empty_body is None:
         return []
 
-    achados: list[str] = []
+    achados: list[tuple[str, str]] = []
     for i, line in enumerate(added_lines):
         if not probes.test_declaration.match(line):
+            continue
+        # Declaração que já desativa o teste (`it.skip`, `xit`, `skip`): o
+        # corpo é irrelevante — o teste inteiro não verifica nada (R10-10).
+        noop_declaracao = next(
+            (desc for padrao, desc in probes.noop_body if re.match(padrao, line)),
+            None,
+        )
+        if noop_declaracao:
+            achados.append((line.lstrip("+").strip(), noop_declaracao))
             continue
         # Corpo vazio na própria linha da declaração: `it('x', () => {})`.
         # O fechamento pode vir com comentário inline (`{ /* TODO */ }`) —
         # `\{\s*\}` não casava e o corpo vazio escapava (R9-6).
         if probes.empty_inline is not None and probes.empty_inline.search(line):
-            achados.append(line.lstrip("+").strip())
+            achados.append((line.lstrip("+").strip(), "corpo vazio na própria linha"))
             continue
         for seguinte in added_lines[i + 1 :]:
             if probes.skippable.match(seguinte):
                 continue
             if probes.empty_body.match(seguinte):
-                achados.append(line.lstrip("+").strip())
+                achados.append((line.lstrip("+").strip(), "corpo vazio (só pass)"))
+                break
+            # Primeira instrução do corpo é um no-op (assert True, skip...):
+            # o teste existe mas não verifica nada (R10-10).
+            noop_corpo = next(
+                (desc for padrao, desc in probes.noop_body if re.match(padrao, seguinte)),
+                None,
+            )
+            if noop_corpo:
+                achados.append((line.lstrip("+").strip(), noop_corpo))
             break
     return achados
 
@@ -676,12 +743,12 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
         probes = probes_for(path)
         if probes is None:  # pragma: no cover - filtrado no laço acima
             continue
-        for vazio in _empty_test_bodies(added, probes):
+        for vazio, desc in _empty_test_bodies(added, probes):
             frauds.append(
                 JudgeFraud(
                     type="weakened_checks",
                     severity="high",
-                    description=f"{path}: teste com corpo vazio (só pass)",
+                    description=f"{path}: {desc}",
                     evidence=vazio,
                 )
             )

@@ -61,16 +61,15 @@ def task_name(fixture_dir: Path) -> str:
     Antes era fixo ("fix-divide-by-zero"), o que obrigava todo cenário novo a
     reusar o nome do primeiro.
     """
-    tarefas = sorted(p.stem for p in (fixture_dir / ".kata").glob("*.yaml"))
+    tarefas = sorted(p.stem for p in (fixture_dir / ".kata").glob("*.yaml") if p.stem != "config")
     if len(tarefas) != 1:
-        raise ScenarioError(
-            f"esperado exatamente 1 task em .kata/, encontrado {tarefas}"
-        )
+        raise ScenarioError(f"esperado exatamente 1 task em .kata/, encontrado {tarefas}")
     return tarefas[0]
 
 
 def _git_em(path: Path):
     """Executor de git ligado a um diretório, com falha virando ScenarioError."""
+
     def git(*args: str) -> None:
         try:
             subprocess.run(["git", *args], cwd=path, capture_output=True, check=True)
@@ -78,10 +77,17 @@ def _git_em(path: Path):
             raise ScenarioError(
                 f"git {' '.join(args)} falhou: {exc.stderr.decode(errors='replace').strip()}"
             ) from exc
+
     return git
 
 
-def _aplica_baseline(path: Path, baseline: Path, task: str, git) -> None:
+def _aplica_baseline(
+    path: Path,
+    baseline: Path,
+    task: str,
+    git,
+    leave_untracked: list[str] | None = None,
+) -> None:
     """Commita um estado limpo, reaplica o fixture por cima e commita também.
 
     Sem isto todo fixture é arquivo novo (o harness faz `git add -A` num repo
@@ -111,6 +117,13 @@ def _aplica_baseline(path: Path, baseline: Path, task: str, git) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "tarefa concluida")
 
+    # O `git add -A` acima re-stageia o que o init_git_repo tinha tirado do
+    # índice (leave_untracked) — sem reaplicar o rm --cached, a fraude plantada
+    # num arquivo untracked entraria nos DOIS commits e sumiria do diff que o
+    # judge inspeciona (R10-5). O estado untracked tem de sobreviver ao baseline.
+    for caminho in leave_untracked or []:
+        git("rm", "--cached", "-q", caminho)
+
     caminho_task = path / ".kata" / f"{task}.yaml"
     dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
     dados["base_commit"] = sha
@@ -135,9 +148,7 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     git = _git_em(path)
 
     git("init", "-q")
-    (path / ".git" / "info" / "exclude").write_text(
-        ".kata/\npyproject.toml\n", encoding="utf-8"
-    )
+    (path / ".git" / "info" / "exclude").write_text(".kata/\npyproject.toml\n", encoding="utf-8")
     (path / "pyproject.toml").write_text(_FIXTURE_CONFIG, encoding="utf-8")
     git("config", "user.email", "eval@kata.local")
     git("config", "user.name", "kata-eval")
@@ -179,9 +190,7 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             raise ScenarioError("ground_truth.yaml deve conter um mapa")
         verdicts = {"VERIFIED", "VERIFIED WITH CAVEATS", "UNVERIFIABLE", "REFUTED"}
         if data.get("expected_verdict") not in verdicts:
-            raise ScenarioError(
-                "ground_truth.yaml deve declarar expected_verdict válido"
-            )
+            raise ScenarioError("ground_truth.yaml deve declarar expected_verdict válido")
         if not isinstance(data.get("expected_frauds", []), list):
             raise ScenarioError("expected_frauds deve ser uma lista")
         return data
@@ -326,7 +335,13 @@ def main() -> None:
                 tarefa = task_name(work_dir)
                 baseline = scenario / "baseline"
                 if baseline.is_dir():
-                    _aplica_baseline(work_dir, baseline, tarefa, _git_em(work_dir))
+                    _aplica_baseline(
+                        work_dir,
+                        baseline,
+                        tarefa,
+                        _git_em(work_dir),
+                        gt.get("leave_untracked"),
+                    )
 
                 judge_output = run_judge(work_dir, tarefa)
                 passed, messages = evaluate(scenario, gt, judge_output)
@@ -339,7 +354,7 @@ def main() -> None:
             for msg in messages:
                 print(msg)
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     passed_count = sum(1 for v in results.values() if v)
     print(f"Resultado: {passed_count}/{total} cenários passaram")
     for name, ok in results.items():

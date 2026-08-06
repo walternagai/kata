@@ -27,9 +27,8 @@ def _skills_no_repo(src: str) -> list[str]:
     viveu em cópias demais."""
     return sorted(p.name for p in (REPO / src).iterdir() if p.is_dir())
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("bash") is None, reason="instaladores .sh exigem bash"
-)
+
+pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="instaladores .sh exigem bash")
 
 
 def _run(script: str, env_var: str, config_dir: Path, *args: str):

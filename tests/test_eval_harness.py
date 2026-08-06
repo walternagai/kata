@@ -85,7 +85,9 @@ def test_fraudes_repetidas_do_mesmo_tipo_sao_contadas_uma_a_uma(capsys) -> None:
     lidas = harness.parse_frauds(saida)
     assert len(lidas) == 3
     assert sorted(f["description"] for f in lidas) == [
-        "coverage falhou", "pytest falhou", "ruff check falhou",
+        "coverage falhou",
+        "pytest falhou",
+        "ruff check falhou",
     ]
 
 
@@ -93,8 +95,11 @@ def test_fraudes_repetidas_do_mesmo_tipo_sao_contadas_uma_a_uma(capsys) -> None:
     "esperadas,obtidas,deve_reprovar",
     [
         ([], [], False),
-        ([{"type": "debris", "severity": "low"}], [{"severity": "low", "type": "debris",
-                                                    "description": "x"}], False),
+        (
+            [{"type": "debris", "severity": "low"}],
+            [{"severity": "low", "type": "debris", "description": "x"}],
+            False,
+        ),
         # faltando: falso negativo
         ([{"type": "debris", "severity": "low"}], [], True),
         # excedendo: falso positivo — a lacuna que o R5-2 fechou

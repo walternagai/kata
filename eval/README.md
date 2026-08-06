@@ -15,8 +15,16 @@ A arquitetura, os vereditos e o contrato do CLI estão documentados em
 ## Como executar
 
 ```bash
+pip install -e '.[dev]'   # pré-requisito: o pacote kata + PyYAML, ruff, pytest
 python3 eval/run_traps.py
 ```
+
+O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
+além do subprocesso `python3 -m kata`, então o pacote precisa estar
+instalado/resolvível — rodar num ambiente sem ele derruba os 9 cenários com
+"No module named kata". Os cenários com re-execução (s01, s03, s07) também
+precisam de ruff e pytest/pytest-cov instalados: sem eles, um cenário honesto
+vira REFUTED por ferramenta ausente, não por fraude.
 
 Roda também no CI, em Python 3.11 e 3.12.
 

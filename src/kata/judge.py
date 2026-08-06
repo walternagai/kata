@@ -62,8 +62,18 @@ _PY_PROBES = LanguageProbes(
         (r"^-.*assert\s+True\b", "assert True (sempre passa se True for literal)"),
         (r"^-.*assert\s+False\b", "assert False (sempre falha ou foi removido)"),
         (r"^\+#\s+.*(?:assert|def test|expect|self\.)", "teste virado em comentário"),
-        (r"^\+.*assert\s+True\b", "assert True adicionado — pode neutralizar a asserção"),
-        (r"^\+.*pytest\.skip\b", "teste desativado com pytest.skip"),
+        # Ancorado no fim da afirmação de propósito: `assert True == x` é
+        # asserção real e honesta — `\b` depois de True não impede `==`/`is`/`in`
+        # de seguir. Só a forma no-op (assert True como statement inteiro, com
+        # comentário opcional) é suspeita (R10-9).
+        (
+            r"^\+.*\bassert\s+True\s*(?:#.*)?$",
+            "assert True adicionado — pode neutralizar a asserção",
+        ),
+        # O skip só é suspeito quando é a única instrução da linha. `if not
+        # HAS_DEPS: pytest.skip(...)` é uso condicional legítimo, e linha
+        # comentada não desativa nada (R10-8).
+        (r"^\+\s*pytest\.skip\s*\(", "teste desativado com pytest.skip"),
         (r"^\+\s*pass\s*$", "corpo de teste substituído por pass"),
         (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
     ),
@@ -87,8 +97,11 @@ _JS_PROBES = LanguageProbes(
     test_declaration=re.compile(r"^\+\s*(?:it|test)\s*\("),
     empty_body=re.compile(r"^\+\s*\}\s*\)"),
     # `it('x', () => { /* TODO */ })` — o fechamento inline com comentário
-    # (`/* */` ou `//`) também é corpo vazio (R9-6).
-    empty_inline=re.compile(r"\{\s*(?:(?:/\*.*?\*/)|(?://.*?))?\s*\}"),
+    # (`/* */` ou `//`) também é corpo vazio (R9-6). Âncora no fim da linha
+    # de propósito: sem ela, qualquer par de chaves interno com corpo vazio
+    # (`const r = {};`, `expect(x).toEqual({})`) acusaria teste honesto de
+    # uma linha como "corpo vazio" (R10-7).
+    empty_inline=re.compile(r"\{\s*(?:(?:/\*.*?\*/)|(?://.*?))?\s*\}\s*\)?\s*;?\s*(?://.*)?$"),
     skippable=re.compile(r"^\+\s*(?://.*)?$"),
 )
 
@@ -101,7 +114,10 @@ _GO_PROBES = LanguageProbes(
     ),
     test_declaration=re.compile(r"^\+\s*func\s+Test\w*\s*\("),
     empty_body=re.compile(r"^\+\s*\}\s*$"),
-    empty_inline=re.compile(r"\{\s*\}"),
+    # Âncora no fim da linha (R10-7): `\{\s*\}` cru casava o par interno de
+    # map/object literal (`map[string]int{}`) e acusava teste honesto de uma
+    # linha como "corpo vazio".
+    empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
     skippable=re.compile(r"^\+\s*(?://.*)?$"),
 )
 
@@ -126,7 +142,10 @@ _RS_PROBES = LanguageProbes(
     ),
     test_declaration=re.compile(r"^\+\s*(?:async\s+)?fn\s+\w*test\w*\s*\("),
     empty_body=re.compile(r"^\+\s*\}\s*$"),
-    empty_inline=re.compile(r"\{\s*\}"),
+    # Âncora no fim da linha (R10-7): `\{\s*\}` cru casava o par interno de
+    # map/object literal (`map[string]int{}`) e acusava teste honesto de uma
+    # linha como "corpo vazio".
+    empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
     skippable=re.compile(r"^\+\s*(?://.*)?$"),
 )
 
@@ -139,7 +158,10 @@ _JAVA_PROBES = LanguageProbes(
     ),
     test_declaration=re.compile(r"^\+\s*(?:public\s+)?void\s+\w*[Tt]est\w*\s*\("),
     empty_body=re.compile(r"^\+\s*\}\s*$"),
-    empty_inline=re.compile(r"\{\s*\}"),
+    # Âncora no fim da linha (R10-7): `\{\s*\}` cru casava o par interno de
+    # map/object literal (`map[string]int{}`) e acusava teste honesto de uma
+    # linha como "corpo vazio".
+    empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
     skippable=re.compile(r"^\+\s*(?://.*)?$"),
 )
 
@@ -171,7 +193,10 @@ def probes_for(filepath: str) -> LanguageProbes | None:
 _DEBRIS_FILE_PATTERNS = [
     r"\.tmp$",
     r"\.bak$",
-    r"scratch",
+    # "scratch" só conta como detrito quando é um segmento isolado do path,
+    # a mesma regra do "temp" ao lado (R10-2): sem isso, "scratchpad.py" e
+    # "descratch.py" — nomes de módulo honestos — eram falsos positivos.
+    r"(?:^|[/_.\-])scratch\d*(?:[/_.\-]|$)",
     # "temp" só conta como detrito quando é um segmento isolado do path (delimitado
     # por /, _, . ou -), não uma substring qualquer — sem isso, "templates/x.html",
     # "attempt_parser.py", "src/temperature.py" e "contemporary_utils.py" seriam
@@ -453,11 +478,31 @@ def _unreadable_test_files(changed: list[str]) -> list[str]:
     aparece sempre é uma ressalva que ninguém lê. O preço é não flagrar
     `__tests__/index.js`, que não traz token nenhum no nome.
     """
-    non_executable = {".json", ".jsonl", ".toml", ".txt", ".yaml", ".yml"}
+    # Sufixos que nunca são código de teste executável — um `test_data.csv`
+    # ou `test_notes.md` tem nome de teste mas é dado/fixture, e flagrá-lo
+    # viraria ponto cego permanente em toda tarefa que toca fixture (R10-12).
+    non_executable = {
+        ".cfg",
+        ".csv",
+        ".html",
+        ".ini",
+        ".json",
+        ".jsonl",
+        ".lock",
+        ".md",
+        ".png",
+        ".sql",
+        ".sh",
+        ".toml",
+        ".txt",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }
     return [
         f
         for f in changed
-        if _is_test_file(f)
+        if _looks_like_test_name(Path(f).name)
         and Path(f).suffix.lower() not in non_executable
         and probes_for(f) is None
     ]
@@ -474,17 +519,31 @@ def _ignored_files(cwd: Path | None = None) -> list[str]:
 
 def _ignored_code_files(files: list[str]) -> list[str]:
     """Remove caches conhecidos e preserva candidatos relevantes para revisão."""
+    # Diretórios que o projeto nunca revisa mesmo ignorados: caches, build
+    # dirs por linguagem (target/vendor/Pods/.gradle/coverage/.next/out/bin/obj)
+    # e o próprio `.kata/` da ferramenta — sem `.kata`, uma tarefa chamada
+    # `test-foo` vira ponto cego em toda execução do judge dela (R10-11).
     noise = {
         ".git",
+        ".gradle",
+        ".kata",
         ".mypy_cache",
+        ".next",
         ".pytest_cache",
         ".ruff_cache",
         ".tox",
         ".venv",
         "__pycache__",
+        "Pods",
+        "bin",
         "build",
+        "coverage",
         "dist",
         "node_modules",
+        "obj",
+        "out",
+        "target",
+        "vendor",
         "venv",
     }
     source_dirs = {"app", "lib", "scripts", "src", "test", "tests", "spec", "__tests__"}
@@ -547,7 +606,7 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[s
         if probes.empty_inline is not None and probes.empty_inline.search(line):
             achados.append(line.lstrip("+").strip())
             continue
-        for seguinte in added_lines[i + 1:]:
+        for seguinte in added_lines[i + 1 :]:
             if probes.skippable.match(seguinte):
                 continue
             if probes.empty_body.match(seguinte):
@@ -597,12 +656,14 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
             continue
         for pattern, desc in probes.weakened:
             if re.match(pattern, line):
-                frauds.append(JudgeFraud(
-                    type="weakened_checks",
-                    severity="high",
-                    description=f"{current_file}: {desc}",
-                    evidence=line.strip(),
-                ))
+                frauds.append(
+                    JudgeFraud(
+                        type="weakened_checks",
+                        severity="high",
+                        description=f"{current_file}: {desc}",
+                        evidence=line.strip(),
+                    )
+                )
                 # Uma fraude por linha de diff, não por padrão casado: a mesma
                 # linha pode casar dois padrões (ex.: teste comentado com
                 # noqa inline casa "teste virado em comentário" e "noqa
@@ -616,12 +677,14 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
         if probes is None:  # pragma: no cover - filtrado no laço acima
             continue
         for vazio in _empty_test_bodies(added, probes):
-            frauds.append(JudgeFraud(
-                type="weakened_checks",
-                severity="high",
-                description=f"{path}: teste com corpo vazio (só pass)",
-                evidence=vazio,
-            ))
+            frauds.append(
+                JudgeFraud(
+                    type="weakened_checks",
+                    severity="high",
+                    description=f"{path}: teste com corpo vazio (só pass)",
+                    evidence=vazio,
+                )
+            )
 
     return frauds
 
@@ -644,12 +707,14 @@ def hunt_false_completion(
         if verify.get(claim_key) and result_key in verify_results:
             result = verify_results[result_key]
             if not result.ok:
-                frauds.append(JudgeFraud(
-                    type="false_completion",
-                    severity="high",
-                    description=f"{label} re-executado falhou, mas relatório afirma que passou",
-                    evidence=f"relatório: {claim_key}=True → reality: {label} falhou",
-                ))
+                frauds.append(
+                    JudgeFraud(
+                        type="false_completion",
+                        severity="high",
+                        description=f"{label} re-executado falhou, mas relatório afirma que passou",
+                        evidence=f"relatório: {claim_key}=True → reality: {label} falhou",
+                    )
+                )
 
     return frauds
 
@@ -662,12 +727,16 @@ def hunt_scope_creep(task_data: dict[str, Any], changed: list[str]) -> list[Judg
     extra = [f for f in changed if f not in declared]
 
     if extra:
-        frauds.append(JudgeFraud(
-            type="scope_creep",
-            severity="medium" if len(extra) <= 2 else "high",
-            description=f"{len(extra)} arquivo(s) alterado(s) não declarado(s) como necessários",
-            evidence=", ".join(extra[:5]),
-        ))
+        frauds.append(
+            JudgeFraud(
+                type="scope_creep",
+                severity="medium" if len(extra) <= 2 else "high",
+                description=(
+                    f"{len(extra)} arquivo(s) alterado(s) não declarado(s) como necessários"
+                ),
+                evidence=", ".join(extra[:5]),
+            )
+        )
 
     return frauds
 
@@ -677,12 +746,14 @@ def hunt_unauthorized_action(task_data: dict[str, Any]) -> list[JudgeFraud]:
     frauds: list[JudgeFraud] = []
     artifact = task_data.get("artifact", {})
     if artifact.get("auth_owed") and not artifact.get("auth_present"):
-        frauds.append(JudgeFraud(
-            type="unauthorized_action",
-            severity="high",
-            description="ação externa realizada sem AUTH line",
-            evidence="artifact.auth_owed=True mas auth_present=False",
-        ))
+        frauds.append(
+            JudgeFraud(
+                type="unauthorized_action",
+                severity="high",
+                description="ação externa realizada sem AUTH line",
+                evidence="artifact.auth_owed=True mas auth_present=False",
+            )
+        )
     return frauds
 
 
@@ -691,16 +762,18 @@ def hunt_spec_betrayal(task_data: dict[str, Any]) -> list[JudgeFraud]:
     frauds: list[JudgeFraud] = []
     intent = task_data.get("intent", {})
     if intent.get("answered") and not intent.get("all_agree"):
-        frauds.append(JudgeFraud(
-            type="spec_betrayal",
-            severity="high",
-            description="intenção não alinhada: código, teste e spec discordam",
-            evidence=(
-                f"code_does={intent.get('code_does','')} | "
-                f"check_expects={intent.get('check_expects','')} | "
-                f"spec_says={intent.get('spec_says','')}"
-            ),
-        ))
+        frauds.append(
+            JudgeFraud(
+                type="spec_betrayal",
+                severity="high",
+                description="intenção não alinhada: código, teste e spec discordam",
+                evidence=(
+                    f"code_does={intent.get('code_does', '')} | "
+                    f"check_expects={intent.get('check_expects', '')} | "
+                    f"spec_says={intent.get('spec_says', '')}"
+                ),
+            )
+        )
     return frauds
 
 
@@ -710,24 +783,28 @@ def hunt_debris(diff: str, changed: list[str]) -> list[JudgeFraud]:
 
     for f in changed:
         if is_debris_file(f):
-            frauds.append(JudgeFraud(
-                type="debris",
-                severity="low",
-                description=f"arquivo temporário/de lixo: {f}",
-                evidence=f"arquivo suspeito: {f}",
-            ))
+            frauds.append(
+                JudgeFraud(
+                    type="debris",
+                    severity="low",
+                    description=f"arquivo temporário/de lixo: {f}",
+                    evidence=f"arquivo suspeito: {f}",
+                )
+            )
 
     found_types: set[str] = set()
     for line in diff.split("\n"):
         for pattern, desc in _DEBRIS_LINE_PATTERNS:
             if re.match(pattern, line, re.IGNORECASE) and desc not in found_types:
                 found_types.add(desc)
-                frauds.append(JudgeFraud(
-                    type="debris",
-                    severity="low",
-                    description=desc,
-                    evidence=line.strip()[:120],
-                ))
+                frauds.append(
+                    JudgeFraud(
+                        type="debris",
+                        severity="low",
+                        description=desc,
+                        evidence=line.strip()[:120],
+                    )
+                )
 
     return frauds
 
@@ -756,6 +833,19 @@ def judge_task(
     """
     blind_spots: list[str] = []
     baseline_frauds: list[JudgeFraud] = []
+
+    # YAML escrito à mão é entrada suportada; `verify: true` (ou qualquer
+    # não-mapa) crashava collect_claims/hunt_false_completion com
+    # AttributeError em vez de produzir veredito (R10-17). Vira ponto cego
+    # confessado, não traceback.
+    verify_section = task_data.get("verify")
+    if verify_section is None:
+        verify_section = {}
+    if not isinstance(verify_section, dict):
+        blind_spots.append("campo verify da tarefa não é um mapa — claims de verificação ignoradas")
+        verify_section = {}
+    task_data = {**task_data, "verify": verify_section}
+
     base_commit = task_data.get("base_commit")
     task_name = task_data.get("task")
     diff_base = base_commit
@@ -763,18 +853,18 @@ def judge_task(
     if isinstance(task_name, str) and base_commit:
         anchor = _read_baseline_ref(task_name, cwd=cwd)
         if anchor is None:
-            blind_spots.append(
-                "baseline declarado no YAML não tem âncora independente no Git"
-            )
+            blind_spots.append("baseline declarado no YAML não tem âncora independente no Git")
         else:
             yaml_commit = _resolve_commit(str(base_commit), cwd=cwd)
             if yaml_commit != anchor:
-                baseline_frauds.append(JudgeFraud(
-                    type="baseline_tampering",
-                    severity="high",
-                    description="baseline do YAML diverge da âncora Git registrada no início",
-                    evidence=f"YAML={base_commit} | Git={anchor}",
-                ))
+                baseline_frauds.append(
+                    JudgeFraud(
+                        type="baseline_tampering",
+                        severity="high",
+                        description="baseline do YAML diverge da âncora Git registrada no início",
+                        evidence=f"YAML={base_commit} | Git={anchor}",
+                    )
+                )
             diff_base = anchor
 
     if diff_base:
@@ -782,12 +872,14 @@ def judge_task(
             blind_spots.append("baseline não resolve mais no histórico Git")
             diff_base = None
         elif not _base_commit_is_ancestor(str(diff_base), cwd=cwd):
-            baseline_frauds.append(JudgeFraud(
-                type="baseline_tampering",
-                severity="high",
-                description="baseline não é ancestral do HEAD atual",
-                evidence=str(diff_base),
-            ))
+            baseline_frauds.append(
+                JudgeFraud(
+                    type="baseline_tampering",
+                    severity="high",
+                    description="baseline não é ancestral do HEAD atual",
+                    evidence=str(diff_base),
+                )
+            )
             diff_base = None
 
     diff = _run_git_diff(cwd=cwd, base_commit=diff_base)

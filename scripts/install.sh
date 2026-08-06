@@ -39,13 +39,35 @@ usage() {
     exit 1
 }
 
+# Caminho canônico (segue symlinks) de forma portátil. `readlink -f` é
+# GNU-only: no macOS (BSD) ele falha e o 2>/dev/null antigo fazia a
+# comparação virar "" == "" — verdade para QUALQUER symlink, inclusive de
+# terceiros (R10-24). Último recurso: `readlink` cru, que basta porque o
+# instalador grava o destino absoluto no link.
+canonicalize() {
+    local caminho="$1"
+    if command -v greadlink >/dev/null 2>&1; then
+        greadlink -f "$caminho" 2>/dev/null
+    elif readlink -f "$caminho" >/dev/null 2>&1; then
+        readlink -f "$caminho" 2>/dev/null
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$caminho" 2>/dev/null
+    else
+        readlink "$caminho" 2>/dev/null
+    fi
+}
+
 # Só é nosso o que aponta para a fonte esperada. Um symlink de terceiros não
 # pode ser substituído nem removido pelo instalador.
 is_our_link() {
     local alvo="$1"
     local fonte="$2"
     [[ -L "$alvo" ]] || return 1
-    [[ "$(readlink -f "$alvo" 2>/dev/null)" == "$(readlink -f "$fonte" 2>/dev/null)" ]]
+    local alvo_real
+    alvo_real="$(canonicalize "$alvo")"
+    local fonte_real
+    fonte_real="$(canonicalize "$fonte")"
+    [[ -n "$alvo_real" && -n "$fonte_real" && "$alvo_real" == "$fonte_real" ]]
 }
 
 check_targets() {

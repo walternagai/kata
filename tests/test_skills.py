@@ -90,6 +90,17 @@ class TestCheckFrontend:
     def test_config_dir_respeita_a_variavel_de_ambiente(self, oc, tmp_path) -> None:
         assert check_frontend(oc).config_dir == tmp_path
 
+    def test_claude_code_nunca_instalado_nao_e_parcial(self, tmp_path, monkeypatch) -> None:
+        """R10-14: `agente_instalado` é True por omissão para claude-code —
+        sem exigir `agente_esperado`, um frontend nunca instalado reportava
+        `parcial` junto de `ausente`, contradizendo o docstring."""
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+        cc = FRONTENDS[1]
+        e = check_frontend(cc)
+        assert e.ausente is True
+        assert e.parcial is False
+        assert e.completo is False
+
 
 class TestDoctor:
     def test_cobre_todos_os_frontends(self, tmp_path, monkeypatch) -> None:

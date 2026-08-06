@@ -40,6 +40,11 @@ jobs:
       - name: Lint
         run: make lint
 
+      # O ruff check não reprova drift de formatação; sem este passo, o
+      # format divergia do padrão declarado sem ninguém ver (R9-8/R10-6).
+      - name: Format check
+        run: make format-check
+
       # O gate de coverage (fail_under = 70) vem de pyproject.toml e é
       # aplicado pelo pytest-cov, então `make test` já reprova sozinho.
       - name: Test

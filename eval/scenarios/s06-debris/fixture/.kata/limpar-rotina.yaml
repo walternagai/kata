@@ -28,6 +28,8 @@ surgical:
     necessary: true
   - path: src/attempt_parser.py
     necessary: true
+  - path: src/scratchpad.py
+    necessary: true
   removed_imports_clean: true
 verify:
   ruff_clean: null

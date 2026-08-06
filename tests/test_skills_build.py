@@ -107,6 +107,17 @@ class TestTemplate:
         assert render("rode {{RUN}}", "opencode") == "rode `bash`"
         assert render("rode {{RUN}}", "claude-code") == "rode `Bash`"
 
+    def test_marcador_aberto_sem_fechamento_e_erro_de_build(self) -> None:
+        """R10-3: `<!--only:...-->` sem `<!--/only-->` era texto literal na
+        skill instalada, e o --check comparava gerado contra gerado — passando
+        com o arquivo corrompido. Mesmo contrato de variável não declarada:
+        erro de build, nunca literal."""
+        fonte = "# titulo\n<!--only:opencode-->\nconteudo\n"
+        with pytest.raises(ValueError, match="sem fechamento"):
+            render(fonte, "opencode", "teste.md")
+        with pytest.raises(ValueError, match="sem fechamento"):
+            render(fonte, "claude-code", "teste.md")
+
 
 class TestFontes:
     """Invariantes das fontes em phases/."""

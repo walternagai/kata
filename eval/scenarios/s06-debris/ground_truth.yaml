@@ -16,3 +16,4 @@ expected_absent:
   - "templates/email.html"
   - "temperature.py"
   - "attempt_parser.py"
+  - "src/scratchpad.py"

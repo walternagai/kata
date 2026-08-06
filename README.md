@@ -89,7 +89,10 @@ subagente isolado que só reporta um resumo ao final.
 ### CLI Python (opcional, para CI/headless)
 
 ```bash
-pip install -e .
+# As extras `dev` trazem o ruff/pytest/pytest-cov que `kata --check-only`
+# executa — instalar só `pip install -e .` deixa o entry point de CI sem
+# ferramenta e reprovando sempre (R10-32).
+pip install -e '.[dev]'
 ```
 
 ## Uso
@@ -276,10 +279,10 @@ migrar tarefas existentes:
 ln -s .karpathy .kata   # symlink preserva acesso ao legado
 ```
 
-Tarefas podem declarar um domínio (`coding`, `devops`, `data-analysis`,
-`research`, `docs`). O domínio padrão é `coding`; outros domínios carregam um
-adapter gerado automaticamente para OpenCode e Claude Code a partir de
-`domains/`.
+Tarefas podem declarar um domínio (`coding`, `devops`). O domínio padrão é
+`coding`; os demais carregam um adapter de `domains/` (fonte única, gerado
+para OpenCode e Claude Code). Domínio sem adapter conhecido roda com aviso,
+sem o adapter — ver `domains/TEMPLATE.md` para criar um novo.
 
 ## Estrutura
 
@@ -290,12 +293,11 @@ kata/
 │                                         edita; o resto é gerado.
 ├── opencode/                          ← GERADO (make build-skills)
 │   ├── agent/kata.md                  ← Agente @kata (OpenCode)
-│   └── skills/kata-*/SKILL.md         ← 10 skills (fit, think, simplify, intent,
-│                                         surgical, verify, artifact, report,
-│                                         question, judge; TWIN CHECK vive no
+│   └── skills/kata-*/SKILL.md         ← 11 skills (10 fases + domain adapter
+│                                         kata-devops; TWIN CHECK vive no
 │                                         orquestrador)
 ├── claude-code/                       ← GERADO (make build-skills)
-│   └── skills/kata-*/SKILL.md         ← 11 skills (orquestrador kata + as 10 acima)
+│   └── skills/kata-*/SKILL.md         ← 12 skills (orquestrador kata + as 11 acima)
 ├── src/kata/
 │   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)

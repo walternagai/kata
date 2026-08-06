@@ -61,9 +61,25 @@ function Test-ManagedPath([string]$Path, [string]$ExpectedSource = "") {
     if ($null -eq $item) { return $true }                                    # não existe: livre
     if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
         if ([string]::IsNullOrWhiteSpace($ExpectedSource)) { return $false }
-        $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue).Path
-        $expected = (Resolve-Path -LiteralPath $ExpectedSource -ErrorAction SilentlyContinue).Path
-        return $resolved -and $expected -and $resolved -ieq $expected
+        # Resolve-Path NÃO segue o symlink/junction final — devolve o próprio
+        # link, então comparar caminhos resolvidos nunca casava links nossos
+        # (reinstalação idempotente e uninstall quebravam; R10-23). O caminho
+        # é nosso por: (1) manifesto — todo link criado por este instalador é
+        # registrado; (2) alvo real do link (PS7+: FileSystemInfo.Target)
+        # igual à fonte esperada. No Windows PowerShell 5.1 a propriedade
+        # não existe e o manifesto é o único critério.
+        if ((Get-Manifest) -contains $Path) { return $true }
+        try {
+            $target = $item.Target
+            if ($target) {
+                if (-not [IO.Path]::IsPathRooted($target)) {
+                    $target = [IO.Path]::GetFullPath((Join-Path $item.DirectoryName $target))
+                }
+                $expected = (Resolve-Path -LiteralPath $ExpectedSource -ErrorAction SilentlyContinue).Path
+                if ($expected -and $target -ieq $expected) { return $true }
+            }
+        } catch { }
+        return $false
     }
     if ((Get-Manifest) -contains $Path) { return $true }                     # cópia nossa
     # Compatibilidade com instalações anteriores, que marcavam o diretório.
@@ -100,6 +116,10 @@ function Install-Entry([string]$Source, [string]$Target, [bool]$IsDirectory) {
         try {
             $linkType = if ($IsDirectory) { "Junction" } else { "SymbolicLink" }
             New-Item -ItemType $linkType -Path $Target -Target $Source | Out-Null
+            # R10-23: links também entram no manifesto — é o único critério
+            # de posse que funciona no Windows PowerShell 5.1, e o primeiro
+            # em qualquer versão (Resolve-Path não segue o link final).
+            Add-ToManifest $Target
             return "link"
         } catch {
             Write-Warning "Não foi possível criar link para '$Target'. Usando cópia."

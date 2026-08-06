@@ -169,19 +169,13 @@ class TestDetectTaskFromBranch:
         mock_result = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="feature/my-task\n", stderr=""
         )
-        monkeypatch.setattr(
-            "subprocess.run", lambda *a, **kw: mock_result
-        )
+        monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)
         task = cli._detect_task_from_branch()
         assert task == "feature-my-task"
 
     def test_detect_detached_head(self, monkeypatch) -> None:
-        mock_result = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="HEAD\n", stderr=""
-        )
-        monkeypatch.setattr(
-            "subprocess.run", lambda *a, **kw: mock_result
-        )
+        mock_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="HEAD\n", stderr="")
+        monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)
         task = cli._detect_task_from_branch()
         assert task is None
 
@@ -197,9 +191,7 @@ class TestDetectTaskFromBranch:
         mock_result = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="bug_fix_123\n", stderr=""
         )
-        monkeypatch.setattr(
-            "subprocess.run", lambda *a, **kw: mock_result
-        )
+        monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock_result)
         task = cli._detect_task_from_branch()
         assert task == "bug-fix-123"
 
@@ -657,8 +649,12 @@ class TestAuditTask:
             "fit": {"answered": True, "reason": "feature request", "skipped": False},
             "think": {"answered": True, "problem": "bug real", "skipped": False},
             "intent": {"answered": True, "code_does": "faz X", "skipped": False},
-            "verify": {"success_criteria_met": True, "ruff_clean": True,
-                       "tests_pass": True, "coverage_pass": True},
+            "verify": {
+                "success_criteria_met": True,
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+            },
             "twins": {"defect_fixed": False, "searched": True},
         }
         achados = cli._audit_task(data)
@@ -739,29 +735,48 @@ class TestAuditTask:
         assert "escopo extra" in fases["surgical"]["risco"]
 
     def test_simplify_e_surgical_respondidos_sao_followed(self) -> None:
-        data = {"simplify": {"answered": True}, "surgical": {"answered": True}}
+        data = {
+            "simplify": {"answered": True, "minimum_code": True},
+            "surgical": {"answered": True, "files": []},
+        }
         achados = cli._audit_task(data)
         fases = {a["fase"]: a for a in achados}
         assert fases["simplify"]["status"] == "followed"
         assert fases["surgical"]["status"] == "followed"
+
+    def test_simplify_e_surgical_respondidos_sem_conteudo_sao_faked(self) -> None:
+        """R10-22: `answered: true` escrito à mão SEM as chaves de conteúdo é
+        faked — o mesmo contrato de THINK com problem vazio. Antes, qualquer
+        answered era followed e o falso não tinha nome."""
+        data = {"simplify": {"answered": True}, "surgical": {"answered": True}}
+        achados = cli._audit_task(data)
+        fases = {a["fase"]: a for a in achados}
+        assert fases["simplify"]["status"] == "faked"
+        assert "minimalidade" in fases["simplify"]["risco"]
+        assert fases["surgical"]["status"] == "faked"
+        assert "escopo extra" in fases["surgical"]["risco"]
 
 
 class TestPrintAudit:
     """Testa _print_audit — output da graduação."""
 
     def test_clean_audit_says_clean(self, capsys) -> None:
-        cli._print_audit([
-            {"fase": "think", "status": "followed", "risco": ""},
-            {"fase": "verify", "status": "followed", "risco": ""},
-        ])
+        cli._print_audit(
+            [
+                {"fase": "think", "status": "followed", "risco": ""},
+                {"fase": "verify", "status": "followed", "risco": ""},
+            ]
+        )
         out = capsys.readouterr().out
         assert "THINK: followed" in out
         assert "Audit limpo" in out
 
     def test_faked_audit_lists_risks(self, capsys) -> None:
-        cli._print_audit([
-            {"fase": "think", "status": "faked", "risco": "problema errado"},
-        ])
+        cli._print_audit(
+            [
+                {"fase": "think", "status": "faked", "risco": "problema errado"},
+            ]
+        )
         out = capsys.readouterr().out
         assert "THINK: faked" in out
         assert "problema errado" in out
@@ -1040,18 +1055,18 @@ class TestIsInvalidTaskName:
     @pytest.mark.parametrize(
         "name",
         [
-            "../../etc/passwd",     # traversal
-            "a/b",                  # separador POSIX
-            "a\\b",                 # separador Windows
+            "../../etc/passwd",  # traversal
+            "a/b",  # separador POSIX
+            "a\\b",  # separador Windows
             "..",
             ".",
             "",
             "   ",
-            ".oculto",              # arquivo oculto
-            "my task",              # viraria ".kata/my task.yaml"
+            ".oculto",  # arquivo oculto
+            "my task",  # viraria ".kata/my task.yaml"
             "tab\tname",
-            "foo.yaml",             # viraria ".kata/foo.yaml.yaml"
-            "foo.json",             # idem quando PyYAML está ausente
+            "foo.yaml",  # viraria ".kata/foo.yaml.yaml"
+            "foo.json",  # idem quando PyYAML está ausente
         ],
     )
     def test_rejected(self, name: str) -> None:
@@ -1122,19 +1137,14 @@ class TestRunHelper:
 class TestStepSurgicalNoFiles:
     """Testa _step_surgical sem arquivos alterados."""
 
-    @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
-    def test_surgical_no_files_no_staged(
-        self, mock_stdin, mock_run, mock_confirm, mock_untracked
-    ) -> None:
+    def test_surgical_no_files_no_staged(self, mock_stdin, mock_run, mock_untracked) -> None:
         mock_stdin.isatty.return_value = True
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
         ]
-        mock_confirm.return_value = True
         data: dict = {}
         result = cli._step_surgical("task", data)
         assert result["surgical"]["files"] == []
@@ -1150,8 +1160,7 @@ class TestHeadlessNaoEnvenenaATarefa:
 
     def _ciclo_headless(self) -> dict:
         data: dict = {"task": "t", "status": "draft"}
-        with patch("kata.cli.sys.stdin") as stdin, patch("kata.cli.untracked_files",
-                                                          return_value=[]):
+        with patch("kata.cli.sys.stdin") as stdin:
             stdin.isatty.return_value = False
             data = cli._step_fit("t", data)
             data = cli._step_think("t", data)
@@ -1168,9 +1177,7 @@ class TestHeadlessNaoEnvenenaATarefa:
         data = self._ciclo_headless()
         capsys.readouterr()
 
-        with patch("kata.cli.sys.stdin") as stdin, \
-             patch("kata.cli.input", return_value="resposta"), \
-             patch("kata.cli._confirm", return_value=True):
+        with patch("kata.cli.sys.stdin") as stdin, patch("kata.cli.input", return_value="resposta"):
             stdin.isatty.return_value = True
             depois = cli._step_think("t", dict(data))
         saida = capsys.readouterr().out
@@ -1186,8 +1193,12 @@ class TestHeadlessNaoEnvenenaATarefa:
         data = self._ciclo_headless()
         capsys.readouterr()
         data["status"] = "approved"
-        data["verify"] = {"ruff_clean": True, "tests_pass": True,
-                          "coverage_pass": True, "coverage_pct": 91.0}
+        data["verify"] = {
+            "ruff_clean": True,
+            "tests_pass": True,
+            "coverage_pass": True,
+            "coverage_pct": 91.0,
+        }
         data["artifact"] = {}
 
         cli._step_report("t", data)
@@ -1328,7 +1339,12 @@ class TestStepArtifact:
     @patch("kata.cli._detect_twins_owed", return_value=True)
     @patch("kata.cli.sys.stdin")
     def test_artifact_non_tty_missing_auth_pending_twins(
-        self, mock_stdin, mock_twins, mock_pending, mock_auth, capsys,
+        self,
+        mock_stdin,
+        mock_twins,
+        mock_pending,
+        mock_auth,
+        capsys,
     ) -> None:
         mock_stdin.isatty.return_value = False
         data: dict = {
@@ -1351,18 +1367,23 @@ class TestStepArtifact:
     @patch(
         "kata.cli.input",
         side_effect=[
-            "código faz X",             # INTENT code_does
-            "teste espera Y",           # INTENT check_expects
-            "spec diz Z",               # INTENT spec_says
-            "fez deploy em prod",       # AUTH action
-            'usuário disse "manda"',    # AUTH quote
-            "revisar módulo Y",         # PENDING action
-            "assert True",              # TWINS pattern
-            "3 ocorrências",            # TWINS result
+            "código faz X",  # INTENT code_does
+            "teste espera Y",  # INTENT check_expects
+            "spec diz Z",  # INTENT spec_says
+            "fez deploy em prod",  # AUTH action
+            'usuário disse "manda"',  # AUTH quote
+            "revisar módulo Y",  # PENDING action
+            "assert True",  # TWINS pattern
+            "3 ocorrências",  # TWINS result
         ],
     )
     def test_artifact_tty_backfills_all_missing_lines(
-        self, mock_input, mock_stdin, mock_twins, mock_pending, mock_auth,
+        self,
+        mock_input,
+        mock_stdin,
+        mock_twins,
+        mock_pending,
+        mock_auth,
     ) -> None:
         """Em modo interativo, preenche INTENT/AUTH/PENDING/TWINS ausentes via input()."""
         mock_stdin.isatty.return_value = True
@@ -1399,13 +1420,18 @@ class TestStepArtifact:
     @patch(
         "kata.cli.input",
         side_effect=[
-            "código faz X",             # INTENT code_does
-            "teste espera Y",           # INTENT check_expects
-            "spec diz Z",               # INTENT spec_says
+            "código faz X",  # INTENT code_does
+            "teste espera Y",  # INTENT check_expects
+            "spec diz Z",  # INTENT spec_says
         ],
     )
     def test_artifact_checks_updated_after_backfill(
-        self, mock_input, mock_stdin, mock_twins, mock_pending, mock_auth,
+        self,
+        mock_input,
+        mock_stdin,
+        mock_twins,
+        mock_pending,
+        mock_auth,
     ) -> None:
         """Regressão: artifact['intent_present'] deve refletir dados recém-preenchidos."""
         mock_stdin.isatty.return_value = True
@@ -1432,8 +1458,15 @@ class TestMainInteractive:
     @patch("kata.cli._init_task")
     @patch("kata.cli._kata_dir")
     def test_main_with_task_arg(
-        self, mock_kata_dir, mock_init, mock_think, mock_simplify,
-        mock_surgical, mock_verify, tmp_path, monkeypatch
+        self,
+        mock_kata_dir,
+        mock_init,
+        mock_think,
+        mock_simplify,
+        mock_surgical,
+        mock_verify,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         """Testa main() com --task argument — modo interativo não-TTY."""
 
@@ -1490,8 +1523,15 @@ class TestMainInteractive:
     @patch("kata.cli._init_task")
     @patch("kata.cli._kata_dir")
     def test_main_rejected_exits_1(
-        self, mock_kata_dir, mock_init, mock_think, mock_simplify,
-        mock_surgical, mock_verify, tmp_path, monkeypatch
+        self,
+        mock_kata_dir,
+        mock_init,
+        mock_think,
+        mock_simplify,
+        mock_surgical,
+        mock_verify,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         """Testa que main() sai com código 1 se a tarefa for rejeitada."""
 
@@ -1543,9 +1583,7 @@ class TestStepFit:
     @patch("kata.cli.diff_stats")
     @patch("kata.cli.input")
     @patch("kata.cli.sys.stdin")
-    def test_step_fit_interactive_code_loop(
-        self, mock_stdin, mock_input, mock_diff_stats
-    ) -> None:
+    def test_step_fit_interactive_code_loop(self, mock_stdin, mock_input, mock_diff_stats) -> None:
         mock_stdin.isatty.return_value = True
         mock_diff_stats.return_value = (["src/foo.py"], 3)
         mock_input.side_effect = ["s", "1", "bugfix simples"]
@@ -1558,9 +1596,7 @@ class TestStepFit:
     @patch("kata.cli.diff_stats")
     @patch("kata.cli.input")
     @patch("kata.cli.sys.stdin")
-    def test_step_fit_interactive_plan_first(
-        self, mock_stdin, mock_input, mock_diff_stats
-    ) -> None:
+    def test_step_fit_interactive_plan_first(self, mock_stdin, mock_input, mock_diff_stats) -> None:
         mock_stdin.isatty.return_value = True
         mock_diff_stats.return_value = ([], 0)
         mock_input.side_effect = ["s", "2", "precisa de planejamento"]
@@ -1659,9 +1695,19 @@ class TestMainRouteHandling:
     @patch("kata.cli._init_task")
     @patch("kata.cli._kata_dir")
     def test_question_route_stops_after_think(
-        self, mock_kata_dir, mock_init, mock_fit, mock_think,
-        mock_simplify, mock_intent, mock_surgical, mock_verify,
-        mock_artifact, mock_report, tmp_path, monkeypatch,
+        self,
+        mock_kata_dir,
+        mock_init,
+        mock_fit,
+        mock_think,
+        mock_simplify,
+        mock_intent,
+        mock_surgical,
+        mock_verify,
+        mock_artifact,
+        mock_report,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         kata_dir = tmp_path / ".kata"
         kata_dir.mkdir()
@@ -1702,9 +1748,20 @@ class TestMainRouteHandling:
     @patch("kata.cli._init_task")
     @patch("kata.cli._kata_dir")
     def test_trivial_route_skips_simplify_intent_surgical_twin(
-        self, mock_kata_dir, mock_init, mock_fit, mock_think,
-        mock_simplify, mock_intent, mock_surgical, mock_twin,
-        mock_verify, mock_artifact, mock_report, tmp_path, monkeypatch,
+        self,
+        mock_kata_dir,
+        mock_init,
+        mock_fit,
+        mock_think,
+        mock_simplify,
+        mock_intent,
+        mock_surgical,
+        mock_twin,
+        mock_verify,
+        mock_artifact,
+        mock_report,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         kata_dir = tmp_path / ".kata"
         kata_dir.mkdir()
@@ -1755,8 +1812,16 @@ class TestMainInteractiveNoTaskArg:
     @patch("kata.cli._init_task")
     @patch("kata.cli._kata_dir")
     def test_main_uses_pick_task_when_no_arg(
-        self, mock_kata_dir, mock_init, mock_pick, mock_think,
-        mock_simplify, mock_surgical, mock_verify, tmp_path, monkeypatch
+        self,
+        mock_kata_dir,
+        mock_init,
+        mock_pick,
+        mock_think,
+        mock_simplify,
+        mock_surgical,
+        mock_verify,
+        tmp_path,
+        monkeypatch,
     ) -> None:
 
         kata_dir = tmp_path / ".kata"
@@ -1847,8 +1912,13 @@ class TestMainJudge:
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_judge_verified(
-        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
-        tmp_path, monkeypatch,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        mock_judge,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         from kata.judge import JudgeResult
 
@@ -1876,8 +1946,13 @@ class TestMainJudge:
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_judge_refuted(
-        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
-        tmp_path, monkeypatch,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        mock_judge,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         from kata.judge import JudgeFraud, JudgeResult
 
@@ -1893,8 +1968,12 @@ class TestMainJudge:
             verdict="REFUTED",
             claims=["ruff passou"],
             frauds=[
-                JudgeFraud(type="false_completion", severity="high",
-                           description="ruff re-executado falhou", evidence="realidade: falha"),
+                JudgeFraud(
+                    type="false_completion",
+                    severity="high",
+                    description="ruff re-executado falhou",
+                    evidence="realidade: falha",
+                ),
             ],
             re_ran_checks={"ruff": False},
         )
@@ -1909,8 +1988,14 @@ class TestMainJudge:
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_judge_caveats_is_not_a_failure(
-        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
-        tmp_path, monkeypatch, capsys,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        mock_judge,
+        tmp_path,
+        monkeypatch,
+        capsys,
     ) -> None:
         """Só REFUTED é falha. Equiparar ressalva de baixa severidade a fraude
         grave leva o CI a ignorar o exit code por inútil."""
@@ -1928,8 +2013,12 @@ class TestMainJudge:
             verdict="VERIFIED WITH CAVEATS",
             claims=["ruff passou"],
             frauds=[
-                JudgeFraud(type="debris", severity="low",
-                           description="TODO deixado no código", evidence="+ # TODO"),
+                JudgeFraud(
+                    type="debris",
+                    severity="low",
+                    description="TODO deixado no código",
+                    evidence="+ # TODO",
+                ),
             ],
             re_ran_checks={"ruff": True},
         )
@@ -1947,8 +2036,14 @@ class TestMainJudge:
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_judge_unverifiable_e_anunciado_e_nao_e_falha(
-        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge,
-        tmp_path, monkeypatch, capsys,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        mock_judge,
+        tmp_path,
+        monkeypatch,
+        capsys,
     ) -> None:
         """UNVERIFIABLE tem de aparecer na tela com os pontos cegos listados.
 
@@ -2014,8 +2109,12 @@ class TestMainAudit:
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_audit_clean_exits_zero(
-        self, mock_kata_dir, mock_path, mock_deserialize,
-        tmp_path, monkeypatch,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         kata_dir = tmp_path / ".kata"
         kata_dir.mkdir()
@@ -2037,8 +2136,12 @@ class TestMainAudit:
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_audit_with_faked_phase_exits_one(
-        self, mock_kata_dir, mock_path, mock_deserialize,
-        tmp_path, monkeypatch,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         """R7-1 como tarefa concluída: THINK 'respondido' com conteúdo vazio
         tem de derrubar o audit."""
@@ -2072,13 +2175,16 @@ class TestMainAudit:
                 cli.main()
         assert exc.value.code == 1
 
-    @pytest.mark.parametrize("flag", [
-        ["--audit", "--plan"],
-        ["--audit", "--check-only"],
-        ["--audit", "--judge"],
-        ["--audit", "--report"],
-        ["--audit", "--init", "x"],
-    ])
+    @pytest.mark.parametrize(
+        "flag",
+        [
+            ["--audit", "--plan"],
+            ["--audit", "--check-only"],
+            ["--audit", "--judge"],
+            ["--audit", "--report"],
+            ["--audit", "--init", "x"],
+        ],
+    )
     def test_audit_conflicts_with_other_modes(self, flag) -> None:
         with patch("sys.argv", ["kata", *flag]):
             with pytest.raises(SystemExit) as exc:
@@ -2296,9 +2402,11 @@ class TestFormatLines:
 
     def test_twins_line_with_counts(self) -> None:
         twins = {
-            "searched": True, "pattern": "parse_date",
+            "searched": True,
+            "pattern": "parse_date",
             "result": "3 file(s), 5 occurrence(s)",
-            "files_count": 3, "matches_count": 5,
+            "files_count": 3,
+            "matches_count": 5,
         }
         line = cli._format_twins_line(twins)
         assert "3 file(s)" in line
@@ -2345,10 +2453,7 @@ class TestDetectScratch:
         templates/, temperature.py e attempt_parser.py como detrito. O CLI
         agora usa a mesma regra do JUDGE (is_debris_file)."""
         mock_run.return_value.stdout = (
-            "templates/email.html\n"
-            "src/temperature.py\n"
-            "attempt_parser.py\n"
-            "contemporary_utils.py\n"
+            "templates/email.html\nsrc/temperature.py\nattempt_parser.py\ncontemporary_utils.py\n"
         )
         assert cli._detect_scratch_files() == []
 
@@ -2375,8 +2480,13 @@ class TestStepReport:
                 "spec_says": "retorna int",
             },
             "surgical": {"files": [{"path": "src/parser.py", "necessary": True}]},
-            "verify": {"ruff_clean": True, "tests_pass": True, "coverage_pass": True,
-                       "coverage_pct": 92.0, "success_criteria_met": True},
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 92.0,
+                "success_criteria_met": True,
+            },
             "artifact": {},
         }
         cli._step_report("test-task", data)
@@ -2392,8 +2502,7 @@ class TestStepReport:
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_report_without_done_omits_criterion(self, mock_scratch, capsys) -> None:
-        data = {"status": "approved", "think": {"problem": "x"}, "verify": {},
-                "artifact": {}}
+        data = {"status": "approved", "think": {"problem": "x"}, "verify": {}, "artifact": {}}
         cli._step_report("test-task", data)
         out = capsys.readouterr().out
         assert "Critério declarado" not in out
@@ -2420,8 +2529,12 @@ class TestStepReport:
         tem de dizer isso em vez de passar batido."""
         data = {
             "status": "approved",
-            "verify": {"ruff_clean": True, "tests_pass": True,
-                       "coverage_pass": True, "coverage_pct": 91.0},
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 91.0,
+            },
             "artifact": {"intent_owed": True, "intent_present": False},
         }
         cli._step_report("test-task", data)
@@ -2495,8 +2608,12 @@ class TestStepReport:
         data = {
             "status": "approved",
             "verify": {},
-            "artifact": {"auth_owed": True, "auth_present": False,
-                         "intent_owed": False, "intent_present": True},
+            "artifact": {
+                "auth_owed": True,
+                "auth_present": False,
+                "intent_owed": False,
+                "intent_present": True,
+            },
         }
         cli._step_report("test-task", data)
         out = capsys.readouterr().out
@@ -2515,9 +2632,11 @@ class TestStepReport:
             "auth": {"authorized": True, "quote": "pode fazer deploy"},
             "pending": {"documented": True, "action": "rollout to prod"},
             "twins": {
-                "searched": True, "pattern": "bug_pattern",
+                "searched": True,
+                "pattern": "bug_pattern",
                 "result": "2 files, 3 occurrences",
-                "files_count": 2, "matches_count": 3,
+                "files_count": 2,
+                "matches_count": 3,
             },
         }
         cli._step_report("test-task", data)
@@ -2537,8 +2656,13 @@ class TestMainReport:
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
     def test_report_approved(
-        self, mock_kata_dir, mock_path, mock_deserialize, mock_report,
-        tmp_path, monkeypatch,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        mock_report,
+        tmp_path,
+        monkeypatch,
     ) -> None:
         kata_dir = tmp_path / ".kata"
         kata_dir.mkdir()
@@ -2558,15 +2682,24 @@ class TestMainReport:
     @patch("kata.cli._deserialize")
     @patch("kata.cli._task_path")
     @patch("kata.cli._kata_dir")
-    @pytest.mark.parametrize("status,esperado", [
-        ("think-complete", 0),   # modo --plan: em andamento, não é falha
-        ("draft", 0),
-        ("approved", 0),
-        ("rejected", 1),         # só isto é falha
-    ])
+    @pytest.mark.parametrize(
+        "status,esperado",
+        [
+            ("think-complete", 0),  # modo --plan: em andamento, não é falha
+            ("draft", 0),
+            ("approved", 0),
+            ("rejected", 1),  # só isto é falha
+        ],
+    )
     def test_report_exit_code_by_status(
-        self, mock_kata_dir, mock_path, mock_deserialize, mock_report,
-        status, esperado, tmp_path,
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        mock_report,
+        status,
+        esperado,
+        tmp_path,
     ) -> None:
         kata_dir = tmp_path / ".kata"
         kata_dir.mkdir()
@@ -2654,6 +2787,7 @@ class TestPrintJudgeVerdict:
     @patch("kata.cli.sys.stdout")
     def test_judge_verdict_shows_caveats(self, mock_stdout) -> None:
         from kata.judge import JudgeResult
+
         result = JudgeResult(
             verdict="VERIFIED WITH CAVEATS",
             caveats=["re-execução falhou: pytest"],
@@ -2668,6 +2802,7 @@ class TestPrintJudgeVerdict:
         nada o re-executa, e apresentá-lo como verificado é a fraude que o
         próprio JUDGE existe para caçar."""
         from kata.judge import JudgeResult
+
         result = JudgeResult(
             verdict="VERIFIED",
             claims=["todos os testes passam"],
@@ -2720,7 +2855,10 @@ class TestStepTwin:
     @patch("kata.cli.search_pattern")
     @patch("kata.cli.sys.stdin")
     def test_defect_fixed_with_matches(
-        self, mock_stdin, mock_search, mock_confirm,
+        self,
+        mock_stdin,
+        mock_search,
+        mock_confirm,
     ) -> None:
         from kata.verify import SearchMatch, SearchResult
 
@@ -2748,15 +2886,17 @@ class TestStepTwin:
     @patch("kata.cli.search_pattern")
     @patch("kata.cli.sys.stdin")
     def test_defect_fixed_many_matches_truncated(
-        self, mock_stdin, mock_search, mock_confirm,
+        self,
+        mock_stdin,
+        mock_search,
+        mock_confirm,
     ) -> None:
         from kata.verify import SearchMatch, SearchResult
 
         mock_stdin.isatty.return_value = True
         mock_search.return_value = SearchResult(
             pattern="TODO",
-            matches=[SearchMatch(file=f"src/{i}.py", line=i, content="TODO")
-                     for i in range(25)],
+            matches=[SearchMatch(file=f"src/{i}.py", line=i, content="TODO") for i in range(25)],
             total_files=25,
         )
         data = {"status": "approved", "intent": {"all_agree": True}}
@@ -2773,7 +2913,10 @@ class TestStepTwin:
     @patch("kata.cli.search_pattern")
     @patch("kata.cli.sys.stdin")
     def test_defect_fixed_no_matches(
-        self, mock_stdin, mock_search, mock_confirm,
+        self,
+        mock_stdin,
+        mock_search,
+        mock_confirm,
     ) -> None:
         from kata.verify import SearchResult
 
@@ -2796,13 +2939,13 @@ class TestStepTwin:
         with patch("builtins.input", return_value=""):
             result = cli._step_twin("task", data)
         assert result["twins"]["searched"] is False
+        # Nenhum padrão informado não é defeito confirmado (R10-13).
+        assert result["twins"]["defect_fixed"] is False
         mock_search.assert_not_called()
 
     @patch("kata.cli.search_pattern")
     @patch("kata.cli.sys.stdin")
-    def test_busca_invalida_nao_e_registrada_como_concluida(
-        self, mock_stdin, mock_search
-    ) -> None:
+    def test_busca_invalida_nao_e_registrada_como_concluida(self, mock_stdin, mock_search) -> None:
         from kata.verify import SearchResult
 
         mock_stdin.isatty.return_value = True
@@ -2813,6 +2956,9 @@ class TestStepTwin:
 
         assert result["twins"]["searched"] is False
         assert result["twins"]["fix_applied"] is False
+        # R10-13: a busca falhou, nada foi confirmado — afirmar defeito
+        # corrigido aqui faria o audit graduar "faked" por falha de ferramenta.
+        assert result["twins"]["defect_fixed"] is False
 
     def test_intent_conflict_triggers_twin(self) -> None:
         data = {"status": "approved", "intent": {"all_agree": False}}
@@ -2833,9 +2979,7 @@ class TestConfigDoProjeto:
         o projeto nunca pediu — a fraude que o JUDGE existe para caçar."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".kata").mkdir()
-        (tmp_path / ".kata" / "config.yaml").write_text(
-            "verify:\n  lint: 42\n", encoding="utf-8"
-        )
+        (tmp_path / ".kata" / "config.yaml").write_text("verify:\n  lint: 42\n", encoding="utf-8")
 
         with patch("sys.argv", ["kata", "--check-only"]):
             with pytest.raises(SystemExit) as exc:
@@ -2877,14 +3021,10 @@ class TestConfigDoProjeto:
         assert "npx vitest run" in out
 
     @patch("kata.cli.run_all")
-    def test_flag_gate_vence_a_config(
-        self, mock_run_all, tmp_path, monkeypatch
-    ) -> None:
+    def test_flag_gate_vence_a_config(self, mock_run_all, tmp_path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".kata").mkdir()
-        (tmp_path / ".kata" / "config.yaml").write_text(
-            "verify:\n  gate: 85\n", encoding="utf-8"
-        )
+        (tmp_path / ".kata" / "config.yaml").write_text("verify:\n  gate: 85\n", encoding="utf-8")
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=True),
             "pytest": VerifyResult(ok=True),
@@ -2963,9 +3103,7 @@ class TestDoctor:
         assert "kata-intent" in out
         assert "fase fingida" in out
 
-    def test_nada_instalado_avisa_mas_nao_reprova(
-        self, tmp_path, monkeypatch, capsys
-    ) -> None:
+    def test_nada_instalado_avisa_mas_nao_reprova(self, tmp_path, monkeypatch, capsys) -> None:
         """Quem só usa o CLI nunca instalou frontend nenhum, e está tudo bem."""
         monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
@@ -3059,3 +3197,25 @@ class TestAuditPreflight:
 
         data = yaml.safe_load((tmp_path / ".kata" / "t.yaml").read_text(encoding="utf-8"))
         assert data["preflight"] == {"skills_missing": []}
+
+
+class TestAvisaDomainDesconhecido:
+    """Domínio sem adapter conhecido roda o ciclo sem ele — aviso, não erro."""
+
+    def test_domain_conhecido_nao_avisa(self, capsys) -> None:
+        cli._avisa_domain_desconhecido({"domain": "coding"})
+        cli._avisa_domain_desconhecido({"domain": "devops"})
+        assert capsys.readouterr().out == ""
+
+    def test_domain_sem_chave_trata_como_coding(self, capsys) -> None:
+        cli._avisa_domain_desconhecido({})
+        assert capsys.readouterr().out == ""
+
+    def test_domain_desconhecido_avisa(self, capsys) -> None:
+        """R10-21: `domain: banana` rodaria sem adapter e sem nenhum aviso —
+        o modo de falha que a Fase 0.5 manda não improvisar."""
+        cli._avisa_domain_desconhecido({"domain": "banana"})
+        saida = capsys.readouterr().out
+        assert "banana" in saida
+        assert "não tem adapter conhecido" in saida
+        assert "devops" in saida  # lista os disponíveis

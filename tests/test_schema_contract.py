@@ -64,7 +64,12 @@ def _chaves_lidas_pelo_codigo() -> set[str]:
     fonte = "".join(
         (REPO / "src" / "kata" / f).read_text(encoding="utf-8") for f in ("cli.py", "judge.py")
     )
-    aninhada = re.compile(r'\b(?:data|task_data)\.get\("(\w+)", \{\}\)\.get\("(\w+)"')
+    # Antes só casava aspas duplas com default exato `{}`: leituras com aspas
+    # simples ou default ≠ {} (ex.: `intent.get('code_does','')`) escapavam,
+    # e a chave `domain` nova passaria despercebida (R10-27).
+    aninhada = re.compile(
+        r'\b(?:data|task_data)\.get\(["\'](\w+)["\'](?:,\s*[^)]*)?\)\.get\(["\'](\w+)["\']'
+    )
 
     lidas: set[str] = set()
     secoes: set[str] = set()
@@ -75,11 +80,19 @@ def _chaves_lidas_pelo_codigo() -> set[str]:
     # Leituras em duas etapas: `twins = data.get("twins", {})` e depois
     # `twins.get("defect_fixed")`. A seção precisa ter sido vista acima ou
     # aqui, na atribuição.
-    for secao in re.findall(r'\b(\w+)\s*=\s*(?:data|task_data)\.get\("(?:\w+)", \{\}\)', fonte):
+    for secao in re.findall(
+        r'\b(\w+)\s*=\s*(?:data|task_data)\.get\(["\']\w+["\'](?:,\s*[^)]*)?\)', fonte
+    ):
         secoes.add(secao)
     for secao in secoes:
-        for chave in re.findall(rf"\b{secao}\.get\(\"(\w+)\"", fonte):
+        for chave in re.findall(rf"\b{secao}\.get\(['\"](\w+)['\"]", fonte):
             lidas.add(f"{secao}.{chave}")
+    # Chaves de topo lidas de uma etapa só (`data.get("domain", "coding")`)
+    # eram invisíveis para o teste: a chave `domain` podia sumir do schema
+    # documentado sem ninguém ver (R10-27).
+    for secao in re.findall(r"\b(?:data|task_data)\.get\(['\"](\w+)['\"]", fonte):
+        secoes.add(secao)
+        lidas.add(secao)
     return lidas
 
 

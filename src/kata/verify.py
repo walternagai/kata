@@ -266,13 +266,22 @@ def run_command_coverage(
     if match is None:
         return VerifyResult(
             ok=False,
-            output=result.output
-            + f"\n(kata: nenhum percentual casou com o padrão {pattern!r})",
+            output=result.output + f"\n(kata: nenhum percentual casou com o padrão {pattern!r})",
             details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
         )
 
     try:
         cov_pct = float(match.group(1))
+    except IndexError:
+        # O padrão CASOU mas não tem grupo de captura (ex.: "coverage:\s+\d+%"):
+        # não há percentual a extrair, e não é possível medir. Reprovar nomeado
+        # em vez de estourar VERIFY e JUDGE com traceback (R10-1).
+        return VerifyResult(
+            ok=False,
+            output=result.output
+            + f"\n(kata: o padrão {pattern!r} não tem grupo de captura para o percentual)",
+            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+        )
     except ValueError:
         # O padrão CASOU mas o grupo não é número (ex.: "N/A"). Não conseguiu
         # medir não é reprovação silenciosa nem 0.0 aprovado: é o mesmo
@@ -331,20 +340,49 @@ def search_pattern(
     """
     if paths is None:
         paths = ["."]
+    # As exclusões têm de ser as MESMAS com rg e com grep (R10-4): o twin
+    # check compara recorrências, e a árvore varrida muda conforme o binário
+    # disponível. Antes, rg só excluía .git/__pycache__ e varria node_modules
+    # e .venv que o grep pulava — falso positivo de recorrência e, com o
+    # timeout de _run, busca interrompida em repo grande.
     if shutil.which("rg"):
         cmd = [
-            "rg", "-n", "--no-heading", "--color", "never",
-            "--glob", "!.git", "--glob", "!__pycache__",
-            pattern, *paths,
+            "rg",
+            "-n",
+            "--no-heading",
+            "--color",
+            "never",
+            "--glob",
+            "!.git",
+            "--glob",
+            "!__pycache__",
+            "--glob",
+            "!.pytest_cache",
+            "--glob",
+            "!.ruff_cache",
+            "--glob",
+            "!.venv",
+            "--glob",
+            "!venv",
+            "--glob",
+            "!node_modules",
+            pattern,
+            *paths,
         ]
     else:
         cmd = [
-            "grep", "-rnI", "--color=never",
-            "--exclude-dir=.git", "--exclude-dir=__pycache__",
-            "--exclude-dir=.pytest_cache", "--exclude-dir=.ruff_cache",
-            "--exclude-dir=.venv", "--exclude-dir=venv",
+            "grep",
+            "-rnI",
+            "--color=never",
+            "--exclude-dir=.git",
+            "--exclude-dir=__pycache__",
+            "--exclude-dir=.pytest_cache",
+            "--exclude-dir=.ruff_cache",
+            "--exclude-dir=.venv",
+            "--exclude-dir=venv",
             "--exclude-dir=node_modules",
-            pattern, *paths,
+            pattern,
+            *paths,
         ]
     result = _run(cmd, cwd=cwd)
     matches: list[SearchMatch] = []

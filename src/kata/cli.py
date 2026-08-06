@@ -46,7 +46,7 @@ from kata.judge import (
     judge_task,
     record_baseline_ref,
 )
-from kata.skills import InstallStatus, doctor, doctor_domain
+from kata.skills import DOMAIN_SKILLS, InstallStatus, doctor, doctor_domain
 from kata.verify import VerifyResult, run_all, search_pattern, untracked_files
 
 try:
@@ -89,9 +89,7 @@ def _serialize(data: dict[str, Any]) -> str:
 def _save_task(path: Path, data: dict[str, Any]) -> None:
     """Persiste a tarefa com replace atômico para permitir retomada segura."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-    )
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -127,12 +125,7 @@ def _detect_cov_source() -> str:
 
             text = pyproject.read_text(encoding="utf-8")
             config = tomllib.loads(text)
-            sources = (
-                config.get("tool", {})
-                .get("coverage", {})
-                .get("run", {})
-                .get("source", [])
-            )
+            sources = config.get("tool", {}).get("coverage", {}).get("run", {}).get("source", [])
             if isinstance(sources, str):
                 return sources
             if sources:
@@ -214,9 +207,7 @@ def _pick_task() -> str:
     if not sys.stdin.isatty():
         return "untitled"
     branch_task = _detect_task_from_branch()
-    existing = sorted(
-        p.stem for p in _kata_dir().glob(f"*{_ext()}") if p.stem != "config"
-    )
+    existing = sorted(p.stem for p in _kata_dir().glob(f"*{_ext()}") if p.stem != "config")
     if branch_task and branch_task in existing:
         return branch_task
     if existing:
@@ -385,6 +376,26 @@ def _capture_base_commit(data: dict[str, Any], task: str | None = None) -> dict[
         if task:
             record_baseline_ref(task, sha, cwd=_cwd())
     return data
+
+
+def _avisa_domain_desconhecido(data: dict[str, Any]) -> None:
+    """Avisa quando a tarefa declara um domínio sem adapter conhecido.
+
+    O orquestrador só carrega adapters por nome `kata-<domínio>`; um valor
+    fora da lista (typo, domínio futuro) roda o ciclo inteiro sem o adapter,
+    em silêncio — exatamente o modo de falha que a Fase 0.5 manda não
+    improvisar (R10-21). Aviso, não erro: o ciclo continua em `coding`.
+    """
+    domain = data.get("domain", "coding")
+    if domain == "coding":
+        return
+    adapters = {d.removeprefix("kata-") for d in DOMAIN_SKILLS}
+    if domain not in adapters:
+        conhecidos = ", ".join(sorted(adapters | {"coding"}))
+        print(
+            f"  ⚠  Domínio '{domain}' não tem adapter conhecido "
+            f"(disponíveis: {conhecidos}) — o ciclo roda sem ele."
+        )
 
 
 def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -776,8 +787,7 @@ def _step_verify(
     verify["hand_back"] = not all_ok and attempts >= MAX_VERIFY_ATTEMPTS
     if verify["hand_back"]:
         print(
-            f"  ⚠  {attempts} tentativas de verificação falharam — "
-            "devolvendo a tarefa ao usuário."
+            f"  ⚠  {attempts} tentativas de verificação falharam — devolvendo a tarefa ao usuário."
         )
 
     data["verify"] = verify
@@ -812,9 +822,8 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     intent = data.get("intent", {})
-    defect_fixed = (
-        not intent.get("all_agree", True)
-        or _confirm("  Um defeito foi corrigido? Deseja buscar padrão similar?", default=False)
+    defect_fixed = not intent.get("all_agree", True) or _confirm(
+        "  Um defeito foi corrigido? Deseja buscar padrão similar?", default=False
     )
 
     # `defect_fixed` é gravado porque é a única evidência de que um defeito
@@ -822,13 +831,19 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
     # correção de defeito de uma tarefa aprovada qualquer.
     if not defect_fixed:
         data["twins"] = {
-            "searched": False, "pattern": "", "result": "", "defect_fixed": False,
+            "searched": False,
+            "pattern": "",
+            "result": "",
+            "defect_fixed": False,
         }
         return data
 
     if not sys.stdin.isatty():
         data["twins"] = {
-            "searched": False, "pattern": "", "result": "", "defect_fixed": True,
+            "searched": False,
+            "pattern": "",
+            "result": "",
+            "defect_fixed": True,
         }
         return data
 
@@ -837,7 +852,10 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
     pattern = input("  Padrão a buscar (regex): ").strip()
     if not pattern:
         data["twins"] = {
-            "searched": False, "pattern": "", "result": "", "defect_fixed": True,
+            "searched": False,
+            "pattern": "",
+            "result": "",
+            "defect_fixed": False,
         }
         return data
 
@@ -846,11 +864,14 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     if search_result.error:
         print(f"  ❌ Busca inválida ou interrompida: {search_result.error}")
+        # `defect_fixed` fica False: a busca falhou, nada foi confirmado.
+        # Com True, o audit graduaria "faked" (defeito declarado corrigido
+        # sem busca) por uma falha de ferramenta (R10-13).
         data["twins"] = {
             "pattern": pattern,
             "result": search_result.error,
             "searched": False,
-            "defect_fixed": True,
+            "defect_fixed": False,
             "matches_count": 0,
             "files_count": 0,
             "fix_applied": False,
@@ -874,8 +895,7 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
             fix_others = False
 
     result_str = (
-        f"{search_result.total_files} arquivo(s), "
-        f"{len(search_result.matches)} ocorrência(s)"
+        f"{search_result.total_files} arquivo(s), {len(search_result.matches)} ocorrência(s)"
     )
     data["twins"] = {
         "pattern": pattern,
@@ -920,9 +940,7 @@ def _detect_intent_owed(data: dict[str, Any]) -> bool:
     justamente onde não há ninguém para notar a ausência. Sem declaração,
     cai para o git.
     """
-    declared = [
-        f.get("path", "") for f in data.get("surgical", {}).get("files", [])
-    ]
+    declared = [f.get("path", "") for f in data.get("surgical", {}).get("files", [])]
     paths = [p for p in declared if p] or _changed_paths()
     return any(Path(p).suffix.lower() not in _DOC_SUFFIXES for p in paths)
 
@@ -1028,8 +1046,10 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
                     action = input("  Ação realizada: ").strip()
                     auth_line = input("  Citação exata da autorização: ").strip()
                     data["auth"] = {
-                        "action_taken": True, "authorized": True,
-                        "action": action, "quote": auth_line,
+                        "action_taken": True,
+                        "authorized": True,
+                        "action": action,
+                        "quote": auth_line,
                     }
                 elif msg.startswith("PENDING"):
                     action = input("  Ação pendente: ").strip()
@@ -1043,8 +1063,11 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
                     check = input("  O que o teste/check ESPERA? ").strip()
                     spec = input("  O que a especificação DIZ? ").strip()
                     data["intent"] = {
-                        "code_does": code, "check_expects": check,
-                        "spec_says": spec, "all_agree": True, "answered": True,
+                        "code_does": code,
+                        "check_expects": check,
+                        "spec_says": spec,
+                        "all_agree": True,
+                        "answered": True,
                     }
 
         # Recompute present flags after user input so YAML reflects reality.
@@ -1319,15 +1342,24 @@ def _init_task(task: str) -> bool:
         "auth": {"action_taken": False, "authorized": False, "action": "", "quote": ""},
         "pending": {"action": "", "documented": False},
         "twins": {
-            "searched": False, "pattern": "", "result": "", "defect_fixed": False,
-            "matches_count": 0, "files_count": 0, "fix_applied": False,
+            "searched": False,
+            "pattern": "",
+            "result": "",
+            "defect_fixed": False,
+            "matches_count": 0,
+            "files_count": 0,
+            "fix_applied": False,
         },
         "preflight": {"skills_missing": []},
         "artifact": {
-            "intent_owed": False, "intent_present": False,
-            "auth_owed": False, "auth_present": False,
-            "pending_owed": False, "pending_present": False,
-            "twins_owed": False, "twins_present": False,
+            "intent_owed": False,
+            "intent_present": False,
+            "auth_owed": False,
+            "auth_present": False,
+            "pending_owed": False,
+            "pending_present": False,
+            "twins_owed": False,
+            "twins_present": False,
         },
     }
     template = _capture_base_commit(template, task=task)
@@ -1345,8 +1377,7 @@ def _init_task(task: str) -> bool:
 _AUDIT_RISKS: dict[str, str] = {
     "fit": "rota e trivialidade não classificadas por humano — esforço pode ser "
     "desperdiçado em tarefa trivial ou mal roteada",
-    "think": "assumptions nunca declaradas — qualquer solução pode atacar o "
-    "problema errado",
+    "think": "assumptions nunca declaradas — qualquer solução pode atacar o problema errado",
     "simplify": "minimalidade afirmada sem ninguém confrontar o diff com o "
     "pedido — abstrações especulativas podem passar sem revisão",
     "surgical": "cada arquivo declarado necessário sem ninguém conferir — "
@@ -1364,10 +1395,15 @@ _AUDIT_RISKS: dict[str, str] = {
 
 # Para cada fase com semântica answered/skipped, a chave cujo conteúdo real
 # prova que a fase foi de fato respondida (não preenchida com default).
+# simplify/surgical entram no mesmo contrato (R10-22): um bloco `answered:
+# true` escrito à mão SEM as chaves de conteúdo é tão faked quanto um THINK
+# com problem vazio.
 _AUDIT_CONTENT_KEY: dict[str, str] = {
     "fit": "reason",
     "think": "problem",
     "intent": "code_does",
+    "simplify": "minimum_code",
+    "surgical": "files",
 }
 
 
@@ -1395,54 +1431,48 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
     # carregadas, o que as outras graduações leem foi escrito sem elas.
     faltando = data.get("preflight", {}).get("skills_missing") or []
     if faltando:
-        achados.append({
-            "fase": "preflight",
-            "status": "degraded",
-            "risco": f"{_AUDIT_RISKS['preflight']} — faltou: {', '.join(faltando)}",
-        })
+        achados.append(
+            {
+                "fase": "preflight",
+                "status": "degraded",
+                "risco": f"{_AUDIT_RISKS['preflight']} — faltou: {', '.join(faltando)}",
+            }
+        )
 
     for fase in ("fit", "think", "intent"):
         bloco = data.get(fase, {})
         if bloco.get("skipped"):
-            achados.append(
-                {"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]}
-            )
+            achados.append({"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]})
             continue
         if not bloco.get("answered"):
             continue
         if str(bloco.get(_AUDIT_CONTENT_KEY[fase], "")).strip():
             achados.append({"fase": fase, "status": "followed", "risco": ""})
         else:
-            achados.append(
-                {"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]}
-            )
+            achados.append({"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]})
 
     for fase in ("simplify", "surgical"):
         bloco = data.get(fase, {})
         if bloco.get("skipped"):
-            achados.append(
-                {"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]}
-            )
-        elif bloco.get("answered"):
+            achados.append({"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]})
+            continue
+        if not bloco.get("answered"):
+            continue
+        if _AUDIT_CONTENT_KEY[fase] in bloco:
             achados.append({"fase": fase, "status": "followed", "risco": ""})
+        else:
+            achados.append({"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]})
 
     verify = data.get("verify", {})
-    evidencias = [
-        verify.get(chave)
-        for chave in ("ruff_clean", "tests_pass", "coverage_pass")
-    ]
+    evidencias = [verify.get(chave) for chave in ("ruff_clean", "tests_pass", "coverage_pass")]
     if verify.get("success_criteria_met") and not any(evidencias):
-        achados.append(
-            {"fase": "verify", "status": "faked", "risco": _AUDIT_RISKS["verify"]}
-        )
+        achados.append({"fase": "verify", "status": "faked", "risco": _AUDIT_RISKS["verify"]})
     elif any(evidencias):
         achados.append({"fase": "verify", "status": "followed", "risco": ""})
 
     twins = data.get("twins", {})
     if twins.get("defect_fixed") and not twins.get("searched"):
-        achados.append(
-            {"fase": "twins", "status": "faked", "risco": _AUDIT_RISKS["twins"]}
-        )
+        achados.append({"fase": "twins", "status": "faked", "risco": _AUDIT_RISKS["twins"]})
     elif twins.get("searched"):
         achados.append({"fase": "twins", "status": "followed", "risco": ""})
 
@@ -1613,8 +1643,7 @@ def main() -> None:
         parser.error("--report é mutuamente exclusivo com --plan e --check-only")
     if args.audit and (args.init or args.plan or args.check_only or args.judge or args.report):
         parser.error(
-            "--audit é mutuamente exclusivo com --init, --plan, --check-only, "
-            "--judge e --report"
+            "--audit é mutuamente exclusivo com --init, --plan, --check-only, --judge e --report"
         )
 
     # --doctor não toca em tarefa nem precisa de .kata/: é sobre a
@@ -1651,6 +1680,7 @@ def main() -> None:
             return
         data = _deserialize(path.read_text(encoding="utf-8"))
         data = _capture_base_commit(data, task=args.init)
+        _avisa_domain_desconhecido(data)
         _save_task(path, data)
         data = _step_fit(args.init, data)
         _save_task(path, data)
@@ -1752,6 +1782,7 @@ def main() -> None:
         else {"task": task, "status": "draft"}
     )
     data = _capture_base_commit(data, task=task)
+    _avisa_domain_desconhecido(data)
     _save_task(path, data)
 
     data = _step_fit(task, data)
@@ -1791,7 +1822,7 @@ def main() -> None:
         ignore=args.ignore,
         cov_source=args.cov_source,
         gate=gate,
-            config=config,
+        config=config,
     )
     _save_task(path, data)
     if not fit_trivial:

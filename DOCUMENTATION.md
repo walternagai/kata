@@ -494,13 +494,13 @@ The judge is opt-in. It re-runs claimed checks and returns:
 
 A **blind spot** is the judge admitting what it could not observe — not an
 accusation, since not having looked is evidence of neither fraud nor honesty.
-Three are detected: the report claims no check the judge knows how to re-run,
-the diff touches a test file in a language the judge has no probes for, or an
-ignored source/test candidate is outside Git's diff. The task's `base_commit`
-must resolve and be an ancestor of the current `HEAD`. Tasks created by the
-CLI also have an independent `refs/kata/base/<hash>` anchor; a mismatch is a
-high-severity `baseline_tampering` finding, while a missing anchor is a blind
-spot.
+Five are detected: the report claims no check the judge knows how to re-run,
+the diff touches a test file in a language the judge has no probes for, an
+ignored source/test candidate is outside Git's diff, a `base_commit` declared
+in the YAML has no independent `refs/kata/base/<hash>` anchor, or a baseline
+no longer resolves in the repository history. A baseline that resolves but is
+not an ancestor of the current `HEAD` is a high-severity `baseline_tampering`
+finding rather than a blind spot.
 
 The first blind spot is disarmed by declaring the project's commands in
 `.kata/config.yaml`. The second knows Python, JS/TS, Go, Ruby, Rust and
@@ -759,8 +759,9 @@ set instead of OpenCode's:
 - `Bash` for Git and verification commands;
 - `Edit` or `Write` for surgical changes and task persistence.
 
-The repository contains the same 10 phase skills as the OpenCode side
-(`claude-code/skills/kata-*/SKILL.md`), plus the `kata` skill itself.
+The repository contains the same 11 phase/domain skills as the OpenCode side
+(`claude-code/skills/kata-*/SKILL.md` — the 10 phases plus the `kata-devops`
+domain adapter), plus the `kata` skill itself.
 `scripts/install-claude-code.sh` symlinks every directory it finds under
 `claude-code/skills/` into `$CLAUDE_CONFIG_DIR/skills/`.
 
@@ -807,12 +808,13 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and the frauds the judge must find. Nine scenarios cover the six
-fraud categories, plus two that exist to catch the opposite failure: `s06`
-plants real debris beside files whose names merely look like debris, and `s07`
-is an entirely honest task that must come back `VERIFIED`. A judge that
-refuses legitimate work is as broken as one that misses fraud, and unit tests
-are poor at catching it, because they test what the author thought to test.
+the verdict and the frauds the judge must find. Eight scenarios (s01–s06,
+s08–s09) plant a fraud the judge must catch; `s07` is an entirely honest task
+that must come back `VERIFIED`, and `s06` doubles as a guard against refusing
+legitimate work, planting real debris beside files whose names merely look
+like debris. A judge that refuses legitimate work is as broken as one that
+misses fraud, and unit tests are poor at catching it, because they test what
+the author thought to test.
 
 See [`eval/README.md`](eval/README.md) for the scenario schema and for the
 rule that a new scenario must be shown to fail when its defect is
@@ -848,7 +850,7 @@ A frontend is defined by three things, declared in `FRONTENDS` in
 
 | Part | What it is |
 |---|---|
-| `roles` | How the host names each of `REQUIRED_ROLES`: `LOAD_PHASE`, `ASK`, `RUN`, `READ`, `WRITE`, `EDIT`, `SEARCH`, `LIST_FILES` |
+| `roles` | How the host names each of `REQUIRED_ROLES`: `LOAD_PHASE`, `LOAD_DOMAIN`, `ASK`, `RUN`, `READ`, `WRITE`, `EDIT`, `SEARCH`, `LIST_FILES` |
 | `identity` | How the frontend presents itself — its name, the invocation prefix, whether it is an agent or a skill |
 | `capabilities` | What the host can do beyond the roles: `closed_choice_ask`, `task_tracker` |
 
@@ -895,7 +897,9 @@ source that had quietly coupled itself to a real frontend would fail there.
 - In non-interactive mode, FIT, THINK, SIMPLIFY, INTENT, and SURGICAL use
   defaults; `--check-only` is the intended CI entry point.
 - Coverage percentage extraction expects a standard pytest-cov `TOTAL` line.
-  If it cannot parse that line, the reported percentage is `0.0`.
+  If it cannot parse that line, the check **fails** — "could not measure" is
+  not "measured and passed", and reporting `0.0` as approved produced YAML
+  that contradicted itself (R10-32).
 
 ## License
 

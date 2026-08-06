@@ -140,9 +140,7 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
         raise ConfigError(f"{caminho}: `verify` deve ser um mapa")
 
     gate = verify.get("gate")
-    if gate is not None and (
-        isinstance(gate, bool) or not isinstance(gate, (int, float))
-    ):
+    if gate is not None and (isinstance(gate, bool) or not isinstance(gate, (int, float))):
         raise ConfigError(f"{caminho}: `verify.gate` deve ser número")
     if gate is not None and (not math.isfinite(float(gate)) or not 0 <= gate <= 100):
         raise ConfigError(f"{caminho}: `verify.gate` deve estar entre 0 e 100")
@@ -151,9 +149,17 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
     if not isinstance(pattern, str):
         raise ConfigError(f"{caminho}: `verify.coverage_pattern` deve ser string")
     try:
-        re.compile(pattern)
+        compiled = re.compile(pattern)
     except re.error as exc:
         raise ConfigError(f"{caminho}: `verify.coverage_pattern` inválido ({exc})") from exc
+    # O percentual é extraído do grupo 1; um padrão válido sem grupo faz
+    # run_command_coverage casar sem conseguir medir (R10-1). Erro nomeado no
+    # carregamento, não crash em tempo de verificação.
+    if compiled.groups < 1:
+        raise ConfigError(
+            f"{caminho}: `verify.coverage_pattern` deve ter ao menos um grupo "
+            "de captura para o percentual"
+        )
 
     return VerifyConfig(
         lint=_parse_command(verify.get("lint"), "lint"),

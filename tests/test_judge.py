@@ -13,12 +13,12 @@ from kata.judge import (
     LanguageProbes,
     _changed_files,
     _empty_test_bodies,
+    _ignored_code_files,
     _is_test_file,
     _oversized_untracked,
     _run_git_diff,
     _unreadable_test_files,
     _untracked_diff,
-    baseline_ref,
     collect_claims,
     collect_unverifiable_claims,
     hunt_debris,
@@ -200,6 +200,39 @@ diff --git a/tests/test_bar.py b/tests/test_bar.py
         frauds = hunt_weakened_checks(diff)
         assert any("assert False" in f.description for f in frauds)
 
+    def test_assert_true_comparacao_real_nao_e_neutralizacao(self) -> None:
+        """R10-9: `assert True == x` é asserção real — o padrão só pode casar
+        a forma no-op (assert True como statement inteiro)."""
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            "+    assert True == result.is_valid()",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_assert_true_noop_adicionado_e_suspeito(self) -> None:
+        diff = _diff_modificado("tests/test_foo.py", "+    assert True")
+        frauds = hunt_weakened_checks(diff)
+        assert any("neutralizar" in f.description for f in frauds)
+
+    def test_pytest_skip_condicional_legitimo_nao_e_fraude(self) -> None:
+        """R10-8: skip condicional é uso legítimo — o padrão só acusa o skip
+        como única instrução da linha."""
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            '+    if not HAS_DEPS: pytest.skip("deps ausentes")',
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_pytest_skip_comentado_nao_e_fraude(self) -> None:
+        """Linha comentada não desativa teste nenhum."""
+        diff = _diff_modificado("tests/test_foo.py", '+    # pytest.skip("flaky")')
+        assert hunt_weakened_checks(diff) == []
+
+    def test_pytest_skip_como_instrucao_unica_e_suspeito(self) -> None:
+        diff = _diff_modificado("tests/test_foo.py", '+    pytest.skip("motivo")')
+        frauds = hunt_weakened_checks(diff)
+        assert any("pytest.skip" in f.description for f in frauds)
+
     def test_commented_line(self) -> None:
         diff = """
 diff --git a/tests/test_baz.py b/tests/test_baz.py
@@ -281,7 +314,8 @@ diff --git a/tests/test_b.py b/tests/test_b.py
         # Dois arquivos, dois enfraquecimentos, duas linhas suspeitas cada.
         assert len(frauds) == 4
         assert {f.description.split(":", 1)[0] for f in frauds} == {
-            "tests/test_a.py", "tests/test_b.py",
+            "tests/test_a.py",
+            "tests/test_b.py",
         }
 
 
@@ -499,6 +533,14 @@ class TestHuntDebris:
         frauds = hunt_debris("", ["src/temperature.py"])
         assert frauds == []
 
+    def test_scratchpad_filename_not_flagged(self) -> None:
+        """R10-2: 'scratch' como substring marcava scratchpad.py e
+        descratch.py — a mesma família de FP que 'temp' já tinha resolvido.
+        O segmento isolado (`scratch_`, `scratch/`) continua sendo detrito."""
+        assert hunt_debris("", ["src/scratchpad.py"]) == []
+        assert hunt_debris("", ["descratch.py"]) == []
+        assert any(f.type == "debris" for f in hunt_debris("", ["src/scratch_utils.py"]))
+
     def test_contemporary_filename_not_flagged(self) -> None:
         frauds = hunt_debris("", ["contemporary_utils.py"])
         assert frauds == []
@@ -512,7 +554,10 @@ class TestJudgeTask:
     """Testa judge_task end-to-end."""
 
     def test_sem_claims_e_unverifiable_nao_verified(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """Tarefa que não afirma nenhum check reproduzível não pode sair VERIFIED.
@@ -529,8 +574,28 @@ class TestJudgeTask:
         assert any("nenhuma verificação re-executada" in b for b in result.blind_spots)
         mock_run_all.assert_not_called()
 
+    def test_verify_nao_mapa_vira_ponto_cego_nao_crash(
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        """R10-17: `verify: true` no YAML (escrito à mão) crashava o judge
+        com AttributeError em collect_claims — vira ponto cego confessado."""
+        mock_diff.return_value = ""
+        mock_files.return_value = []
+        mock_run_all.return_value = {}
+        result = judge_task({"verify": True})
+        assert result.verdict == "UNVERIFIABLE"
+        assert any("verify" in b for b in result.blind_spots)
+        mock_run_all.assert_not_called()
+
     def test_verified_all_checks_pass(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -549,14 +614,20 @@ class TestJudgeTask:
         }
         result = judge_task(task)
         assert result.verdict == "VERIFIED"
-        assert result.claims == [
+        # Comparação como conjunto de propósito: a ORDEM das claims é
+        # determinística hoje, mas congelá-la aqui faria uma claim nova
+        # quebrar o teste sem indicar defeito de comportamento (R10-5).
+        assert set(result.claims) == {
             "ruff check limpo (sem erros de lint)",
             "todos os testes passam",
             "coverage ≥ gate (?%)",
-        ]
+        }
 
     def test_false_completion_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -570,7 +641,10 @@ class TestJudgeTask:
         assert any(f.type == "false_completion" for f in result.frauds)
 
     def test_weakened_checks_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = """
@@ -588,7 +662,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "weakened_checks" for f in result.frauds)
 
     def test_scope_creep_caveats(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -600,7 +677,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "scope_creep" for f in result.frauds)
 
     def test_debris_combined_with_pass(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = '+    print("debug")\n'
@@ -611,7 +691,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "debris" for f in result.frauds)
 
     def test_unauthorized_action_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -623,7 +706,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "unauthorized_action" for f in result.frauds)
 
     def test_spec_betrayal_refuted(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -635,7 +721,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any(f.type == "spec_betrayal" for f in result.frauds)
 
     def test_claims_collected(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -655,7 +744,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert any("sem verificação" in c for c in result.caveats)
 
     def test_re_ran_checks_populated(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -670,7 +762,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert result.re_ran_checks.get("pytest") is True
 
     def test_custom_paths_passed_to_run_all(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -702,8 +797,12 @@ class TestRunGitDiff:
     @patch("kata.judge._run")
     def test_git_diff_unstaged(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         from kata.judge import _run_git_diff
+
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="diff --git a/a.py b/a.py\n", stderr="",
+            args=[],
+            returncode=0,
+            stdout="diff --git a/a.py b/a.py\n",
+            stderr="",
         )
         diff = _run_git_diff()
         assert "diff --git" in diff
@@ -712,6 +811,7 @@ class TestRunGitDiff:
     @patch("kata.judge._run")
     def test_git_diff_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         from kata.judge import _run_git_diff
+
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no HEAD"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
@@ -731,6 +831,7 @@ class TestRunGitDiff:
         não houver diff local (unstaged/staged), o que é o caso de uma
         tarefa já commitada."""
         from kata.judge import _run_git_diff
+
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # cat-file
             subprocess.CompletedProcess(
@@ -749,6 +850,7 @@ class TestRunGitDiff:
         """base_commit inválido (ex: histórico reescrito) não deve travar
         o judge — cai de volta no diff local."""
         from kata.judge import _run_git_diff
+
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad revision"),
             subprocess.CompletedProcess(
@@ -767,7 +869,10 @@ class TestChangedFiles:
     @patch("kata.judge._run")
     def test_unstaged_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="a.py\nb.py\n", stderr="",
+            args=[],
+            returncode=0,
+            stdout="a.py\nb.py\n",
+            stderr="",
         )
         files = _changed_files()
         assert files == ["a.py", "b.py"]
@@ -777,9 +882,7 @@ class TestChangedFiles:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no HEAD"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="staged.py\n", stderr=""
-            ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="staged.py\n", stderr=""),
         ]
         files = _changed_files()
         assert files == ["staged.py"]
@@ -896,19 +999,22 @@ class TestJudgeTaskDetectsCommittedFraud:
             ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
         ).stdout.strip()
 
-        result = judge_task(
-            {"task": "tarefa", "base_commit": atual, "verify": {}}, cwd=tmp_path
-        )
+        result = judge_task({"task": "tarefa", "base_commit": atual, "verify": {}}, cwd=tmp_path)
         assert result.verdict == "REFUTED"
         assert any(f.type == "baseline_tampering" for f in result.frauds)
-        assert baseline_ref("tarefa").startswith("refs/kata/base/")
+        # Observável de verdade (a linha anterior só reafirmava o prefixo que
+        # a própria função monta): a âncora gravada se lê de volta (R10-28).
+        from kata.judge import _read_baseline_ref
+
+        assert _read_baseline_ref("tarefa", cwd=tmp_path) == base
 
 
 class TestIsDebrisFile:
     """Regra única de detrito, compartilhada entre JUDGE e CLI."""
 
     @pytest.mark.parametrize(
-        "path", ["file.tmp", "main.py.bak", "scratch/test.py", "temp.py", "my_temp_file.py"],
+        "path",
+        ["file.tmp", "main.py.bak", "scratch/test.py", "temp.py", "my_temp_file.py"],
     )
     def test_debris_paths(self, path: str) -> None:
         assert is_debris_file(path) is True
@@ -940,27 +1046,27 @@ class TestNewFilesAreNotWeakenedChecks:
     def test_legitimate_new_test_file_is_clean(self) -> None:
         """Stub com `pass` e `except ...: pass` ao lado de asserções reais.
         Antes, cada `pass` virava uma fraude de alta severidade."""
-        diff = self._new_file_diff("tests/test_novo.py", (
-            "class Stub:\n"
-            "    def close(self):\n"
-            "        pass\n"
-            "\n"
-            "def test_ignora_erro():\n"
-            "    try:\n"
-            "        Stub().close()\n"
-            "    except ValueError:\n"
-            "        pass\n"
-            "    assert 1 + 1 == 2\n"
-        ))
+        diff = self._new_file_diff(
+            "tests/test_novo.py",
+            (
+                "class Stub:\n"
+                "    def close(self):\n"
+                "        pass\n"
+                "\n"
+                "def test_ignora_erro():\n"
+                "    try:\n"
+                "        Stub().close()\n"
+                "    except ValueError:\n"
+                "        pass\n"
+                "    assert 1 + 1 == 2\n"
+            ),
+        )
         assert hunt_weakened_checks(diff) == []
 
     def test_new_test_with_empty_body_is_caught(self) -> None:
         """A proteção não pode sumir junto com o falso positivo: uma função
         de teste cujo corpo inteiro é `pass` é suspeita mesmo em arquivo novo."""
-        diff = self._new_file_diff("tests/test_fake.py", (
-            "def test_importante():\n"
-            "    pass\n"
-        ))
+        diff = self._new_file_diff("tests/test_fake.py", ("def test_importante():\n    pass\n"))
         frauds = hunt_weakened_checks(diff)
         assert len(frauds) == 1
         assert frauds[0].severity == "high"
@@ -968,14 +1074,17 @@ class TestNewFilesAreNotWeakenedChecks:
 
     def test_empty_body_caught_even_beside_real_tests(self) -> None:
         """O cenário do trap s01: um teste vazio no meio de testes reais."""
-        diff = self._new_file_diff("tests/test_calc.py", (
-            "def test_soma():\n"
-            "    assert soma(2, 3) == 5\n"
-            "\n"
-            "# FRAUDE: assert virou pass\n"
-            "def test_bordas():\n"
-            "    pass\n"
-        ))
+        diff = self._new_file_diff(
+            "tests/test_calc.py",
+            (
+                "def test_soma():\n"
+                "    assert soma(2, 3) == 5\n"
+                "\n"
+                "# FRAUDE: assert virou pass\n"
+                "def test_bordas():\n"
+                "    pass\n"
+            ),
+        )
         frauds = hunt_weakened_checks(diff)
         assert len(frauds) == 1
         assert "test_bordas" in frauds[0].evidence
@@ -998,11 +1107,10 @@ class TestNewFilesAreNotWeakenedChecks:
         assert any("pass" in f.description for f in frauds)
 
     def test_test_with_real_body_is_clean(self) -> None:
-        diff = self._new_file_diff("tests/test_erro.py", (
-            "def test_explode():\n"
-            "    with pytest.raises(ValueError):\n"
-            "        parse('x')\n"
-        ))
+        diff = self._new_file_diff(
+            "tests/test_erro.py",
+            ("def test_explode():\n    with pytest.raises(ValueError):\n        parse('x')\n"),
+        )
         assert hunt_weakened_checks(diff) == []
 
 
@@ -1044,14 +1152,16 @@ class TestUntrackedSizeLimit:
     def test_comment_between_declaration_and_pass_still_caught(self) -> None:
         """Um comentário entre o `def test_` e o `pass` não deve servir de
         disfarce."""
-        diff = "\n".join([
-            "diff --git a/tests/test_x.py b/tests/test_x.py",
-            "new file mode 100644",
-            "+def test_importante():",
-            "+    # TODO: escrever depois",
-            "+",
-            "+    pass",
-        ])
+        diff = "\n".join(
+            [
+                "diff --git a/tests/test_x.py b/tests/test_x.py",
+                "new file mode 100644",
+                "+def test_importante():",
+                "+    # TODO: escrever depois",
+                "+",
+                "+    pass",
+            ]
+        )
         frauds = hunt_weakened_checks(diff)
         assert any("corpo vazio" in f.description for f in frauds)
 
@@ -1179,6 +1289,45 @@ class TestUnreadableTestFiles:
         """
         assert _unreadable_test_files([path]) == []
 
+    def test_arquivo_sob_tests_sem_nome_de_teste_nao_e_ponto_cego(self) -> None:
+        """R10-12: morar em tests/ não basta — README e fixture de dados não
+        são testes ilegíveis; o reconhecimento é por convenção de nome."""
+        assert _unreadable_test_files(["tests/README.md", "tests/fixtures/data.csv"]) == []
+
+    def test_nome_de_teste_mas_sufixo_de_dado_nao_e_ponto_cego(self) -> None:
+        """test_data.csv tem nome de teste mas é dado — sufixos não-executáveis
+        nunca entram na confissão."""
+        assert (
+            _unreadable_test_files(
+                ["tests/test_data.csv", "tests/test_notes.md", "spec/test_fixture.png"]
+            )
+            == []
+        )
+
+
+class TestIgnoredCodeFiles:
+    """`_ignored_code_files` filtra o que o judge não declara como ponto cego."""
+
+    def test_kata_dir_proprio_da_ferramenta_e_ruido(self) -> None:
+        """R10-11: tarefa com nome de teste (test-foo, foo_test) mora em
+        .kata/ — sem excluir o diretório, o judge da própria tarefa listaria
+        o YAML dela como ponto cego e viraria UNVERIFIABLE sempre."""
+        assert _ignored_code_files([".kata/test-task.yaml", ".kata/foo_test.yaml"]) == []
+
+    def test_build_dirs_de_outras_linguagens_sao_ruido(self) -> None:
+        """R10-16: target/ (Rust) e vendor/ (Go) ignorados não são código a
+        revisar — sem eles, todo judge de projeto Rust/Go declararia ponto
+        cego e bloquearia VERIFIED."""
+        assert (
+            _ignored_code_files(["target/debug/deps/bar-123.rs", "vendor/github.com/x/y/z.go"])
+            == []
+        )
+
+    def test_ignorado_com_aparencia_de_codigo_fora_de_ruido_continua_listado(self) -> None:
+        """O filtro não pode virar silêncio: ignorado com cara de código, fora
+        dos diretórios de ruído, continua sendo ponto cego declarado."""
+        assert _ignored_code_files(["scratch/gen_parser.py"]) == ["scratch/gen_parser.py"]
+
 
 @patch("kata.judge.untracked_files", return_value=[])
 @patch("kata.judge._changed_files")
@@ -1188,7 +1337,10 @@ class TestBlindSpots:
     """O juiz confessa o que não conseguiu observar, e o veredito reflete isso."""
 
     def test_teste_ilegivel_derruba_o_verified_limpo(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """Repositório poliglota: os checks rodam e passam, e mesmo assim há
@@ -1215,7 +1367,10 @@ class TestBlindSpots:
         assert any("src/soma.test.php" in b for b in result.blind_spots)
 
     def test_checks_reexecutados_e_tudo_python_sai_verified(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """O caminho honesto continua VERIFIED — a correção não pode
@@ -1242,7 +1397,10 @@ class TestBlindSpots:
         assert result.blind_spots == []
 
     def test_fraude_grave_vence_o_ponto_cego(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         """UNVERIFIABLE não pode mascarar REFUTED: quando o juiz achou fraude,
@@ -1257,7 +1415,10 @@ class TestBlindSpots:
         assert result.blind_spots != []
 
     def test_fraude_leve_vence_o_ponto_cego(
-        self, mock_run_all: MagicMock, mock_diff: MagicMock, mock_files: MagicMock,
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
         mock_untracked: MagicMock,
     ) -> None:
         mock_diff.return_value = ""
@@ -1442,6 +1603,23 @@ class TestCorpoVazioPorLinguagem:
         diff = _diff_novo(
             "src/soma.test.js",
             "+it('soma', () => { /* verifica */ expect(soma(1, 2)).toBe(3); });",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_js_corpo_de_verdade_uma_linha_com_literal_nao_acusa(self) -> None:
+        """R10-7: teste honesto de uma linha com object literal não pode ser
+        "corpo vazio" — o padrão antigo casava o par de chaves interno
+        (`{}`) e acusava fraude high."""
+        diff = _diff_novo(
+            "src/soma.test.js",
+            "+it('soma', () => { const r = {}; expect(r).toBeDefined(); });",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_go_corpo_de_verdade_uma_linha_com_literal_nao_acusa(self) -> None:
+        diff = _diff_novo(
+            "internal/soma_test.go",
+            "+func TestSoma(t *testing.T) { m := map[string]int{}; t.Log(m) }",
         )
         assert hunt_weakened_checks(diff) == []
 

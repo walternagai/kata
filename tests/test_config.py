@@ -170,6 +170,23 @@ class TestErros:
         with pytest.raises(ConfigError, match="coverage_pattern.*inválido"):
             load_verify_config(cwd=tmp_path)
 
+    def test_pattern_sem_grupo_de_captura_reprova_no_carregamento(self, tmp_path) -> None:
+        """R10-1: regex válida sem grupo casaria sem conseguir medir — erro
+        nomeado no carregamento, não crash em tempo de verificação."""
+        _escreve(tmp_path, "verify:\n  coverage_pattern: 'coverage:\\s+\\d+%'\n")
+        with pytest.raises(ConfigError, match="grupo de captura"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_verify_nulo_e_tratado_como_secao_ausente(self, tmp_path) -> None:
+        """`verify:` (YAML null) é ausência explícita, não config quebrada —
+        cai nos defaults como sem arquivo (R10-31). false/[]/'' reprovam
+        porque são valores, não ausência."""
+        _escreve(tmp_path, "verify:\n")
+        cfg = load_verify_config(cwd=tmp_path)
+        assert cfg.coverage_pattern == DEFAULT_COVERAGE_PATTERN
+        assert cfg.gate is None
+        assert cfg.customizado is False
+
     def test_yaml_ilegivel(self, tmp_path) -> None:
         _escreve(tmp_path, "verify:\n  lint: [nao\n    fecha\n")
         with pytest.raises(ConfigError, match="não foi possível ler"):

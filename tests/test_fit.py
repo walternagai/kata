@@ -43,11 +43,14 @@ class TestDiffStats:
     def test_unstaged_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
-                args=[], returncode=0,
-                stdout="src/foo.py\nsrc/bar.py\n", stderr="",
+                args=[],
+                returncode=0,
+                stdout="src/foo.py\nsrc/bar.py\n",
+                stderr="",
             ),
             subprocess.CompletedProcess(
-                args=[], returncode=0,
+                args=[],
+                returncode=0,
                 stdout=" src/foo.py | 3 +--\n src/bar.py | 2 ++\n",
                 stderr="",
             ),
@@ -60,14 +63,22 @@ class TestDiffStats:
     def test_staged_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="", stderr="",
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
             ),
             subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="baz.py\n", stderr="",
+                args=[],
+                returncode=0,
+                stdout="baz.py\n",
+                stderr="",
             ),
             subprocess.CompletedProcess(
-                args=[], returncode=0,
-                stdout=" baz.py | 7 ++++++-\n", stderr="",
+                args=[],
+                returncode=0,
+                stdout=" baz.py | 7 ++++++-\n",
+                stderr="",
             ),
         ]
         files, lines = diff_stats()
@@ -95,9 +106,6 @@ class TestDiffStats:
         files, lines = diff_stats()
         assert files == ["file.py"]
         assert lines == 0
-
-
-
 
 
 class TestUntrackedIsNotInvisible:

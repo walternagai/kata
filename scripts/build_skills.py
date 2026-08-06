@@ -46,36 +46,47 @@ ORQUESTRADOR = "kata"
 # "executar um comando", não "bash" — um frontend sem bash ainda executa
 # comandos, e chamar a variável de BASH fazia o contrato parecer amarrado a
 # um shell específico.
-REQUIRED_ROLES: frozenset[str] = frozenset({
-    "LOAD_PHASE",   # carregar as instruções de uma fase
-    "LOAD_DOMAIN",  # carregar as instruções de um domain adapter
-    "ASK",          # perguntar ao usuário
-    "RUN",          # executar um comando
-    "READ",         # ler um arquivo
-    "WRITE",        # criar/escrever um arquivo
-    "EDIT",         # alterar um arquivo existente
-    "SEARCH",       # buscar por conteúdo no projeto
-    "LIST_FILES",   # encontrar arquivos por padrão de nome
-})
+REQUIRED_ROLES: frozenset[str] = frozenset(
+    {
+        "LOAD_PHASE",  # carregar as instruções de uma fase
+        "LOAD_DOMAIN",  # carregar as instruções de um domain adapter
+        "ASK",  # perguntar ao usuário
+        "RUN",  # executar um comando
+        "READ",  # ler um arquivo
+        "WRITE",  # criar/escrever um arquivo
+        "EDIT",  # alterar um arquivo existente
+        "SEARCH",  # buscar por conteúdo no projeto
+        "LIST_FILES",  # encontrar arquivos por padrão de nome
+    }
+)
 
 # Como o frontend se apresenta. Não é capacidade: é nome, e não muda o que
 # o ciclo pode fazer.
-REQUIRED_IDENTITY: frozenset[str] = frozenset({
-    "AGENTE", "AGENTE_CAP", "AGENTE_CAP_MIN", "FRONTEND_NOME",
-    "ESTE_ORQUESTRADOR", "INVOC", "INVOC_SEM_ARGS",
-})
+REQUIRED_IDENTITY: frozenset[str] = frozenset(
+    {
+        "AGENTE",
+        "AGENTE_CAP",
+        "AGENTE_CAP_MIN",
+        "FRONTEND_NOME",
+        "ESTE_ORQUESTRADOR",
+        "INVOC",
+        "INVOC_SEM_ARGS",
+    }
+)
 
 # Capacidades conhecidas, para os blocos `<!--if:-->` / `<!--ifnot:-->`.
 # Capacidade não declarada aqui é erro de build: um typo em `<!--if:-->`
 # faria o bloco sumir calado dos dois frontends.
-CAPABILITIES: frozenset[str] = frozenset({
-    # A ferramenta de perguntar é de escolha fechada, com teto de opções —
-    # então pergunta narrativa vai em texto normal, e não nela. É o que
-    # governa quase todo o conteúdo condicional do repositório.
-    "closed_choice_ask",
-    # Existe uma lista de tarefas na UI para espelhar as fases.
-    "task_tracker",
-})
+CAPABILITIES: frozenset[str] = frozenset(
+    {
+        # A ferramenta de perguntar é de escolha fechada, com teto de opções —
+        # então pergunta narrativa vai em texto normal, e não nela. É o que
+        # governa quase todo o conteúdo condicional do repositório.
+        "closed_choice_ask",
+        # Existe uma lista de tarefas na UI para espelhar as fases.
+        "task_tracker",
+    }
+)
 
 FRONTENDS: dict[str, dict] = {
     "opencode": {
@@ -175,6 +186,29 @@ _IFNOT = _bloco("ifnot")
 _VAR = re.compile(r"\{\{(\w+)\}\}")
 
 
+# Marcadores condicionais que o render espera sempre em pares abertos.
+_MARCADORES = ("only", "if", "ifnot")
+
+
+def _verifica_balanceamento(texto: str, origem: str) -> None:
+    """Marcador de abertura sem o par de fechamento é erro de build, nunca
+    texto literal (R10-3).
+
+    Um typo que apague um `<!--/only-->` deixava o marcador e o conteúdo
+    visíveis na skill instalada de TODOS os frontends, e o --check comparava
+    gerado contra gerado — passando com o arquivo corrompido. O mesmo
+    contrato de variável não declarada (erro, não literal) vale aqui.
+    """
+    for marca in _MARCADORES:
+        abre = len(re.findall(rf"<!--{marca}:", texto))
+        fecha = len(re.findall(rf"<!--/{marca}-->", texto))
+        if abre != fecha:
+            raise ValueError(
+                f"{origem}: marcador <!--{marca}:--> sem fechamento correspondente "
+                f"({abre} abertura(s), {fecha} fechamento(s))"
+            )
+
+
 def _resolve_blocos(texto: str, frontend: str) -> str:
     """Resolve os blocos condicionais para um frontend.
 
@@ -222,16 +256,14 @@ def _resolve_vars(texto: str, valores: dict[str, str], origem: str) -> str:
 
 def render(fonte: str, frontend: str, origem: str = "<memória>") -> str:
     """Aplica blocos condicionais e variáveis para um frontend."""
+    _verifica_balanceamento(fonte, origem)
     texto = _resolve_blocos(fonte, frontend)
     return _resolve_vars(texto, _vars(frontend), origem)
 
 
 # Comentário HTML: não aparece no markdown renderizado, mas aparece para quem
 # abre o arquivo — que é justamente quem está prestes a editá-lo à mão.
-_AVISO = (
-    "<!-- Gerado por scripts/build_skills.py a partir de {origem}."
-    " Não edite aqui. -->\n"
-)
+_AVISO = "<!-- Gerado por scripts/build_skills.py a partir de {origem}. Não edite aqui. -->\n"
 
 _FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 
@@ -263,9 +295,26 @@ def _fontes() -> list[Path]:
     if DOMINIOS.is_dir():
         # TEMPLATE.md é documentação do schema de adapters, não uma skill
         # instalável.
-        fontes.extend(
-            p for p in sorted(DOMINIOS.glob("*.md")) if p.stem != "TEMPLATE"
-        )
+        dominios = sorted(p for p in DOMINIOS.glob("*.md") if p.stem != "TEMPLATE")
+        # O orquestrador carrega adapters por nome `kata-<domínio>`
+        # ({{LOAD_DOMAIN}}), e o doctor só os conhece assim. Um nome fora da
+        # convenção geraria uma skill que ninguém carrega nem checa (R10-20).
+        sem_prefixo = [p.name for p in dominios if not p.stem.startswith("kata-")]
+        if sem_prefixo:
+            raise SystemExit(
+                "domínios devem ser nomeados kata-<domínio>: " + ", ".join(sem_prefixo)
+            )
+        colisao = sorted({p.stem for p in fontes} & {p.stem for p in dominios})
+        if colisao:
+            # O domínio renderizaria para o MESMO destino da fase
+            # (opencode/skills/<slug>/SKILL.md) e a sobrescreveria em
+            # silêncio (R10-18). Falha nomeada, não divergência confusa.
+            raise SystemExit(
+                "colisão de nomes entre phases/ e domains/: "
+                + ", ".join(colisao)
+                + " — um domínio sobrescreveria a fase no destino gerado"
+            )
+        fontes.extend(dominios)
     return fontes
 
 

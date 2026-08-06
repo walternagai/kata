@@ -92,9 +92,7 @@ class InstallStatus:
     @property
     def ausente(self) -> bool:
         """Nenhuma skill instalada — o frontend simplesmente não é usado."""
-        return not self.instaladas and (
-            not self.agente_esperado or not self.agente_instalado
-        )
+        return not self.instaladas and (not self.agente_esperado or not self.agente_instalado)
 
     @property
     def parcial(self) -> bool:
@@ -103,10 +101,14 @@ class InstallStatus:
         É este o estado perigoso, e não o `ausente`. Quem nunca instalou o
         OpenCode não perde nada; quem tem 9 das 10 skills roda o ciclo e
         perde uma fase sem ser avisado.
+
+        `agente_instalado` é True por omissão quando o frontend não espera
+        agente (claude-code) — a primeira conjunção tem de exigir
+        `agente_esperado` também, senão um claude-code nunca instalado
+        reportaria `parcial` junto de `ausente` (R10-14).
         """
-        return (
-            (bool(self.instaladas) or self.agente_instalado)
-            and (bool(self.faltando) or (self.agente_esperado and not self.agente_instalado))
+        return (bool(self.instaladas) or (self.agente_esperado and self.agente_instalado)) and (
+            bool(self.faltando) or (self.agente_esperado and not self.agente_instalado)
         )
 
     @property
@@ -131,11 +133,7 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
         else:
             faltando.append(nome)
     agente_esperado = not frontend.orquestrador_e_skill
-    agente_instalado = (
-        (raiz.parent / "agent" / "kata.md").is_file()
-        if agente_esperado
-        else True
-    )
+    agente_instalado = (raiz.parent / "agent" / "kata.md").is_file() if agente_esperado else True
     return InstallStatus(
         frontend=frontend.nome,
         config_dir=frontend.config_dir(),
@@ -152,13 +150,15 @@ def check_domain_skills(frontend: Frontend) -> list[str]:
     Diferente de `check_frontend`, esta função nunca reprova: ela só informa
     que o adapter de um domínio não está disponível. Uma tarefa `coding`
     continua funcionando normalmente.
+
+    Frontend nunca instalado não gera aviso: sem nem as skills de fase, não
+    faz sentido acusar a falta de um adapter opcional (R10-15) — o mesmo
+    tratamento que o preflight de fases dá ao ausente.
     """
+    if check_frontend(frontend).ausente:
+        return []
     raiz = frontend.config_dir() / "skills"
-    return [
-        nome
-        for nome in frontend.domain_skills_esperadas()
-        if not (raiz / nome).exists()
-    ]
+    return [nome for nome in frontend.domain_skills_esperadas() if not (raiz / nome).exists()]
 
 
 def doctor() -> list[InstallStatus]:

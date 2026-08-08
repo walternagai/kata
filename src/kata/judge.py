@@ -6,8 +6,9 @@ Inspirado no fable-judge do The Fable Method
 1. Collect claims — o que o relatório diz que foi feito
 2. Establish ground truth — git diff contra o estado real
 3. Re-run every claimed verification — executa de novo e compara
-4. Hunt frauds — 6 categorias (weakened checks, false completion,
-   scope creep, unauthorized action, spec betrayal, debris)
+4. Hunt frauds — 7 categorias (weakened checks, false completion,
+   scope creep, unauthorized action, spec betrayal, debris, baseline
+   tampering)
 5. Deliver verdict — VERIFIED / VERIFIED WITH CAVEATS / UNVERIFIABLE / REFUTED
 
 UNVERIFIABLE cobre o caso em que nada foi observado: o juiz não achou fraude
@@ -391,6 +392,36 @@ def _base_commit_is_ancestor(base_commit: str, cwd: Path | None = None) -> bool:
     return result.returncode == 0
 
 
+def is_kata_bookkeeping(filepath: str) -> bool:
+    """O arquivo é escrituração da própria ferramenta, não trabalho da tarefa.
+
+    `.kata/<task>.yaml` é criado pelo kata, não pelo autor da tarefa. Ele é
+    untracked em qualquer projeto que não tenha ignorado `.kata/` — e nada no
+    kata pede isso: `--init` não mexe no .gitignore e nenhum doc instrui a
+    ignorá-lo. Sem este filtro, o judge conta o arquivo da própria tarefa como
+    "arquivo alterado não declarado" e acusa trabalho honesto de scope creep;
+    acima de 2 arquivos a severidade vira alta e o veredito, REFUTED (R11-3).
+
+    Duas coisas esconderam isso por dez rodadas, e as duas são ambiente: este
+    repositório tem `/.kata/` no .gitignore, então o kata sobre si mesmo nunca
+    via; e o harness de traps escreve `.kata/` no .git/info/exclude de todo
+    fixture, o que torna a classe inalcançável até pelo s07-honest-work.
+
+    Filtra a escrituração, não o diretório: `.kata/config.yaml` também é
+    ferramenta, mas um arquivo de código que alguém guarde sob `.kata/` não
+    tem por que ficar invisível ao juiz.
+    """
+    partes = Path(filepath).parts
+    if ".kata" not in partes:
+        return False
+    return Path(filepath).suffix.lower() in {".yaml", ".yml", ".json"}
+
+
+def _sem_escrituracao(files: list[str]) -> list[str]:
+    """Remove a escrituração do kata de uma lista de arquivos."""
+    return [f for f in files if not is_kata_bookkeeping(f)]
+
+
 def _oversized_untracked(files: list[str], cwd: Path | None = None) -> list[str]:
     """Arquivos untracked grandes demais para inspecionar (viram caveat)."""
     base = cwd or Path.cwd()
@@ -448,7 +479,7 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
                 result = _run(["git", "diff", "--cached"], cwd=cwd)
         diff = result.stdout
 
-    untracked = _untracked_diff(untracked_files(cwd=cwd), cwd=cwd)
+    untracked = _untracked_diff(_sem_escrituracao(untracked_files(cwd=cwd)), cwd=cwd)
     return f"{diff}\n{untracked}" if untracked else diff
 
 
@@ -463,9 +494,10 @@ def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> l
             if not result.stdout.strip():
                 result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
 
-    tracked = [f for f in result.stdout.strip().split("\n") if f.strip()]
+    tracked = _sem_escrituracao([f for f in result.stdout.strip().split("\n") if f.strip()])
     seen = set(tracked)
-    return tracked + [f for f in untracked_files(cwd=cwd) if f not in seen]
+    novos = _sem_escrituracao(untracked_files(cwd=cwd))
+    return tracked + [f for f in novos if f not in seen]
 
 
 # ── fraud hunters ─────────────────────────────────────────────────────────
@@ -878,6 +910,70 @@ def hunt_debris(diff: str, changed: list[str]) -> list[JudgeFraud]:
 
 # ── orchestration ─────────────────────────────────────────────────────────
 
+# Seções do YAML que os hunters leem como mapa, e o que se perde quando uma
+# delas não pode ser lida. `verify` ganhou guarda no R10-17 — sua frase é a
+# de lá, preservada — e as irmãs continuaram sem, cada uma derrubando o judge
+# do mesmo jeito (R11-1).
+_SECOES_MAPA: tuple[tuple[str, str], ...] = (
+    ("verify", "claims de verificação ignoradas"),
+    ("surgical", "arquivos declarados ignorados"),
+    ("intent", "checagem de intenção ignorada"),
+    ("artifact", "checagem de AUTH ignorada"),
+)
+
+
+def _normaliza_task(task_data: Any) -> tuple[dict[str, Any], list[str]]:
+    """Devolve a tarefa com as seções em forma de mapa, e o que foi descartado.
+
+    YAML escrito à mão é entrada suportada, e o kata não valida schema antes
+    de julgar. Uma seção que não é mapa (`surgical: true`), uma lista no topo
+    do arquivo, ou `files` com strings no lugar de mapas faziam `--judge` e
+    `--audit` morrerem com AttributeError em vez de entregar veredito.
+
+    O crash não era só feio: traceback sai com código 1, o mesmo de REFUTED,
+    então um arquivo malformado era indistinguível de fraude encontrada para
+    quem lê o exit code no CI.
+
+    A doutrina é a do R10-17, agora aplicada às quatro seções: o que não pôde
+    ser lido vira ponto cego confessado, e o veredito sai.
+    """
+    avisos: list[str] = []
+    if not isinstance(task_data, dict):
+        return {}, [
+            f"tarefa não é um mapa no topo do arquivo ({type(task_data).__name__}) — "
+            "nenhuma claim pôde ser lida"
+        ]
+
+    normalizado = dict(task_data)
+    for nome, consequencia in _SECOES_MAPA:
+        secao = normalizado.get(nome)
+        if secao is None:
+            normalizado[nome] = {}
+            continue
+        if not isinstance(secao, dict):
+            normalizado[nome] = {}
+            avisos.append(f"campo {nome} da tarefa não é um mapa — {consequencia}")
+
+    # `surgical.files` é iterado e cada item lido com .get(): uma lista de
+    # strings (`files: [a.py]`) crashava tão bem quanto uma seção não-mapa.
+    files = normalizado["surgical"].get("files")
+    if files is not None:
+        if not isinstance(files, list):
+            normalizado["surgical"] = {**normalizado["surgical"], "files": []}
+            avisos.append(
+                "surgical.files da tarefa não é uma lista — arquivos declarados ignorados"
+            )
+        else:
+            mapas = [f for f in files if isinstance(f, dict)]
+            if len(mapas) != len(files):
+                avisos.append(
+                    f"{len(files) - len(mapas)} entrada(s) de surgical.files não são mapas — "
+                    "ignorada(s) na conferência de escopo"
+                )
+            normalizado["surgical"] = {**normalizado["surgical"], "files": mapas}
+
+    return normalizado, avisos
+
 
 def judge_task(
     task_data: dict[str, Any],
@@ -894,24 +990,15 @@ def judge_task(
     1. Coleta claims do YAML da tarefa
     2. Estabelece verdade material (git diff)
     3. Re-executa verificações que o relatório afirma que passaram
-    4. Caça fraudes em 6 categorias
+    4. Caça fraudes em 7 categorias
     5. Registra o que não conseguiu observar (pontos cegos)
     6. Entrega veredito
     """
-    blind_spots: list[str] = []
     baseline_frauds: list[JudgeFraud] = []
 
-    # YAML escrito à mão é entrada suportada; `verify: true` (ou qualquer
-    # não-mapa) crashava collect_claims/hunt_false_completion com
-    # AttributeError em vez de produzir veredito (R10-17). Vira ponto cego
-    # confessado, não traceback.
-    verify_section = task_data.get("verify")
-    if verify_section is None:
-        verify_section = {}
-    if not isinstance(verify_section, dict):
-        blind_spots.append("campo verify da tarefa não é um mapa — claims de verificação ignoradas")
-        verify_section = {}
-    task_data = {**task_data, "verify": verify_section}
+    # Seção que não é mapa vira ponto cego confessado, nunca traceback
+    # (R10-17 para `verify`, R11-1 para as irmãs e para o topo do arquivo).
+    task_data, blind_spots = _normaliza_task(task_data)
 
     base_commit = task_data.get("base_commit")
     task_name = task_data.get("task")

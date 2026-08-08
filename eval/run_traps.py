@@ -157,7 +157,11 @@ def _aplica_baseline(
     caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
-def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
+def init_git_repo(
+    path: Path,
+    leave_untracked: list[str] | None = None,
+    kata_visivel: bool = False,
+) -> None:
     """Inicializa um repositório git com o fixture staged, sem commit.
 
     O fixture já vem com a fraude plantada (ex: corpo de teste virado
@@ -165,8 +169,16 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     --cached`, então as mudanças precisam ficar não commitadas para serem
     visíveis — um commit único não deixaria diff nenhum para inspecionar.
     `.kata/` é git-ignorado localmente (via .git/info/exclude, não um
-    .gitignore rastreado) como no projeto real, para não aparecer como
-    scope creep no diff nem no diff em si.
+    .gitignore rastreado), para não aparecer como scope creep no diff nem no
+    diff em si.
+
+    `kata_visivel` desliga essa exclusão. Ela imitava um projeto que ignora
+    `.kata/`, mas o kata não pede isso a ninguém: `--init` não mexe no
+    .gitignore e nenhum doc instrui a ignorá-lo. O efeito colateral foi que
+    os 14 cenários rodavam num ambiente onde o arquivo da própria tarefa era
+    invisível ao git — e o judge contá-lo como scope creep passou dez rodadas
+    sem ser visto, inclusive pelo s07, que existe para pegar falso positivo
+    (R11-3). Com isto, um cenário pode exigir o ambiente real.
 
     `leave_untracked` remove caminhos do índice depois do `git add -A`, para
     que fiquem só na árvore de trabalho. É o estado que o judge era cego a
@@ -175,7 +187,8 @@ def init_git_repo(path: Path, leave_untracked: list[str] | None = None) -> None:
     git = _git_em(path)
 
     git("init", "-q")
-    (path / ".git" / "info" / "exclude").write_text(".kata/\npyproject.toml\n", encoding="utf-8")
+    excluidos = "pyproject.toml\n" if kata_visivel else ".kata/\npyproject.toml\n"
+    (path / ".git" / "info" / "exclude").write_text(excluidos, encoding="utf-8")
     (path / "pyproject.toml").write_text(_FIXTURE_CONFIG, encoding="utf-8")
     git("config", "user.email", "eval@kata.local")
     git("config", "user.name", "kata-eval")
@@ -237,6 +250,10 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             valor = data.get(chave)
             if valor is not None and not isinstance(valor, list):
                 raise ScenarioError(f"ground_truth.yaml: {chave} deve ser uma lista")
+        for chave in ("tamper_base_commit", "kata_visivel"):
+            valor = data.get(chave)
+            if valor is not None and not isinstance(valor, bool):
+                raise ScenarioError(f"ground_truth.yaml: {chave} deve ser booleano")
         return data
     except (OSError, yaml.YAMLError) as exc:
         raise ScenarioError(f"ground_truth.yaml ilegível: {exc}") from exc
@@ -383,7 +400,11 @@ def main() -> None:
                 except OSError as exc:
                     raise ScenarioError(f"fixture não pôde ser copiado: {exc}") from exc
 
-                init_git_repo(work_dir, gt.get("leave_untracked"))
+                init_git_repo(
+                    work_dir,
+                    gt.get("leave_untracked"),
+                    kata_visivel=bool(gt.get("kata_visivel")),
+                )
 
                 tarefa = task_name(work_dir)
                 baseline = scenario / "baseline"

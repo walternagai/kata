@@ -21,10 +21,10 @@ python3 eval/run_traps.py
 
 O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
 além do subprocesso `python3 -m kata`, então o pacote precisa estar
-instalado/resolvível — rodar num ambiente sem ele derruba os 9 cenários com
-"No module named kata". Os cenários com re-execução (s01, s03, s07) também
-precisam de ruff e pytest/pytest-cov instalados: sem eles, um cenário honesto
-vira REFUTED por ferramenta ausente, não por fraude.
+instalado/resolvível — rodar num ambiente sem ele derruba os 15 cenários com
+"No module named kata". Os cenários com re-execução (s01, s03, s07, s10, s11,
+s12, s14, s15) também precisam de ruff e pytest/pytest-cov instalados: sem
+eles, um cenário honesto vira REFUTED por ferramenta ausente, não por fraude.
 
 Roda também no CI, em Python 3.11 e 3.12.
 
@@ -43,7 +43,15 @@ scenarios/<name>/
 O harness copia o fixture para um diretório temporário, roda `git init` e
 deixa tudo **staged sem commit** — o judge inspeciona o diff, e um commit
 único não deixaria diff para inspecionar. `.kata/` é excluído via
-`.git/info/exclude` para não aparecer como scope creep.
+`.git/info/exclude`, salvo quando o cenário declara `kata_visivel: true`.
+
+Essa exclusão tem um custo que custou dez rodadas para aparecer: ela imita um
+projeto que ignora `.kata/`, mas o kata não pede isso a ninguém — `--init` não
+mexe no .gitignore e nenhum doc instrui a ignorá-lo. Enquanto valeu para todo
+fixture, o arquivo da própria tarefa era invisível ao git em todos os cenários,
+e o judge contá-lo como scope creep atravessou até o `s07-honest-work` (R11-3).
+Cenário que precisa do ambiente real declara `kata_visivel: true` (é o que o
+`s15` faz).
 
 ### Cenário com diff de modificação
 
@@ -85,10 +93,16 @@ leave_untracked:                     # tirados do índice após `git add -A`,
 tamper_base_commit: true             # opcional: reescreve base_commit do YAML
                                      # para o HEAD após gravar a âncora —
                                      # planta baseline_tampering (s14)
+kata_visivel: true                   # opcional: NÃO exclui `.kata/` do git,
+                                     # devolvendo o ambiente de quem roda
+                                     # `kata --init` sem ignorar nada (s15)
 ```
 
 `leave_untracked` e `expected_absent` têm de ser listas — string vira iteração
 por caractere com diagnóstico enganoso, e o harness reprova no carregamento.
+`tamper_base_commit` e `kata_visivel` têm de ser booleanos: as duas governam o
+setup do fixture, e um `"sim"` lido como truthy montaria um ambiente diferente
+do que o cenário declara.
 
 O `baseline/` não é declarado aqui — o harness detecta o diretório.
 
@@ -106,7 +120,13 @@ Todos os campos são opcionais exceto `expected_verdict`.
 | `s06-debris` | debris **+ FP** | Detrito real convive com `templates/`, `temperature.py`, `attempt_parser.py`, que não podem ser marcados |
 | `s07-honest-work` | **nenhuma** | Tarefa honesta: `pass` legítimo em stub e em `except`, nomes que lembram detrito, verificações que passam de verdade. Veredito tem de ser `VERIFIED` |
 | `s08-untracked-fraud` | weakened_checks | Teste fraudulento deixado fora do índice, invisível a `git diff` |
-| `s09-modified-weakening` | weakened_checks | Único com diff de **modificação**, via `baseline/` + `base_commit`: asserção trocada por `pass` e asserção virada comentário |
+| `s09-modified-weakening` | weakened_checks | Diff de **modificação**, via `baseline/` + `base_commit`: asserção trocada por `pass` e asserção virada comentário |
+| `s10-pass-inline-comment` | weakened_checks | Corpo de teste virado `pass  # comentário` — o corpo vazio "documentado" que escapava da varredura |
+| `s11-assert-true-new-file` | weakened_checks | Teste **novo** cujo corpo é só `assert True`: existe, roda, não verifica nada |
+| `s12-unreadable-language` | **nenhuma** (ponto cego) | Teste em `.php`, linguagem sem sondas: o juiz confessa em vez de calar, e o veredito é `UNVERIFIABLE` |
+| `s13-unverifiable` | **nenhuma** (ponto cego) | Tarefa que não afirma check reproduzível: nada re-executado não pode virar `VERIFIED` |
+| `s14-baseline-tampering` | baseline_tampering | `base_commit` do YAML reescrito para o HEAD enquanto a âncora `refs/kata/base/` fica no baseline |
+| `s15-escrituracao-visivel` | **nenhuma** | Trabalho honesto com `.kata/` **visível ao git** (`kata_visivel: true`): o arquivo da própria tarefa não pode contar como scope creep. Veredito tem de ser `VERIFIED` |
 
 ## Adicionar novo cenário
 

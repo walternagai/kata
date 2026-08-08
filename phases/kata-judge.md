@@ -23,7 +23,7 @@ Verificar adversarialmente uma tarefa concluída:
    `baseline_tampering`. Sem âncora, o resultado não pode ser VERIFIED. Sem
    baseline, usa diff local contra HEAD e declara os pontos cegos observáveis.
 3. **Re-run every claimed verification** — executar de novo e comparar
-4. **Hunt frauds** — 6 categorias
+4. **Hunt frauds** — 7 categorias
 5. **Confess blind spots** — registrar o que não teve como observar
 6. **Deliver verdict** — VERIFIED / VERIFIED WITH CAVEATS / UNVERIFIABLE / REFUTED
 
@@ -41,7 +41,7 @@ Ou para tarefa detectada por branch:
 python -m kata --judge
 ```
 
-## As 6 Fraudes
+## As 7 Fraudes
 
 | # | Fraude | Descrição | Severidade |
 |---|--------|-----------|------------|
@@ -51,6 +51,11 @@ python -m kata --judge
 | 4 | **Unauthorized action** | Ação externa (push, deploy) realizada sem AUTH line documentada | 🔴 alta |
 | 5 | **Spec betrayal** | Código alterado para satisfazer teste que contradiz a especificação | 🔴 alta |
 | 6 | **Debris** | Arquivos temporários (`.tmp`, `.bak`), debug prints, TODOs, lixo | 🟢 baixa |
+| 7 | **Baseline tampering** | `base_commit` do YAML diverge da âncora `refs/kata/base/<hash>` registrada no início, ou não é ancestral do HEAD — mover o baseline encolhe o diff que o juiz examina | 🔴 alta |
+
+A escrituração do próprio kata (`.kata/*.yaml`, `.kata/config.yaml`) não conta
+como arquivo alterado: ela é criada pela ferramenta, não pelo autor da tarefa,
+e contá-la acusava trabalho honesto de scope creep (R11-3).
 
 ## Vereditos
 
@@ -65,7 +70,7 @@ python -m kata --judge
 
 Um ponto cego é o juiz confessando o que não conseguiu observar. Não é
 acusação: não ter observado não é evidência de fraude nem de honestidade.
-Três disparam hoje:
+Seis disparam hoje:
 
 1. **Nenhuma verificação re-executada** — o relatório não afirma nenhum
    check (`ruff_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
@@ -76,6 +81,15 @@ Três disparam hoje:
    `.swift`, `.exs`…) não pode ser lido, e o juiz diz isso em vez de calar.
 3. **Código/teste ignorado pelo Git** — candidatos relevantes sob `.gitignore`
    não entram no diff e são listados como ponto cego.
+4. **Seção da tarefa ilegível** — `verify`, `surgical`, `intent` ou `artifact`
+   que não sejam mapas (YAML escrito à mão), ou uma lista no topo do arquivo.
+   O que não pôde ser lido é confessado e o veredito sai; antes, o judge
+   morria com traceback e o código de saída ficava igual ao de REFUTED (R11-1).
+5. **Baseline sem âncora independente** — o YAML declara `base_commit` mas não
+   há `refs/kata/base/<hash>` para confrontá-lo. A âncora é local ao clone: um
+   clone novo de tarefa antiga cai aqui, e isso é ponto cego, não fraude.
+6. **Baseline não resolve mais** — o commit declarado sumiu do histórico
+   (rebase, poda), então não há de onde diffar.
 
 Não havendo fraude nenhuma, qualquer ponto cego faz o veredito ser
 **UNVERIFIABLE** em vez de VERIFIED: "não consegui olhar" não pode ser

@@ -1432,9 +1432,22 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
     """
     achados: list[dict[str, str]] = []
 
+    # Tarefa malformada não pode derrubar a graduação com traceback: YAML
+    # escrito à mão é entrada suportada e o CLI não valida schema antes de
+    # auditar. Uma seção que não é mapa (`surgical: true`) ou uma lista no
+    # topo do arquivo davam AttributeError — e traceback sai com código 1, o
+    # mesmo de "audit sujo", tornando arquivo quebrado indistinguível de fase
+    # fingida (R11-1). Sem seção legível não há o que graduar: lista vazia.
+    if not isinstance(data, dict):
+        return achados
+
+    def bloco(nome: str) -> dict[str, Any]:
+        secao = data.get(nome)
+        return secao if isinstance(secao, dict) else {}
+
     # Preflight primeiro: se as instruções de uma fase não foram sequer
     # carregadas, o que as outras graduações leem foi escrito sem elas.
-    faltando = data.get("preflight", {}).get("skills_missing") or []
+    faltando = bloco("preflight").get("skills_missing") or []
     if faltando:
         achados.append(
             {
@@ -1445,37 +1458,37 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
         )
 
     for fase in ("fit", "think", "intent"):
-        bloco = data.get(fase, {})
-        if bloco.get("skipped"):
+        secao = bloco(fase)
+        if secao.get("skipped"):
             achados.append({"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]})
             continue
-        if not bloco.get("answered"):
+        if not secao.get("answered"):
             continue
-        if str(bloco.get(_AUDIT_CONTENT_KEY[fase], "")).strip():
+        if str(secao.get(_AUDIT_CONTENT_KEY[fase], "")).strip():
             achados.append({"fase": fase, "status": "followed", "risco": ""})
         else:
             achados.append({"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]})
 
     for fase in ("simplify", "surgical"):
-        bloco = data.get(fase, {})
-        if bloco.get("skipped"):
+        secao = bloco(fase)
+        if secao.get("skipped"):
             achados.append({"fase": fase, "status": "skipped", "risco": _AUDIT_RISKS[fase]})
             continue
-        if not bloco.get("answered"):
+        if not secao.get("answered"):
             continue
-        if _AUDIT_CONTENT_KEY[fase] in bloco:
+        if _AUDIT_CONTENT_KEY[fase] in secao:
             achados.append({"fase": fase, "status": "followed", "risco": ""})
         else:
             achados.append({"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]})
 
-    verify = data.get("verify", {})
+    verify = bloco("verify")
     evidencias = [verify.get(chave) for chave in ("ruff_clean", "tests_pass", "coverage_pass")]
     if verify.get("success_criteria_met") and not any(evidencias):
         achados.append({"fase": "verify", "status": "faked", "risco": _AUDIT_RISKS["verify"]})
     elif any(evidencias):
         achados.append({"fase": "verify", "status": "followed", "risco": ""})
 
-    twins = data.get("twins", {})
+    twins = bloco("twins")
     if twins.get("defect_fixed") and not twins.get("searched"):
         achados.append({"fase": "twins", "status": "faked", "risco": _AUDIT_RISKS["twins"]})
     elif twins.get("searched"):

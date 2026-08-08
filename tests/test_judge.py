@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,6 +17,7 @@ from kata.judge import (
     _empty_test_bodies,
     _ignored_code_files,
     _is_test_file,
+    _normaliza_task,
     _oversized_untracked,
     _run_git_diff,
     _unreadable_test_files,
@@ -28,11 +31,16 @@ from kata.judge import (
     hunt_unauthorized_action,
     hunt_weakened_checks,
     is_debris_file,
+    is_kata_bookkeeping,
     judge_task,
     probes_for,
     record_baseline_ref,
 )
 from kata.verify import VerifyResult, is_inspectable
+
+# Raiz do repo — os testes de sincronia entre judge.py e o prompt da fase leem
+# os dois arquivos direto da fonte (R11-2).
+REPO = Path(__file__).resolve().parent.parent
 
 
 class TestJudgeResult:
@@ -1783,3 +1791,189 @@ class TestEmptyTestBodiesSemSondas:
     def test_sem_declaracao_nao_varre(self) -> None:
         probes = LanguageProbes(weakened=((r"^-.*assert", "x"),))
         assert _empty_test_bodies(["+func TestA() {", "+}"], probes) == []
+
+
+class TestEscrituracaoDoKata:
+    """R11-3: `.kata/<task>.yaml` é escrituração da ferramenta, não trabalho.
+
+    O arquivo é criado pelo kata e é untracked em qualquer projeto que não
+    tenha ignorado `.kata/` — e nada no kata pede isso. Contá-lo fazia o juiz
+    acusar trabalho honesto de scope creep.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            ".kata/minha-tarefa.yaml",
+            ".kata/minha-tarefa.yml",
+            ".kata/config.yaml",
+            ".kata/tarefa.json",
+            "sub/projeto/.kata/t.yaml",
+        ],
+    )
+    def test_reconhece_escrituracao(self, path: str) -> None:
+        assert is_kata_bookkeeping(path) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "src/kata/judge.py",
+            "src/config.yaml",
+            "katalogo.yaml",
+            "docs/.katalog/x.yaml",
+            ".kata/script.py",
+        ],
+    )
+    def test_nao_engole_codigo(self, path: str) -> None:
+        """Filtra a escrituração, não o diretório: código guardado sob
+        `.kata/` continua visível ao juiz, e `.kata` como substring de outro
+        nome não conta — a mesma família de falso positivo do "temp"."""
+        assert is_kata_bookkeeping(path) is False
+
+
+class TestJudgeComKataVisivelAoGit:
+    """R11-3 ponta a ponta, no ambiente exato em que o defeito vivia.
+
+    Este repositório tem `/.kata/` no .gitignore e o harness de traps escreve
+    `.kata/` no .git/info/exclude de todo fixture — por isso nem a suíte nem
+    os 14 cenários conseguiam ver a classe. Aqui `.kata/` fica VISÍVEL ao git,
+    que é o estado de qualquer projeto que rode `kata --init` sem ignorar nada.
+    """
+
+    def _tarefa(self, repo, declarados: list[str]) -> dict:
+        (repo / ".kata").mkdir(exist_ok=True)
+        (repo / ".kata" / "t.yaml").write_text("task: t\n", encoding="utf-8")
+        return {
+            "task": "t",
+            "surgical": {"files": [{"path": p, "necessary": True} for p in declarados]},
+        }
+
+    def test_arquivo_da_propria_tarefa_nao_e_scope_creep(self, repo_git) -> None:
+        (repo_git / "base.txt").write_text("mudou\n", encoding="utf-8")
+        data = self._tarefa(repo_git, ["base.txt"])
+
+        resultado = judge_task(data, cwd=repo_git)
+
+        assert [f for f in resultado.frauds if f.type == "scope_creep"] == []
+        assert ".kata" not in str(resultado.frauds)
+
+    def test_arquivo_novo_de_verdade_continua_sendo_pego(self, repo_git) -> None:
+        """Guarda contra filtrar demais: o filtro é da escrituração, e um
+        arquivo não declarado de verdade tem de continuar acusado."""
+        (repo_git / "base.txt").write_text("mudou\n", encoding="utf-8")
+        (repo_git / "extra.py").write_text("x = 1\n", encoding="utf-8")
+        data = self._tarefa(repo_git, ["base.txt"])
+
+        resultado = judge_task(data, cwd=repo_git)
+
+        creep = [f for f in resultado.frauds if f.type == "scope_creep"]
+        assert len(creep) == 1
+        assert "extra.py" in creep[0].evidence
+        assert ".kata" not in creep[0].evidence
+
+
+class TestNormalizaTask:
+    """R11-1: YAML malformado vira ponto cego confessado, nunca traceback."""
+
+    def test_topo_que_nao_e_mapa(self) -> None:
+        data, avisos = _normaliza_task(["isto", "e uma lista"])
+        assert data == {}
+        assert any("topo do arquivo" in a for a in avisos)
+
+    @pytest.mark.parametrize("secao", ["verify", "surgical", "intent", "artifact"])
+    def test_secao_que_nao_e_mapa(self, secao: str) -> None:
+        data, avisos = _normaliza_task({"task": "t", secao: True})
+        assert data[secao] == {}
+        assert any(secao in a for a in avisos)
+
+    def test_files_com_strings_no_lugar_de_mapas(self) -> None:
+        data, avisos = _normaliza_task({"surgical": {"files": ["a.py", {"path": "b.py"}]}})
+        assert data["surgical"]["files"] == [{"path": "b.py"}]
+        assert any("não são mapas" in a for a in avisos)
+
+    def test_files_que_nao_e_lista(self) -> None:
+        data, avisos = _normaliza_task({"surgical": {"files": "a.py"}})
+        assert data["surgical"]["files"] == []
+        assert any("não é uma lista" in a for a in avisos)
+
+    def test_tarefa_bem_formada_nao_gera_aviso(self) -> None:
+        original = {
+            "task": "t",
+            "verify": {"tests_pass": True},
+            "surgical": {"files": [{"path": "a.py", "necessary": True}]},
+            "intent": {"all_agree": True},
+        }
+        data, avisos = _normaliza_task(original)
+        assert avisos == []
+        assert data["verify"] == {"tests_pass": True}
+        assert data["surgical"]["files"] == [{"path": "a.py", "necessary": True}]
+
+
+@patch("kata.judge._ignored_files", return_value=[])
+@patch("kata.judge.untracked_files", return_value=[])
+@patch("kata.judge._changed_files", return_value=[])
+@patch("kata.judge._run_git_diff", return_value="")
+class TestJudgeTaskTarefaMalformada:
+    """R11-1 ponta a ponta: o veredito sai, e o exit code deixa de mentir.
+
+    Traceback saía com código 1 — o mesmo de REFUTED —, então arquivo
+    quebrado era indistinguível de fraude encontrada para quem lê o CI.
+    """
+
+    @pytest.mark.parametrize("secao", ["verify", "surgical", "intent", "artifact"])
+    def test_secao_nao_mapa_entrega_veredito(
+        self,
+        mock_diff: MagicMock,
+        mock_changed: MagicMock,
+        mock_untracked: MagicMock,
+        mock_ignored: MagicMock,
+        secao: str,
+    ) -> None:
+        resultado = judge_task({"task": "t", secao: True})
+
+        assert resultado.verdict == "UNVERIFIABLE"
+        assert any(secao in p for p in resultado.blind_spots)
+        assert resultado.frauds == []
+
+    def test_topo_nao_mapa_entrega_veredito(
+        self,
+        mock_diff: MagicMock,
+        mock_changed: MagicMock,
+        mock_untracked: MagicMock,
+        mock_ignored: MagicMock,
+    ) -> None:
+        resultado = judge_task(["isto", "e uma lista"])
+
+        assert resultado.verdict == "UNVERIFIABLE"
+        assert any("topo do arquivo" in p for p in resultado.blind_spots)
+
+
+class TestPromptDaFaseBateComOsHunters:
+    """R11-2: a tabela de fraudes do prompt é o que o agente lê.
+
+    O prompt declarava 6 fraudes e 3 pontos cegos contra 7 e 6 implementados,
+    e `make check-skills` passava — o gerado estava fiel a uma fonte errada.
+    Este teste deriva a verdade de judge.py, então a tabela não pode envelhecer
+    de novo em silêncio.
+    """
+
+    def _emitidos(self) -> set[str]:
+        fonte = (REPO / "src" / "kata" / "judge.py").read_text(encoding="utf-8")
+        return set(re.findall(r'type="(\w+)"', fonte))
+
+    def test_toda_fraude_emitida_aparece_no_prompt(self) -> None:
+        prompt = (REPO / "phases" / "kata-judge.md").read_text(encoding="utf-8").lower()
+        faltando = sorted(t for t in self._emitidos() if t.replace("_", " ") not in prompt)
+        assert not faltando, (
+            f"judge.py emite fraudes que phases/kata-judge.md não documenta: {faltando}. "
+            "Atualize a tabela e rode `make build-skills`."
+        )
+
+    def test_a_contagem_declarada_bate_com_a_implementacao(self) -> None:
+        prompt = (REPO / "phases" / "kata-judge.md").read_text(encoding="utf-8")
+        declarada = re.search(r"##\s+As\s+(\d+)\s+Fraudes", prompt)
+        assert declarada is not None, "phases/kata-judge.md perdeu o título 'As N Fraudes'"
+        assert int(declarada.group(1)) == len(self._emitidos()), (
+            f"o prompt declara {declarada.group(1)} fraudes e judge.py emite "
+            f"{len(self._emitidos())}"
+        )

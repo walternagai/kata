@@ -238,8 +238,9 @@ de cada skip/fake. Equivalente ao `/fable-method audit`.
 
 ### JUDGE (opcional)
 Verificação adversarial — re-executa as verificações afirmadas, confronta o
-diff com o relatório e caça fraudes em 6 categorias (weakened checks, false
-completion, scope creep, unauthorized action, spec betrayal, debris).
+diff com o relatório e caça fraudes em 7 categorias (weakened checks, false
+completion, scope creep, unauthorized action, spec betrayal, debris, baseline
+tampering).
 É a última fase, aplicada apenas quando solicitada após o REPORT.
 
 Se o juiz não encontrar fraude mas também não tiver tido como observar — nada

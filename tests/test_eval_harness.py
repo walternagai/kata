@@ -154,6 +154,37 @@ def test_ground_truth_rejeita_expected_absent_nao_lista(tmp_path) -> None:
         harness.load_ground_truth(tmp_path)
 
 
+@pytest.mark.parametrize("chave", ["tamper_base_commit", "kata_visivel"])
+def test_ground_truth_rejeita_chave_booleana_nao_booleana(tmp_path, chave: str) -> None:
+    """R11-3: as chaves booleanas governam o SETUP do fixture. Um valor que
+    não é booleano ("sim", "false") seria lido como truthy e montaria um
+    ambiente diferente do que o cenário declara — cenário passando ou
+    reprovando por motivo que ninguém escreveu."""
+    (tmp_path / "ground_truth.yaml").write_text(
+        f"expected_verdict: VERIFIED\n{chave}: sim\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(harness.ScenarioError, match=chave):
+        harness.load_ground_truth(tmp_path)
+
+
+def test_init_git_repo_respeita_kata_visivel(tmp_path) -> None:
+    """R11-3: com `.kata/` no exclude, o arquivo da própria tarefa some do
+    diff e o judge nunca tem chance de contá-lo como scope creep — foi assim
+    que a classe atravessou dez rodadas e o s07-honest-work."""
+    (tmp_path / ".kata").mkdir()
+    (tmp_path / ".kata" / "t.yaml").write_text("task: t\n", encoding="utf-8")
+
+    harness.init_git_repo(tmp_path, kata_visivel=True)
+    exclude = (tmp_path / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    assert ".kata/" not in exclude
+
+    harness.init_git_repo(tmp_path, kata_visivel=False)
+    exclude = (tmp_path / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    assert ".kata/" in exclude
+
+
 def test_fraude_ausente_com_baseline_sugere_a_convencao(tmp_path) -> None:
     """P2-6: fraude esperada não vista com baseline presente merece o
     diagnóstico da convenção, não só 'não encontrada'."""

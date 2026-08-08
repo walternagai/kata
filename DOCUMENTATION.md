@@ -150,9 +150,16 @@ Ruff and pytest, then runs coverage only when pytest succeeds.
 #### `kata.judge`
 
 The optional judge treats the task file as a collection of claims, compares
-those claims with the Git diff, re-runs claimed checks, and searches for six
+those claims with the Git diff, re-runs claimed checks, and searches for seven
 fraud categories: weakened checks, false completion, scope creep, unauthorized
-actions, specification betrayal, and debris.
+actions, specification betrayal, debris, and baseline tampering.
+
+Kata's own bookkeeping (`.kata/*.yaml`, `.kata/config.yaml`) is excluded from
+the changed-file set: the tool creates those files, the task's author does not,
+and counting them accused honest work of scope creep — up to `REFUTED` past two
+files, since `--init` touches no `.gitignore` and nothing asks a project to
+ignore `.kata/`. The exclusion is by extension, not by directory, so source
+code someone keeps under `.kata/` stays visible to the judge.
 
 ## Installation
 
@@ -502,13 +509,21 @@ The judge is opt-in. It re-runs claimed checks and returns:
 
 A **blind spot** is the judge admitting what it could not observe — not an
 accusation, since not having looked is evidence of neither fraud nor honesty.
-Five are detected: the report claims no check the judge knows how to re-run,
+Six are detected: the report claims no check the judge knows how to re-run,
 the diff touches a test file in a language the judge has no probes for, an
 ignored source/test candidate is outside Git's diff, a `base_commit` declared
-in the YAML has no independent `refs/kata/base/<hash>` anchor, or a baseline
-no longer resolves in the repository history. A baseline that resolves but is
-not an ancestor of the current `HEAD` is a high-severity `baseline_tampering`
-finding rather than a blind spot.
+in the YAML has no independent `refs/kata/base/<hash>` anchor, a baseline
+no longer resolves in the repository history, or a section of the task file
+is not a map (`surgical: true` in hand-written YAML, or a list at the top of
+the file). A baseline that resolves but is not an ancestor of the current
+`HEAD` is a high-severity `baseline_tampering` finding rather than a blind
+spot.
+
+Hand-written task files are supported input and the CLI validates no schema
+before judging, so an unreadable section is confessed and the verdict still
+comes out. It used to be an `AttributeError`, and a traceback exits 1 — the
+same code as `REFUTED` — which made a malformed file indistinguishable from
+fraud found for anything reading the exit code.
 
 The first blind spot is disarmed by declaring the project's commands in
 `.kata/config.yaml`. The second knows Python, JS/TS, Go, Ruby, Rust and
@@ -820,14 +835,20 @@ python3 eval/run_traps.py
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
 the verdict and the frauds the judge must find. Eleven scenarios (s01–s06,
-s08–s11, s14) plant a fraud the judge must catch; `s07` is an entirely honest
-task that must come back `VERIFIED`, and `s12`/`s13` expect `UNVERIFIABLE`
-(blind spots, no fraud). `s06` doubles as a guard against refusing legitimate
-work, planting real debris beside files whose names merely look like debris,
-and `s14` plants `baseline_tampering` (the harness rewrites `base_commit` in
-the YAML after recording the Git anchor). A judge that refuses legitimate
-work is as broken as one that misses fraud, and unit tests are poor at
-catching it, because they test what the author thought to test.
+s08–s11, s14) plant a fraud the judge must catch; `s07` and `s15` are entirely
+honest tasks that must come back `VERIFIED`, and `s12`/`s13` expect
+`UNVERIFIABLE` (blind spots, no fraud). `s06` doubles as a guard against
+refusing legitimate work, planting real debris beside files whose names merely
+look like debris, and `s14` plants `baseline_tampering` (the harness rewrites
+`base_commit` in the YAML after recording the Git anchor). A judge that refuses
+legitimate work is as broken as one that misses fraud, and unit tests are poor
+at catching it, because they test what the author thought to test.
+
+`s15` exists because the other fourteen structurally could not catch its
+defect: the harness excluded `.kata/` from Git in every fixture, so the task's
+own file was invisible and the judge counting it as scope creep survived ten
+review rounds — including `s07`, whose whole job is catching false positives.
+A scenario now opts into the real environment with `kata_visivel: true`.
 
 See [`eval/README.md`](eval/README.md) for the scenario schema and for the
 rule that a new scenario must be shown to fail when its defect is

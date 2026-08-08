@@ -682,6 +682,23 @@ class TestAuditTask:
         achados = cli._audit_task({})
         assert achados == []
 
+    def test_topo_que_nao_e_mapa_nao_derruba_a_graduacao(self) -> None:
+        """R11-1: lista no topo do arquivo dava AttributeError, e traceback
+        sai com código 1 — o mesmo de audit sujo. Sem seção legível não há o
+        que graduar."""
+        assert cli._audit_task(["isto", "e uma lista"]) == []
+
+    @pytest.mark.parametrize("fase", ["fit", "think", "intent", "simplify", "surgical"])
+    def test_secao_que_nao_e_mapa_nao_derruba_a_graduacao(self, fase: str) -> None:
+        """R11-1: `surgical: true` num YAML escrito à mão não pode virar
+        traceback — a fase simplesmente não tem o que graduar."""
+        achados = cli._audit_task({"task": "t", fase: True})
+        assert [a for a in achados if a["fase"] == fase] == []
+
+    def test_verify_e_twins_que_nao_sao_mapas_nao_derrubam(self) -> None:
+        """R11-1: as duas seções lidas fora do laço de fases."""
+        assert cli._audit_task({"verify": True, "twins": "sim"}) == []
+
     def test_faked_verify_claims_success_without_evidence(self) -> None:
         """VERIFY afirmando sucesso sem nenhuma checagem objetiva é faked."""
         data = {"verify": {"success_criteria_met": True}}

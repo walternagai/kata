@@ -27,11 +27,11 @@ src/kata/       código Python (cli.py, config.py, fit.py, verify.py, judge.py,
                 skills.py, __init__.py, __main__.py)
 tests/          testes pytest (test_cli.py, test_config.py, test_fit.py,
                 test_verify.py, test_judge.py, test_skills.py,
-                test_install.py — roda os instaladores .sh de verdade;
-                test_eval_harness.py — parser de fraudes do run_traps.py;
-                test_skills_build.py — gerados vs. phases/ fonte única;
-                test_schema_contract.py — schema documentado no DOCUMENTATION.md
-                contra o código e o template do --init)
+                test_domains.py, test_install.py — roda os instaladores .sh
+                de verdade; test_eval_harness.py — parser de fraudes do
+                run_traps.py; test_skills_build.py — gerados vs. phases/ fonte
+                única; test_schema_contract.py — schema documentado no
+                DOCUMENTATION.md contra o código e o template do --init)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
   skills/kata-*/SKILL.md 11 skills (10 fases + domain adapter kata-devops;
@@ -117,6 +117,7 @@ make check-skills  # falha se o gerado estiver desatualizado
 make test      # pytest + coverage (gate 70%)
 make lint      # ruff check src/ tests/ eval/ scripts/
 make format    # ruff format src/ tests/ eval/ scripts/
+make format-check  # ruff format --check — o lint não vê drift de formatação
 
 make install                 # symlinks do agente + skills em ~/.config/opencode/
 make uninstall               # remove os symlinks
@@ -126,12 +127,14 @@ make uninstall-claude-code   # remove os symlinks
 
 Rodar um único teste: `python3 -m pytest tests/test_verify.py::TestRunRuff -v`
 
-Ordem recomendada: `make lint && make test`.
+Ordem recomendada: `make lint && make test` (e `make format-check` antes de
+commitar — o CI reprova drift de formatação que o `ruff check` não vê).
 
-`.github/workflows/ci.yml` roda exatamente esses dois alvos mais
-`python3 eval/run_traps.py`, em Python 3.11 e 3.12, a cada push na `main` e
-em todo PR. O CI chama o Makefile de propósito: o que é verificado local e
-o que é verificado remoto não devem poder divergir.
+`.github/workflows/ci.yml` roda `make lint`, `make format-check`,
+`make check-skills`, `make test` e `python3 eval/run_traps.py`, em Python
+3.11 e 3.12, a cada push na `main` e em todo PR. O CI chama o Makefile de
+propósito: o que é verificado local e o que é verificado remoto não devem
+poder divergir.
 
 ## Instalação — symlinks, não cópias
 

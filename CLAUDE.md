@@ -28,14 +28,20 @@ Full technical reference: [`DOCUMENTATION.md`](DOCUMENTATION.md). Agent-authorin
 ## Commands
 
 ```bash
+pip install -e '.[dev]'       # do this first — the suite imports `kata`, and without the
+                              # editable install every test file errors with
+                              # ModuleNotFoundError before a single assertion runs
+
 make lint && make test        # recommended order before committing
 make build-skills             # regenerate opencode/ + claude-code/ from phases/
 make check-skills             # fail if the generated files are stale
 make lint                     # ruff check src/ tests/ eval/ scripts/
 make format                   # ruff format src/ tests/ eval/ scripts/
+make format-check             # CI runs this; `ruff check` does not catch format drift
 make test                     # pytest tests/ -v --cov=kata --cov=build_skills --cov=run_traps (gate 70%)
 
-python3 -m pytest tests/test_verify.py::TestRunRuff -v   # run a single test
+python3 -m pytest tests/test_verify.py::TestRunRuff -v      # a single class
+python3 -m pytest tests/test_judge.py -k escrituracao -v    # by name fragment
 
 make install                  # symlink @kata agent + skills into ~/.config/opencode/
 make uninstall
@@ -47,6 +53,12 @@ python3 -m kata --doctor      # are the phase skills installed? (partial install
                               # missing domain adapters are optional warnings)
 python3 eval/run_traps.py     # adversarial JUDGE trap scenarios (eval/scenarios/)
 ```
+
+CI (`.github/workflows/ci.yml`, Python 3.11 + 3.12) runs `make lint`, `make format-check`,
+`make check-skills`, `make test` and the trap runner — all five must pass. The traps are the
+one gate `make test` does not cover: `run_traps.py` shells out to `python3 -m kata` with
+`cwd` set to a temp fixture, so a *relative* `PYTHONPATH=src` silently stops resolving there
+and all scenarios fail with "No module named kata". Install the package instead.
 
 Installers use symlinks (`$OPENCODE_CONFIG_DIR` / `$CLAUDE_CONFIG_DIR`, defaulting to
 `~/.config/opencode` / `~/.claude`), so editing files under `opencode/` or `claude-code/` is visible
@@ -91,8 +103,18 @@ src/kata/
   (`_LANGUAGES`: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin); a test in an unlisted language becomes a
   declared blind spot instead of silence. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
   (medium/low findings only), `UNVERIFIABLE` (no fraud, but nothing could be
-  observed — nothing re-run, tests in a language it has no patterns for, or a missing baseline
-  anchor), `REFUTED` (any high-severity finding).
+  observed — one of six blind spots), `REFUTED` (any high-severity finding).
+  Two rules are easy to break by accident:
+  - **Kata's own bookkeeping is not the task's work.** `is_kata_bookkeeping()` keeps
+    `.kata/*.{yaml,yml,json}` out of the changed-file set and the synthetic untracked diff.
+    Counting it made the judge accuse honest work of scope creep — up to `REFUTED` past two
+    files — because nothing asks a project to gitignore `.kata/`. The filter is by extension,
+    not by directory, so source code kept under `.kata/` stays visible.
+  - **A malformed task file must still produce a verdict.** Hand-written YAML is supported and
+    nothing validates a schema before judging, so `_normaliza_task()` coerces `verify` /
+    `surgical` / `intent` / `artifact`, a non-map top level, and non-map `surgical.files`
+    entries into blind spots. Never reach into those sections with a bare `.get()`: a traceback
+    exits 1, the same code as `REFUTED`, which makes a broken file look like fraud found.
 - Task files live in `.kata/<task>.yaml` at the *target* project's root (not this repo's own root,
   except when kata is being used on itself). Schema is compatible with mushin's `.karpathy/`
   (`ln -s .karpathy .kata` to migrate).
@@ -121,6 +143,44 @@ frontends; only the *asking tool* becomes `{{ASK}}`.
 
 Phases with objective logic (FIT, VERIFY, JUDGE) also live in `src/kata/*.py` — a behaviour change
 there must accompany the source.
+
+## Review rounds and the `Rn-m` markers
+
+Comments across `src/`, `scripts/`, `eval/` and `phases/` cite findings like `R10-8` or
+`R11-3` — finding *m* of review round *n*. They are the reason a guard exists, and they are
+load-bearing: most of the odd-looking specificity in the fraud patterns is a false positive
+some round reproduced. Read the marker before "simplifying" the code around it.
+
+Rounds come in pairs of task files under `.kata/`, which is gitignored at the repo root
+(`/.kata/`, anchored so `eval/scenarios/*/fixture/.kata/` stays tracked as fixture data):
+
+- `code-review-round-N.yaml` — diagnosis only, `fit.route: question`, no code changes. Findings
+  go in `question.findings`, each tagged `RN-m`, with severity and a reproduction.
+- `fix-round-N.yaml` — the `code-loop` task that implements them.
+
+Two habits that round 11 showed matter:
+
+- **Reproduce before reporting.** A finding carries `[R]` (executed) or `[E]` (static). A
+  hypothesis that did not reproduce is written down as a verified false alarm so the next
+  round does not reopen it.
+- **Prove a new test fails without its fix.** `eval/README.md` requires it for scenarios, and
+  it applies to unit tests too: revert the fix, watch the test go red, restore. The suite is
+  full of guards against *false positives*, and a test that passes in both states protects
+  nothing.
+
+## Testing conventions
+
+- Unit tests mock `kata.verify._run` — never invoke real ruff/pytest inside the suite.
+- Tests needing a real repository use the shared `repo_git` fixture (`tests/conftest.py`),
+  not a private `git init` helper.
+- `tests/test_skills_build.py` guards the generated frontends: it fails on drift from
+  `phases/` and on an installable skill with no source (`make check-skills` catches only the
+  first).
+- Eval scenarios live in `eval/scenarios/<name>/` with `fixture/` (exactly one task YAML in
+  `.kata/`) and `ground_truth.yaml`. The harness git-excludes `.kata/` by default; a scenario
+  that needs the real environment — where the task file is visible to Git — sets
+  `kata_visivel: true`. An optional `baseline/` gives the scenario a modification diff and a
+  `base_commit`.
 
 ## Conventions (from AGENTS.md)
 

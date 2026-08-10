@@ -919,6 +919,31 @@ class TestDetectCovSource:
         )
         assert cli._detect_cov_source() == "src"
 
+    def test_pyproject_malformado_loga_warning_e_fallback(
+        self, tmp_path, monkeypatch, caplog
+    ) -> None:
+        """CR-009/S4: pyproject.toml malformado não pode ser engolido em
+        silêncio — o --cov rodaria contra um source que o projeto não
+        declarou. Avisa e degrada para o fallback."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.coverage.run\nsource = ['quebrado']\n", encoding="utf-8"
+        )
+        with caplog.at_level("WARNING", logger="kata.cli"):
+            assert cli._detect_cov_source() == "src"
+        assert any("pyproject.toml ilegível" in r.message for r in caplog.records)
+
+    def test_pyproject_ilegivel_loga_warning_e_fallback(
+        self, tmp_path, monkeypatch, caplog
+    ) -> None:
+        """CR-009/S4: pyproject.toml com bytes inválidos (UnicodeDecodeError)
+        também avisa em vez de engolir."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_bytes(b"\xff\xfe\x00\x01")
+        with caplog.at_level("WARNING", logger="kata.cli"):
+            assert cli._detect_cov_source() == "src"
+        assert any("pyproject.toml ilegível" in r.message for r in caplog.records)
+
 
 class TestCwdHelper:
     """Testa _cwd e _kata_dir."""

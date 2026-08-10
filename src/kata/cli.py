@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import re
 import subprocess
@@ -130,8 +131,11 @@ def _detect_cov_source() -> str:
                 return sources
             if sources:
                 return sources[0]
-        except Exception:
-            pass
+        except (tomllib.TOMLDecodeError, OSError, UnicodeDecodeError) as exc:
+            # CR-009/S4: pyproject malformado ou ilegível não pode ser
+            # engolido em silêncio — o --cov rodaria contra um source que o
+            # projeto não declarou. Avisa e degrada para o fallback.
+            logging.warning("pyproject.toml ilegível (%s); usando 'src' como fallback", exc)
     return "src"
 
 

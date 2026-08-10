@@ -47,10 +47,11 @@ markers = [
 ]
 
 [tool.coverage.run]
-# build_skills/run_traps entram na medição pelo nome de módulo importado
-# (scripts/ e eval/ não são pacotes) — regressão no builder ou no harness
-# de traps tem de derrubar o gate (R10-26).
-source = ["kata", "build_skills", "run_traps"]
+# Paths explícitos em vez de nomes de módulo top-level: build_skills e
+# run_traps vivem em scripts/ e eval/ (não são pacotes), e o nome de módulo
+# só resolve quando o pytest roda da raiz do repo. Com paths, o coverage
+# funciona de qualquer CWD (CR-006/S4).
+source = ["src/kata", "scripts/build_skills.py", "eval/run_traps.py"]
 omit = [
     "tests/*",
     "*/__main__.py",

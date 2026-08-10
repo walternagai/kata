@@ -95,6 +95,22 @@ subagente isolado que só reporta um resumo ao final.
 pip install -e '.[dev]'
 ```
 
+### O que o projeto alvo precisa
+
+O kata é aplicado a um projeto (não a este repositório). Para o `--check-only`
+e o JUDGE descobrirem o que verificar, o projeto alvo deve ter:
+
+- **`pyproject.toml`** — o kata lê `[tool.coverage.run] source` para saber o
+  que medir no coverage. Sem ele, cai no fallback `src`.
+- **`.kata/config.yaml`** *(opcional)* — declara os comandos de lint/test/
+  coverage do projeto quando não são Python (ex.: `eslint`, `vitest`,
+  `go test`). Sem ele, valem os defaults Python (ruff/pytest/pytest-cov).
+- **`.kata/<task>.yaml`** — criado por `kata --init <nome>`; é o registro da
+  tarefa que o ciclo lê e grava a cada fase.
+
+Sem `pyproject.toml` nem `.kata/config.yaml`, o kata assume um projeto Python
+com `src/` e `tests/` — se o seu projeto não é assim, declare o config.
+
 ## Uso
 
 ### No OpenCode

@@ -209,6 +209,64 @@ _JAVA_PROBES = LanguageProbes(
     skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
 )
 
+_CS_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\bAssert\.\w+\s*\(", "asserção Assert.* removida"),
+        (r"^-.*\[(?:Fact|Theory|Test(?:Case)?)\]", "atributo de teste removido"),
+        (r"^\+\s*//.*(?:Assert|\[Fact\]|\[Test\])", "teste virado em comentário"),
+        (r"^\+.*#pragma\s+warning\s+disable", "pragma warning disable adicionado"),
+    ),
+    # xUnit: [Fact] / [Theory]; NUnit: [Test] / [TestCase(...)].
+    test_declaration=re.compile(r"^\+\s*\[(?:Fact|Theory|Test(?:Case)?)\s*\]"),
+    empty_body=re.compile(r"^\+\s*\}\s*$"),
+    # Corpo vazio inline: `[Fact] public void T() { }` — chaves na mesma linha.
+    empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
+    skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
+    noop_body=(
+        (r"^\+.*\bAssert\.True\s*\(\s*true\s*\)", "corpo só com Assert.True(true)"),
+        (r"^\+.*\bAssert\.Pass\s*\(", "teste desativado com Assert.Pass"),
+    ),
+)
+
+_PHP_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\b(?:assert|expect)\w*\s*\(", "asserção removida"),
+        (
+            r"^\+.*\b(?:markTestSkipped|markTestIncomplete)\s*\(",
+            "teste desativado (markTestSkipped)",
+        ),  # noqa: E501
+        (r"^\+\s*//.*(?:assert|expect|function test)", "teste virado em comentário"),
+        (r"^\+.*@(?:group|requires|dataProvider)\b", "anotação de teste alterada"),
+    ),
+    # PHPUnit: `public function testX()` ou atributo #[Test].
+    test_declaration=re.compile(r"^\+\s*(?:public\s+)?function\s+test\w*\s*\(|^\+\s*#\[Test\]"),
+    empty_body=re.compile(r"^\+\s*\}\s*$"),
+    empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
+    skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
+    noop_body=(
+        (r"^\+.*\bassertTrue\s*\(\s*true\s*\)", "corpo só com assertTrue(true)"),
+        (r"^\+.*\bmarkTestSkipped\s*\(", "teste desativado com markTestSkipped"),
+    ),
+)
+
+_SWIFT_PROBES = LanguageProbes(
+    weakened=(
+        (r"^-.*\bXCTAssert\w*\s*\(", "asserção XCTAssert removida"),
+        (r"^\+.*\bXCTSkip\s*\(", "teste desativado com XCTSkip"),
+        (r"^\+\s*//.*(?:XCTAssert|func test)", "teste virado em comentário"),
+        (r"^\+.*\bXCTAssert\w*\s*\(\s*true\s*\)", "corpo só com XCTAssert(true)"),
+    ),
+    # XCTest: `func testX()`.
+    test_declaration=re.compile(r"^\+\s*func\s+test\w*\s*\("),
+    empty_body=re.compile(r"^\+\s*\}\s*$"),
+    empty_inline=re.compile(r"\{\s*\}\s*(?://.*)?$"),
+    skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
+    noop_body=(
+        (r"^\+.*\bXCTSkip\s*\(", "teste desativado com XCTSkip"),
+        (r"^\+.*\bXCTAssert\w*\s*\(\s*true\s*\)", "corpo só com XCTAssert(true)"),
+    ),
+)
+
 # Extensão → o que o juiz sabe procurar ali. Uma extensão ausente daqui é um
 # ponto cego declarado, não um silêncio: ver `_unreadable_test_files`.
 _LANGUAGES: dict[str, LanguageProbes] = {
@@ -224,6 +282,9 @@ _LANGUAGES: dict[str, LanguageProbes] = {
     ".rs": _RS_PROBES,
     ".java": _JAVA_PROBES,
     ".kt": _JAVA_PROBES,
+    ".cs": _CS_PROBES,
+    ".php": _PHP_PROBES,
+    ".swift": _SWIFT_PROBES,
 }
 
 
@@ -1114,6 +1175,12 @@ def judge_task(
         blind_spots.append(
             f"{len(unreadable)} arquivo(s) de teste sem padrão de enfraquecimento "
             "para a linguagem: " + ", ".join(unreadable[:5])
+        )
+        # CR-011/S5: o ponto cego é confessado, mas o usuário precisa saber
+        # como fechá-lo — a dataclass LanguageProbes é onde a sonda entra.
+        blind_spots.append(
+            "Para cobrir uma linguagem, adicione a sonda em "
+            "kata.judge.LanguageProbes e registre a extensão em _LANGUAGES."
         )
     ignored = _ignored_code_files(_ignored_files(cwd=cwd))
     if ignored:

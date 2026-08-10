@@ -109,6 +109,17 @@ class TestInitTask:
         assert data["fit"]["route"] == "code-loop"
         assert data["think"]["answered"] is False
 
+    def test_init_grava_schema_version(self, tmp_path, monkeypatch) -> None:
+        """CR-014/S5: o template do --init grava schema_version no topo."""
+        monkeypatch.chdir(tmp_path)
+        cli._kata_dir().mkdir(parents=True, exist_ok=True)
+        cli._init_task("test-task")
+
+        import kata.cli as cli_mod
+
+        data = cli_mod._deserialize(cli._task_path("test-task").read_text(encoding="utf-8"))
+        assert data["schema_version"] == cli.SCHEMA_VERSION == 1
+
     def test_init_existing_warns(self, tmp_path, monkeypatch, capsys) -> None:
         monkeypatch.chdir(tmp_path)
         cli._kata_dir().mkdir(parents=True, exist_ok=True)

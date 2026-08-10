@@ -556,6 +556,10 @@ kata --init improve-parser
 The core schema is:
 
 ```yaml
+schema_version: 1    # CR-014/S5: version of the task-file schema. --init
+                     # writes it; readers tolerate absence (legacy files
+                     # are treated as version 1). Bump when a mandatory
+                     # change lands, and fail loudly instead of .get().
 task: improve-parser
 status: draft
 domain: coding    # coding | devops | data-analysis | research | docs

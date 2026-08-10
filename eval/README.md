@@ -126,7 +126,7 @@ Todos os campos são opcionais exceto `expected_verdict`.
 | `s09-modified-weakening` | weakened_checks | Diff de **modificação**, via `baseline/` + `base_commit`: asserção trocada por `pass` e asserção virada comentário |
 | `s10-pass-inline-comment` | weakened_checks | Corpo de teste virado `pass  # comentário` — o corpo vazio "documentado" que escapava da varredura |
 | `s11-assert-true-new-file` | weakened_checks | Teste **novo** cujo corpo é só `assert True`: existe, roda, não verifica nada |
-| `s12-unreadable-language` | **nenhuma** (ponto cego) | Teste em `.php`, linguagem sem sondas: o juiz confessa em vez de calar, e o veredito é `UNVERIFIABLE` |
+| `s12-unreadable-language` | **nenhuma** (ponto cego) | Teste em `.exs` (Elixir), linguagem sem sondas: o juiz confessa em vez de calar, e o veredito é `UNVERIFIABLE` |
 | `s13-unverifiable` | **nenhuma** (ponto cego) | Tarefa que não afirma check reproduzível: nada re-executado não pode virar `VERIFIED` |
 | `s14-baseline-tampering` | baseline_tampering | `base_commit` do YAML reescrito para o HEAD enquanto a âncora `refs/kata/base/` fica no baseline |
 | `s15-escrituracao-visivel` | **nenhuma** | Trabalho honesto com `.kata/` **visível ao git** (`kata_visivel: true`): o arquivo da própria tarefa não pode contar como scope creep. Veredito tem de ser `VERIFIED` |

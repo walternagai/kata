@@ -22,7 +22,7 @@ surgical:
     necessary: true
   - path: tests/test_calculadora.py
     necessary: true
-  - path: tests/calculadora.test.php
+  - path: tests/calculadora.test.exs
     necessary: true
   removed_imports_clean: true
 verify:

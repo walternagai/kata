@@ -1403,10 +1403,10 @@ class TestUnreadableTestFiles:
     @pytest.mark.parametrize(
         "path",
         [
-            "src/Calculadora.test.php",
-            "Tests/soma_test.swift",
             "test/calculo_test.exs",
             "spec/widget_spec.dart",
+            "src/Calculadora.test.lua",
+            "Tests/soma_test.hs",
         ],
     )
     def test_linguagem_sem_sondas_e_ilegivel(self, path: str) -> None:
@@ -1422,6 +1422,9 @@ class TestUnreadableTestFiles:
             "spec/models/user_spec.rb",
             "src/calculo_test.rs",
             "src/CalculoTest.java",
+            "src/Calculadora.test.php",
+            "Tests/soma_test.swift",
+            "tests/CalculadoraTest.cs",
         ],
     )
     def test_linguagem_com_sondas_deixa_de_ser_ponto_cego(self, path: str) -> None:
@@ -1526,7 +1529,7 @@ class TestBlindSpots:
         """Repositório poliglota: os checks rodam e passam, e mesmo assim há
         no diff um teste de linguagem que hunt_weakened_checks não lê."""
         mock_diff.return_value = ""
-        mock_files.return_value = ["src/soma.php", "src/soma.test.php"]
+        mock_files.return_value = ["src/soma.ex", "src/soma.test.exs"]
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=True),
             "pytest": VerifyResult(ok=True),
@@ -1535,8 +1538,8 @@ class TestBlindSpots:
             "verify": {"ruff_clean": True, "tests_pass": True},
             "surgical": {
                 "files": [
-                    {"path": "src/soma.php", "necessary": True},
-                    {"path": "src/soma.test.php", "necessary": True},
+                    {"path": "src/soma.ex", "necessary": True},
+                    {"path": "src/soma.test.exs", "necessary": True},
                 ]
             },
         }
@@ -1544,7 +1547,9 @@ class TestBlindSpots:
 
         assert result.verdict == "UNVERIFIABLE"
         assert result.re_ran_checks == {"ruff": True, "pytest": True}
-        assert any("src/soma.test.php" in b for b in result.blind_spots)
+        assert any("src/soma.test.exs" in b for b in result.blind_spots)
+        # CR-011/S5: a mensagem didática aponta para LanguageProbes.
+        assert any("LanguageProbes" in b for b in result.blind_spots)
 
     def test_checks_reexecutados_e_tudo_python_sai_verified(
         self,
@@ -1632,9 +1637,12 @@ class TestProbesPorLinguagem:
         assert probes_for("src/a.js") is not None
         assert probes_for("src/a.go") is not None
         assert probes_for("src/a.py") is not None
+        assert probes_for("src/a.cs") is not None
+        assert probes_for("src/a.php") is not None
+        assert probes_for("src/a.swift") is not None
 
     def test_extensao_desconhecida_nao_tem(self) -> None:
-        assert probes_for("src/a.php") is None
+        assert probes_for("src/a.exs") is None
         assert probes_for("src/a") is None
 
     def test_variantes_de_js_compartilham_as_mesmas_sondas(self) -> None:
@@ -1692,10 +1700,47 @@ class TestHuntWeakenedChecksPoliglota:
         diff = _diff_modificado("src/SomaTest.java", "+    @Disabled")
         assert any("@Disabled" in f.description for f in hunt_weakened_checks(diff))
 
+    def test_cs_assert_removido(self) -> None:
+        diff = _diff_modificado(
+            "tests/SomaTest.cs",
+            "-  Assert.Equal(3, soma(1, 2));",
+            "+  // nada",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("Assert.* removida" in f.description for f in frauds)
+
+    def test_cs_fact_removido(self) -> None:
+        diff = _diff_modificado("tests/SomaTest.cs", "-  [Fact]", "+  public void Soma() {")
+        assert any("atributo de teste" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_php_assert_removido(self) -> None:
+        diff = _diff_modificado(
+            "tests/SomaTest.php",
+            "-  $this->assertEquals(3, $r);",
+            "+  // nada",
+        )
+        assert any("asserção removida" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_php_mark_test_skipped(self) -> None:
+        diff = _diff_modificado("tests/SomaTest.php", "+  $this->markTestSkipped('flaky');")
+        assert any("markTestSkipped" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_swift_xctassert_removido(self) -> None:
+        diff = _diff_modificado(
+            "Tests/SomaTests.swift",
+            "-  XCTAssertEqual(3, soma(1, 2))",
+            "+  // nada",
+        )
+        assert any("XCTAssert" in f.description for f in hunt_weakened_checks(diff))
+
+    def test_swift_xctskip(self) -> None:
+        diff = _diff_modificado("Tests/SomaTests.swift", '+  throw XCTSkip("flaky")')
+        assert any("XCTSkip" in f.description for f in hunt_weakened_checks(diff))
+
     def test_linguagem_sem_sondas_nao_gera_fraude(self) -> None:
         """Silêncio aqui é declarado como ponto cego em judge_task, e não
         confundido com ausência de fraude."""
-        diff = _diff_modificado("src/soma.test.php", "-  $this->assertEquals(3, $r);")
+        diff = _diff_modificado("src/soma.test.exs", "-  assert soma(1, 2) == 3")
         assert hunt_weakened_checks(diff) == []
 
     def test_padroes_de_python_nao_vazam_para_outra_linguagem(self) -> None:

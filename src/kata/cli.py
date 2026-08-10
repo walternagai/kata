@@ -66,6 +66,12 @@ _TASK_WHITESPACE = re.compile(r"\s")
 # fix-verify indefinidamente.
 MAX_VERIFY_ATTEMPTS = 3
 
+# Versão do schema de .kata/<task>.yaml (CR-014/S5). O --init grava no topo
+# do template; a leitura tolera ausência (YAMLs antigos) tratando como 1.
+# Quando uma mudança obrigatória for necessária, incremente e falhe com
+# mensagem clara em vez de .get() silencioso.
+SCHEMA_VERSION = 1
+
 # Extensões que _task_path pode concatenar, conforme PyYAML esteja
 # presente ou não. A validação rejeita as duas independentemente.
 _SERIALIZATION_EXTS = (".yaml", ".json")
@@ -1322,6 +1328,7 @@ def _init_task(task: str) -> bool:
         return False
 
     template: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
         "task": task,
         "status": "draft",
         "domain": "coding",

@@ -485,14 +485,26 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
 
 def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> list[str]:
     """Retorna a lista de arquivos alterados pela tarefa (mesma lógica de _run_git_diff)."""
+    result = None
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
         result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
     else:
-        result = _run(["git", "diff", "HEAD", "--name-only"], cwd=cwd)
-        if result.returncode != 0:
-            result = _run(["git", "diff", "--name-only"], cwd=cwd)
+        try:
+            result = _run(["git", "diff", "HEAD", "--name-only"], cwd=cwd)
+        except OSError:
+            result = None
+        if result is None or result.returncode != 0:
+            try:
+                result = _run(["git", "diff", "--name-only"], cwd=cwd)
+            except OSError:
+                result = None
+            if result is None:
+                return []
             if not result.stdout.strip():
-                result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
+                try:
+                    result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
+                except OSError:
+                    return []
 
     tracked = _sem_escrituracao([f for f in result.stdout.strip().split("\n") if f.strip()])
     seen = set(tracked)

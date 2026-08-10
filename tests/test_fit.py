@@ -107,6 +107,55 @@ class TestDiffStats:
         assert files == ["file.py"]
         assert lines == 0
 
+    @patch("kata.fit._run")
+    def test_head_diff_falls_back_to_unstaged(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: `git diff HEAD` falha (repo sem commit) → cai para unstaged."""
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="", stderr="fatal: bad revision"
+            ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="fallback.py\n", stderr=""),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=" fallback.py | 3 ++\n", stderr=""
+            ),
+        ]
+        files, lines = diff_stats()
+        assert files == ["fallback.py"]
+        assert lines == 3
+
+    @patch("kata.fit._run")
+    def test_head_empty_falls_back_to_cached(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: diff HEAD vazio → cai para staged/cached."""
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="staged.py\n", stderr=""),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=" staged.py | 4 ++++\n", stderr=""
+            ),
+        ]
+        files, lines = diff_stats()
+        assert files == ["staged.py"]
+        assert lines == 4
+
+    @patch("kata.fit._run")
+    def test_all_diffs_fail_returns_empty(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: todos os diffs falham → retorna lista vazia, não crasha."""
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=""),
+        ]
+        files, lines = diff_stats()
+        assert files == []
+        assert lines == 0
+
 
 class TestUntrackedIsNotInvisible:
     """Prova, com um repo git de verdade, que arquivos novos contam para o

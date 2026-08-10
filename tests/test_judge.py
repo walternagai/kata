@@ -980,6 +980,84 @@ class TestChangedFiles:
         files = _changed_files(base_commit="deadbeef")
         assert files == ["local.py"]
 
+    @patch("kata.judge._run")
+    def test_oserror_on_git_diff_returns_empty(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: OSError ao rodar git diff -> _changed_files retorna [] sem crashar."""
+        mock_run.side_effect = OSError("git not found")
+        files = _changed_files()
+        assert files == []
+
+    @patch("kata.judge._run")
+    def test_oserror_on_cached_fallback_returns_empty(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: OSError no fallback staged/cached de _changed_files."""
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="", stderr="fatal: bad revision"
+            ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            OSError("git not found"),
+        ]
+        files = _changed_files()
+        assert files == []
+
+    @patch("kata.judge._run")
+    def test_baseline_ref_retorna_none_quando_comando_falha(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: _read_baseline_ref retorna None quando git rev-parse falha."""
+        from kata.judge import _read_baseline_ref
+
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr=""
+        )
+        assert _read_baseline_ref("task") is None
+
+    @patch("kata.judge._run")
+    def test_resolve_commit_retorna_none_quando_comando_falha(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: _resolve_commit retorna None quando git rev-parse falha."""
+        from kata.judge import _resolve_commit
+
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr=""
+        )
+        assert _resolve_commit("deadbeef") is None
+
+    @patch("kata.judge._run")
+    def test_resolve_commit_retorna_none_para_stdout_vazio(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: _resolve_commit retorna None quando stdout está vazio."""
+        from kata.judge import _resolve_commit
+
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="\n", stderr=""
+        )
+        assert _resolve_commit("deadbeef") is None
+
+    @patch("kata.judge._run")
+    def test_oserror_on_baseline_ref_returns_none(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: OSError ao ler baseline ref -> _read_baseline_ref retorna None."""
+        from kata.judge import _read_baseline_ref
+
+        mock_run.side_effect = OSError("git not found")
+        assert _read_baseline_ref("task") is None
+
+    @patch("kata.judge._run")
+    def test_oserror_on_record_baseline_ref_returns_false(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """CR-010: OSError ao gravar baseline ref -> record_baseline_ref retorna False."""
+        mock_run.side_effect = OSError("git not found")
+        assert record_baseline_ref("task", "deadbeef") is False
+
 
 class TestJudgeTaskDetectsCommittedFraud:
     """Prova, com um repo git de verdade, que uma fraude já commitada
@@ -1065,6 +1143,38 @@ class TestJudgeTaskDetectsCommittedFraud:
         from kata.judge import _read_baseline_ref
 
         assert _read_baseline_ref("tarefa", cwd=tmp_path) == base
+
+    def test_baseline_nao_resolve_mais_vira_blind_spot(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """CR-010: baseline aponta para commit inexistente -> blind spot, não crash."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+
+        result = judge_task({"task": "t", "base_commit": "deadbeef", "verify": {}}, cwd=tmp_path)
+        assert any("baseline não resolve mais" in spot for spot in result.blind_spots)
+
+    def test_baseline_nao_e_ancestral_vira_fraud(self, repo_git, tmp_path, monkeypatch) -> None:
+        """CR-010: baseline existe mas não é ancestral do HEAD atual."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        # Novo branch sem ancestralidade
+        subprocess.run(["git", "checkout", "--orphan", "outro"], cwd=tmp_path, check=True)
+        (tmp_path / "outro.py").write_text("y = 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "novo"], cwd=tmp_path, check=True)
+
+        result = judge_task({"task": "t", "base_commit": base, "verify": {}}, cwd=tmp_path)
+        assert any(f.type == "baseline_tampering" for f in result.frauds)
+        assert any("não é ancestral" in f.description for f in result.frauds)
 
 
 class TestIsDebrisFile:
@@ -1269,6 +1379,22 @@ class TestJudgeSeesUntrackedFiles:
         diff = _run_git_diff(cwd=tmp_path)
         assert "blob.bin" not in diff
         assert _changed_files(cwd=tmp_path) == ["blob.bin"]
+
+    def test_ignored_code_files_reported_as_blind_spot(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """CR-010: arquivos ignorados com aparência de código/teste viram ponto cego."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+
+        # .gitignore rastreado; arquivo novo ignorado com aparência de código
+        (tmp_path / ".gitignore").write_text("ignored.py\n", encoding="utf-8")
+        (tmp_path / "ignored.py").write_text("assert True\n", encoding="utf-8")
+
+        result = judge_task({"verify": {}}, cwd=tmp_path)
+        assert any("ignorado" in spot for spot in result.blind_spots)
 
 
 class TestUnreadableTestFiles:

@@ -28,7 +28,12 @@ def _instala(config_dir: Path, nomes) -> None:
     skills = config_dir / "skills"
     skills.mkdir(parents=True, exist_ok=True)
     for nome in nomes:
-        (skills / nome).mkdir()
+        alvo = skills / nome
+        if alvo.is_symlink() or alvo.is_file():
+            alvo.unlink()
+        elif alvo.exists():
+            alvo.rmdir()
+        alvo.mkdir()
 
 
 @pytest.fixture
@@ -109,6 +114,102 @@ class TestDoctor:
         estados = doctor()
         assert [e.frontend for e in estados] == ["opencode", "claude-code"]
         assert all(e.ausente for e in estados)
+
+    def test_doctor_domain_avisa_quando_frontend_instalado_sem_domain_adapter(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """CR-012: quando o frontend está instalado mas falta o domain adapter,
+        doctor_domain lista o adapter faltando.
+        """
+        from kata.skills import DOMAIN_SKILLS, doctor_domain
+
+        oc_dir = tmp_path / "oc"
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(oc_dir))
+        _instala(oc_dir, PHASE_SKILLS)
+        (oc_dir / "agent").mkdir()
+        (oc_dir / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+
+        faltando = doctor_domain()
+        assert faltando["opencode"] == list(DOMAIN_SKILLS)
+
+    def test_doctor_domain_ignora_domain_adapter_quando_frontend_nao_instalado(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """CR-012: se o frontend está ausente, não faz sentido exigir adapter."""
+        from kata.skills import doctor_domain
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        faltando = doctor_domain()
+        assert faltando["opencode"] == []
+
+
+class TestSecurity:
+    def test_symlink_para_fora_do_repo_nao_conta_como_instalado(self, oc, tmp_path) -> None:
+        """CR-012: symlink quebrado ou apontando para fora do config_dir não
+        deve ser considerado uma skill instalada (segurança)."""
+        _instala(tmp_path, ["kata-fit"])
+        alvo = tmp_path / "skills" / "kata-fit"
+        if alvo.is_symlink() or alvo.is_file():
+            alvo.unlink()
+        elif alvo.is_dir():
+            alvo.rmdir()
+        alvo.symlink_to("/tmp/nao-existe-no-sistema")
+        e = check_frontend(oc)
+        assert "kata-fit" in e.faltando
+
+    def test_skill_instalada_sem_SKILL_md_ainda_conta(self, oc, tmp_path) -> None:
+        """CR-012: check_frontend só verifica existência do diretório; o host
+        é quem valida o SKILL.md. Diretório vazio conta como instalado."""
+        _instala(tmp_path, ["kata-fit"])
+        e = check_frontend(oc)
+        assert "kata-fit" not in e.faltando
+
+
+class TestClaudeCodeOrchestrator:
+    def test_com_orquestrador_e_completo(self, tmp_path, monkeypatch) -> None:
+        """CR-012: caminho feliz do claude-code com todas as fases + orquestrador."""
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+        _instala(tmp_path, (*PHASE_SKILLS, ORCHESTRATOR_SKILL))
+        cc = FRONTENDS[1]
+        e = check_frontend(cc)
+        assert e.completo is True
+        assert e.parcial is False
+        assert e.faltando == []
+
+    def test_sem_orquestrador_e_parcial(self, tmp_path, monkeypatch) -> None:
+        """CR-012: claude-code com fases mas sem orquestrador é parcial."""
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+        _instala(tmp_path, PHASE_SKILLS)  # sem ORCHESTRATOR_SKILL
+        cc = FRONTENDS[1]
+        e = check_frontend(cc)
+        assert e.completo is False
+        assert e.parcial is True
+        assert ORCHESTRATOR_SKILL in e.faltando
+
+
+class TestDomainAdapter:
+    def test_frontend_completo_incluindo_domain_adapter(self, oc, tmp_path) -> None:
+        """CR-012: check_frontend completo quando o domain adapter também existe."""
+        from kata.skills import DOMAIN_SKILLS
+
+        _instala(tmp_path, (*PHASE_SKILLS, *DOMAIN_SKILLS))
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        e = check_frontend(oc)
+        assert e.completo is True
+        assert e.faltando == []
+
+    def test_skill_orfa_nao_reprova_frontend(self, oc, tmp_path) -> None:
+        """CR-012: diretório extra em skills/ que não está na lista canônica
+        não faz o frontend ser parcial nem completo — é ignorado.
+        """
+        _instala(tmp_path, PHASE_SKILLS)
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        (tmp_path / "skills" / "kata-fantasma").mkdir()
+        e = check_frontend(oc)
+        assert e.completo is True
+        assert "kata-fantasma" not in e.faltando
 
 
 def test_a_lista_canonica_bate_com_as_fontes_em_phases() -> None:

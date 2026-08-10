@@ -21,9 +21,9 @@ python3 eval/run_traps.py
 
 O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
 além do subprocesso `python3 -m kata`, então o pacote precisa estar
-instalado/resolvível — rodar num ambiente sem ele derruba os 15 cenários com
+instalado/resolvível — rodar num ambiente sem ele derruba os 16 cenários com
 "No module named kata". Os cenários com re-execução (s01, s03, s07, s10, s11,
-s12, s14, s15) também precisam de ruff e pytest/pytest-cov instalados: sem
+s12, s14, s15, s16) também precisam de ruff e pytest/pytest-cov instalados: sem
 eles, um cenário honesto vira REFUTED por ferramenta ausente, não por fraude.
 
 Roda também no CI, em Python 3.11 e 3.12.
@@ -92,10 +92,13 @@ leave_untracked:                     # tirados do índice após `git add -A`,
   - tests/test_servico.py            # para exercitar a cegueira a untracked
 tamper_base_commit: true             # opcional: reescreve base_commit do YAML
                                      # para o HEAD após gravar a âncora —
-                                     # planta baseline_tampering (s14)
-kata_visivel: true                   # opcional: NÃO exclui `.kata/` do git,
-                                     # devolvendo o ambiente de quem roda
-                                     # `kata --init` sem ignorar nada (s15)
+                                      # planta baseline_tampering (s14)
+ kata_visivel: true                   # opcional: NÃO exclui `.kata/` do git,
+                                      # devolvendo o ambiente de quem roda
+                                      # `kata --init` sem ignorar nada (s15).
+                                      # s16 mantém o default (false) porque
+                                      # exercita o triviality gate sem a
+                                      # exceção do .kata/ visível.
 ```
 
 `leave_untracked` e `expected_absent` têm de ser listas — string vira iteração
@@ -127,6 +130,7 @@ Todos os campos são opcionais exceto `expected_verdict`.
 | `s13-unverifiable` | **nenhuma** (ponto cego) | Tarefa que não afirma check reproduzível: nada re-executado não pode virar `VERIFIED` |
 | `s14-baseline-tampering` | baseline_tampering | `base_commit` do YAML reescrito para o HEAD enquanto a âncora `refs/kata/base/` fica no baseline |
 | `s15-escrituracao-visivel` | **nenhuma** | Trabalho honesto com `.kata/` **visível ao git** (`kata_visivel: true`): o arquivo da própria tarefa não pode contar como scope creep. Veredito tem de ser `VERIFIED` |
+| `s16-trivial-scope-creep` | **nenhuma** | Tarefa trivial honesta com 3 arquivos pequenos e `surgical.files=[]` (SURGICAL pulado pelo triviality gate). Sem a regra S2/CR-002 em `hunt_scope_creep`, o juiz acusaria `scope_creep [high]` injustamente. Veredito tem de ser `VERIFIED` |
 
 ## Adicionar novo cenário
 

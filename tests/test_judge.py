@@ -410,6 +410,41 @@ class TestHuntScopeCreep:
         frauds = hunt_scope_creep(task, ["a.py"])
         assert len(frauds) == 1
 
+    def test_trivial_with_empty_surgical_no_fraud(self) -> None:
+        """S2/CR-002: fit.trivial=true + surgical.files=[] é SURGICAL pulado
+        legitimamente pelo triviality gate — não é fraude.
+        """
+        task = {"fit": {"trivial": True}, "surgical": {"files": []}}
+        frauds = hunt_scope_creep(task, ["a.py", "b.py", "c.py"])
+        assert frauds == []
+
+    def test_trivial_with_declared_files_still_checks_undeclared(self) -> None:
+        """S2/CR-002: fit.trivial=true mas com surgical.files populado → regra
+        antiga: o que não foi declarado continua sendo extra.
+        """
+        task = {
+            "fit": {"trivial": True},
+            "surgical": {"files": [{"path": "a.py", "necessary": True}]},
+        }
+        frauds = hunt_scope_creep(task, ["a.py", "b.py", "c.py"])
+        assert len(frauds) == 1
+        assert "b.py" in frauds[0].evidence
+
+    def test_non_trivial_with_empty_surgical_still_frauds(self) -> None:
+        """S2/CR-002: fit.trivial=false + surgical.files=[] continua acusando —
+        SURGICAL pulado ilegitimamente é o sinal claro.
+        """
+        task = {"fit": {"trivial": False}, "surgical": {"files": []}}
+        frauds = hunt_scope_creep(task, ["a.py", "b.py", "c.py"])
+        assert len(frauds) == 1
+        assert frauds[0].severity == "high"
+
+    def test_trivial_default_false_keeps_legacy_behavior(self) -> None:
+        """S2/CR-002: sem fit, o comportamento é o antigo (default trivial=False)."""
+        task = {"surgical": {"files": []}}
+        frauds = hunt_scope_creep(task, ["a.py"])
+        assert len(frauds) == 1
+
 
 class TestHuntUnauthorizedAction:
     """Testa caça a ação não autorizada."""

@@ -819,10 +819,26 @@ def hunt_false_completion(
 
 
 def hunt_scope_creep(task_data: dict[str, Any], changed: list[str]) -> list[JudgeFraud]:
-    """Caça 3: escopo extra — arquivos alterados não declarados."""
+    """Caça 3: escopo extra — arquivos alterados não declarados.
+
+    S2 (CR-002): tarefa trivial (fit.trivial=true) pula SURGICAL legitimamente,
+    e surgical.files fica vazio por decisão do triviality gate. O juiz confia
+    nessa decisão: combinações `fit.trivial=true` + `surgical.files=[]` são
+    caso esperado, não fraude. O fit.trivial=false + surgical.files=[] continua
+    acusando, porque aí a ausência é ilegitima (SURGICAL pulado sem motivo).
+
+    fit.trivial=true com surgical.files populado também usa a regra antiga: o
+    usuário declarou arquivos explicitamente, o contrato é o mesmo.
+    """
     frauds: list[JudgeFraud] = []
     surgical = task_data.get("surgical", {})
     declared = {f.get("path") for f in surgical.get("files", []) if f.get("necessary")}
+    fit_trivial = task_data.get("fit", {}).get("trivial", False)
+
+    # SURGICAL pulado legitimamente pelo triviality gate → não há o que declarar.
+    if fit_trivial and not declared:
+        return frauds
+
     extra = [f for f in changed if f not in declared]
 
     if extra:

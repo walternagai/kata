@@ -1,0 +1,14 @@
+# Tarefa trivial com 3 arquivos pequenos. O triviality gate pulou SURGICAL
+# legitimamente, e surgical.files ficou vazio por decisão do gate.
+#
+# Sem a regra S2/CR-002, hunt_scope_creep contaria os 3 arquivos como não
+# declarados → scope_creep [high] → REFUTED (falso positivo, exatamente o
+# problema que motivou este cenário). Com a regra, fit.trivial=true +
+# surgical.files=[] é tratado como SURGICAL pulado legitimamente e o veredito
+# é VERIFIED.
+#
+# Kata visível (kata_visivel: false default): o harness esconde .kata/ do git,
+# então o judge vê apenas os 3 arquivos de src/ e tests/ — sem o YAML da
+# própria tarefa. É o mesmo ambiente dos cenários s01..s14.
+expected_verdict: "VERIFIED"
+expected_frauds: []

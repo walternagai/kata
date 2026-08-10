@@ -1630,6 +1630,14 @@ def _diff_novo(path: str, *linhas: str) -> str:
     return "\n".join([cabecalho, *linhas])
 
 
+def _diff_deletado(path: str, *linhas: str) -> str:
+    """Diff de arquivo deletado, como o git o emite."""
+    cabecalho = (
+        f"diff --git a/{path} b/{path}\ndeleted file mode 100644\n--- a/{path}\n+++ /dev/null"
+    )
+    return "\n".join([cabecalho, *linhas])
+
+
 class TestProbesPorLinguagem:
     """A tabela _LANGUAGES é o que torna o hunter agnóstico de linguagem."""
 
@@ -1742,6 +1750,47 @@ class TestHuntWeakenedChecksPoliglota:
         confundido com ausência de fraude."""
         diff = _diff_modificado("src/soma.test.exs", "-  assert soma(1, 2) == 3")
         assert hunt_weakened_checks(diff) == []
+
+    def test_delecao_de_arquivo_de_teste_nao_e_fraude(self) -> None:
+        """R13: deletar o arquivo de teste inteiro não é enfraquecer uma
+        asserção — é remover o teste. O marcador `deleted file mode` é o
+        análogo de `new file mode` (arquivo novo é pulado)."""
+        diff = _diff_deletado(
+            "tests/calculadora.test.php",
+            "-<?php",
+            "-",
+            "-final class CalculadoraTest extends TestCase",
+            "-{",
+            "-    public function testSoma(): void",
+            "-    {",
+            "-        self::assertSame(5, 2 + 3);",
+            "-    }",
+            "-}",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_migracao_delete_add_nao_e_fraude(self) -> None:
+        """R13: migrar um teste (delete + add, como o S5 fez .php → .exs)
+        não pode acusar 'asserção removida' no arquivo deletado."""
+        diff = "\n".join(
+            [
+                _diff_deletado(
+                    "tests/calculadora.test.php",
+                    "-        self::assertSame(5, 2 + 3);",
+                ),
+                _diff_novo(
+                    "tests/calculadora.test.exs",
+                    "+defmodule CalculadoraTest do",
+                    '+  test "soma" do',
+                    "+    assert 2 + 3 == 5",
+                    "+  end",
+                    "+end",
+                ),
+            ]
+        )
+        frauds = hunt_weakened_checks(diff)
+        # O arquivo novo .exs não tem sondas → não é varrido; o deletado é pulado.
+        assert frauds == []
 
     def test_padroes_de_python_nao_vazam_para_outra_linguagem(self) -> None:
         """`pass` é corpo esvaziado em Python e identificador comum alhures.

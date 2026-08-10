@@ -806,6 +806,7 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
     frauds: list[JudgeFraud] = []
     current_file = ""
     is_new_file = False
+    is_deleted_file = False
     new_test_bodies: dict[str, list[str]] = {}
 
     for line in diff.split("\n"):
@@ -813,8 +814,15 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
             parts = line.split()
             current_file = parts[3].replace("b/", "", 1) if len(parts) >= 4 else ""
             is_new_file = False
+            is_deleted_file = False
         elif line.startswith("new file mode"):
             is_new_file = True
+        elif line.startswith("deleted file mode"):
+            # R13: deletar o arquivo de teste inteiro não é enfraquecer uma
+            # asserção — é remover o teste. O análogo de `new file mode`
+            # (arquivo novo é pulado porque "enfraquecer" pressupõe algo que
+            # existia antes): arquivo deletado também é pulado.
+            is_deleted_file = True
         if not current_file or not _is_test_file(current_file):
             continue
         probes = probes_for(current_file)
@@ -825,6 +833,8 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
         if is_new_file:
             if line.startswith("+"):
                 new_test_bodies.setdefault(current_file, []).append(line)
+            continue
+        if is_deleted_file:
             continue
         for pattern, desc in probes.weakened:
             if re.match(pattern, line):

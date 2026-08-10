@@ -48,7 +48,7 @@ FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK →
 | TWIN CHECK | Se um defeito foi corrigido, buscar o mesmo padrão no projeto inteiro |
 | ARTIFACT | Verificar que todas as linhas devidas (INTENT/AUTH/PENDING/TWINS) estão presentes |
 | REPORT | Relatório outcome-first: resultado na primeira linha, verificações, caveats honestos, INTENT/AUTH/PENDING/TWINS lines |
-| JUDGE *(opcional)* | Verificação adversarial — re-executa verificações, caça 6 tipos de fraude, entrega veredito VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED |
+| JUDGE *(opcional)* | Verificação adversarial — re-executa verificações, caça 7 tipos de fraude, entrega veredito VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED |
 
 A fase FIT é inspirada no **triviality gate** e **fit gate**; a fase JUDGE
 é inspirada no **fable-judge** do

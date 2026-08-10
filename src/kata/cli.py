@@ -229,6 +229,36 @@ def _pick_task() -> str:
     return name
 
 
+def _resolve_task_or_suggest(task: str) -> Path | None:
+    """Resolve o caminho da task ou imprime mensagem específica e retorna None.
+
+    CR-004 (S1): três call sites (--report, --judge, --audit) caíam na mesma
+    mensagem vaga "não encontrado. Execute o ciclo primeiro" para casos
+    distintos. Esta função distingue:
+
+      a) repo sem nenhuma task em .kata/  → sugere `kata --init <nome>`
+      b) há tasks mas `task` (vindo de _pick_task ou --task) não bate       →
+         lista as existentes
+      c) a task existe mas o YAML não (improvável; corrida)                  →
+         mensagem original
+
+    Retorna o Path se a task existe, None se não existe (já tendo imprimido
+    a mensagem de erro adequada). O caller decide se faz sys.exit(1).
+    """
+    path = _task_path(task)
+    if path.exists():
+        return path
+    existentes = sorted(p.stem for p in _kata_dir().glob(f"*{_ext()}") if p.stem != "config")
+    if not existentes:
+        print(f"⚠  Nenhuma tarefa em {_kata_dir()}. Rode `kata --init <nome>` primeiro.")
+        return None
+    print(f"⚠  {path.name} não encontrado. Tarefas existentes em {_kata_dir()}:")
+    for i, name in enumerate(existentes, 1):
+        print(f"  {i}. {name}")
+    print("Rode `kata --task <nome>`, ou crie uma nova com `kata --init <nome>`.")
+    return None
+
+
 def _run_git(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     """Executa um comando git capturando saída, com defaults sobrescreíveis.
 
@@ -1710,9 +1740,8 @@ def main() -> None:
     # Modo --report (outcome-first)
     if args.report:
         task = args.task or _pick_task()
-        path = _task_path(task)
-        if not path.exists():
-            print(f"⚠  {path} não encontrado. Execute o ciclo primeiro.")
+        path = _resolve_task_or_suggest(task)
+        if path is None:
             sys.exit(1)
         data = _deserialize(path.read_text(encoding="utf-8"))
         _step_report(task, data)
@@ -1725,9 +1754,8 @@ def main() -> None:
     # Modo --judge (adversarial verification)
     if args.judge:
         task = args.task or _pick_task()
-        path = _task_path(task)
-        if not path.exists():
-            print(f"⚠  {path} não encontrado. Execute o ciclo primeiro.")
+        path = _resolve_task_or_suggest(task)
+        if path is None:
             sys.exit(1)
         data = _deserialize(path.read_text(encoding="utf-8"))
         _print_header(f"JUDGE — Verificação adversarial de '{task}'")
@@ -1757,9 +1785,8 @@ def main() -> None:
     # Modo --audit (graduação followed/skipped/faked)
     if args.audit:
         task = args.task or _pick_task()
-        path = _task_path(task)
-        if not path.exists():
-            print(f"⚠  {path} não encontrado. Execute o ciclo primeiro.")
+        path = _resolve_task_or_suggest(task)
+        if path is None:
             sys.exit(1)
         data = _deserialize(path.read_text(encoding="utf-8"))
         _print_header(f"AUDIT — Graduação das fases de '{task}'")

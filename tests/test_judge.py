@@ -1955,6 +1955,10 @@ class TestPromptDaFaseBateComOsHunters:
     e `make check-skills` passava — o gerado estava fiel a uma fonte errada.
     Este teste deriva a verdade de judge.py, então a tabela não pode envelhecer
     de novo em silêncio.
+
+    CR-001 (S1): estendido para varrer também `phases/kata.md` (orquestrador) —
+    antes só `kata-judge.md` era coberto, e o drift voltou exatamente na fonte
+    que o agente lê primeiro.
     """
 
     def _emitidos(self) -> set[str]:
@@ -1976,4 +1980,37 @@ class TestPromptDaFaseBateComOsHunters:
         assert int(declarada.group(1)) == len(self._emitidos()), (
             f"o prompt declara {declarada.group(1)} fraudes e judge.py emite "
             f"{len(self._emitidos())}"
+        )
+
+    def test_a_contagem_no_orquestrador_bate_com_a_implementacao(self) -> None:
+        """CR-001: phases/kata.md (fonte do agente/skill do orquestrador) também
+        precisa refletir a contagem real de fraudes. Sem este teste, o drift
+        '6 tipos de fraude' voltou em kata.md sem ser pego pela suíte.
+        """
+        prompt = (REPO / "phases" / "kata.md").read_text(encoding="utf-8")
+        n_emitidos = len(self._emitidos())
+        declarado = re.search(r"ca[çc]a\s+(\d+)\s+tipos?\s+de\s+fraude", prompt)
+        assert declarado is not None, (
+            "phases/kata.md perdeu a frase 'caça N tipos de fraude' na seção JUDGE"
+        )
+        assert int(declarado.group(1)) == n_emitidos, (
+            f"phases/kata.md declara {declarado.group(1)} tipos de fraude e judge.py "
+            f"emite {n_emitidos}. Atualize kata.md e rode `make build-skills`."
+        )
+
+    def test_pkg_init_declara_9_fases(self) -> None:
+        """CR-003: src/kata/__init__.py docstring tem que mencionar '9 fases'.
+
+        O ciclo tem 9 fases (FIT, THINK, SIMPLIFY, INTENT, SURGICAL, VERIFY,
+        TWIN CHECK, ARTIFACT, REPORT) — TWIN CHECK é a 7ª, omitida por
+        contagens que dizem '8 fases'. Antes deste teste ninguém pegou.
+        """
+        init = (REPO / "src" / "kata" / "__init__.py").read_text(encoding="utf-8")
+        assert "9 fases" in init or "nove fases" in init, (
+            "src/kata/__init__.py docstring deveria dizer '9 fases' (o ciclo tem 9 "
+            "incluindo TWIN CHECK); atualmente diz outra coisa. Atualize."
+        )
+        assert "8 fases" not in init and "oito fases" not in init, (
+            "src/kata/__init__.py docstring ainda menciona '8 fases' — drift com "
+            "o resto do repo (README, AGENTS, phases, frontends gerados)."
         )

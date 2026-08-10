@@ -3228,3 +3228,67 @@ class TestAvisaDomainDesconhecido:
         assert "banana" in saida
         assert "não tem adapter conhecido" in saida
         assert "devops" in saida  # lista os disponíveis
+
+
+class TestResolveTaskOrSuggest:
+    """CR-004 (S1): --report/--judge/--audit sem task agora distinguem 3 casos.
+
+    Antes, todos caíam em "não encontrado. Execute o ciclo primeiro". Agora:
+      a) repo sem tasks → sugere `kata --init <nome>`
+      b) há tasks mas a solicitada não bate → lista as existentes
+      c) task existe → retorna o Path
+    """
+
+    def test_repo_sem_tasks_sugere_init(self, tmp_path, monkeypatch, capsys) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        result = cli._resolve_task_or_suggest("foo")
+        assert result is None
+        saida = capsys.readouterr().out
+        assert "Nenhuma tarefa" in saida
+        assert "kata --init" in saida
+
+    def test_task_existente_retorna_path(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        (kata_dir / "foo.yaml").write_text("task: foo\n", encoding="utf-8")
+        result = cli._resolve_task_or_suggest("foo")
+        assert result is not None
+        assert result.exists()
+        assert result.name == "foo.yaml"
+
+    def test_task_inexistente_lista_existentes(self, tmp_path, monkeypatch, capsys) -> None:
+        monkeypatch.chdir(tmp_path)
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        (kata_dir / "alpha.yaml").write_text("task: alpha\n", encoding="utf-8")
+        (kata_dir / "beta.yaml").write_text("task: beta\n", encoding="utf-8")
+        result = cli._resolve_task_or_suggest("foo")
+        assert result is None
+        saida = capsys.readouterr().out
+        assert "foo.yaml não encontrado" in saida
+        assert "alpha" in saida
+        assert "beta" in saida
+        assert "kata --task" in saida
+
+    def test_config_yaml_e_outros_nao_listados_como_tarefas(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """`config.yaml` não é uma tarefa — não pode aparecer no menu."""
+        monkeypatch.chdir(tmp_path)
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        (kata_dir / "config.yaml").write_text("kata: v1\n", encoding="utf-8")
+        (kata_dir / "real.yaml").write_text("task: real\n", encoding="utf-8")
+        result = cli._resolve_task_or_suggest("foo")
+        assert result is None
+        saida = capsys.readouterr().out
+        # 'config' pode aparecer no path, mas NÃO como item numerado da lista.
+        # Verifica que o nome do arquivo `config.yaml` não está nas linhas
+        # de tarefas listadas.
+        linhas_tarefas = [
+            ln for ln in saida.splitlines() if ln.strip().startswith(("1.", "2.", "3."))
+        ]
+        assert all("config" not in ln for ln in linhas_tarefas)
+        assert any("real" in ln for ln in linhas_tarefas)

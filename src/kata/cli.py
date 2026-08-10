@@ -857,6 +857,15 @@ def _step_verify(
 
     data["verify"] = verify
     data["status"] = "approved" if all_ok else "rejected"
+    if all_ok:
+        # R14: approved_commit marca o FIM do trabalho da tarefa — o HEAD no
+        # momento da aprovação. O JUDGE diffa base_commit..approved_commit
+        # (em vez de base_commit..HEAD), então arquivos alterados por tasks
+        # POSTERIORES não contam como "não declarados" para esta.
+        result = _run_git(["git", "rev-parse", "HEAD"])
+        sha = result.stdout.strip()
+        if result.returncode == 0 and sha:
+            data["approved_commit"] = sha
 
     # Resumo
     print()

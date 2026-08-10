@@ -519,6 +519,36 @@ class TestStepVerify:
 
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
+    def test_step_verify_approved_grava_approved_commit(
+        self, mock_run_all, mock_confirm, capsys, tmp_path, monkeypatch
+    ) -> None:
+        """R14: ao aprovar, _step_verify grava approved_commit (HEAD atual) —
+        o teto do diff que o JUDGE usa para não contar tasks posteriores."""
+        monkeypatch.chdir(tmp_path)
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        (tmp_path / "x.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="10 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = True
+        result = cli._step_verify("my-task", {})
+        assert result["status"] == "approved"
+        assert result["approved_commit"] == head
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
     def test_step_verify_ruff_fails(self, mock_run_all, mock_confirm, capsys) -> None:
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=False, output="F401 unused import"),

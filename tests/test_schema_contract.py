@@ -175,6 +175,8 @@ def test_template_do_init_cobre_o_schema_documentado(arquivo: str, tmp_path, mon
 
     # base_commit só existe dentro de um repo git; o template o omite fora dele.
     documentado.discard("base_commit")
+    # approved_commit (R14) só é gravado no approve; o template do --init o omite.
+    documentado.discard("approved_commit")
     faltando = sorted(documentado - gerado)
     assert not faltando, f"template de --init não tem: {faltando}"
 

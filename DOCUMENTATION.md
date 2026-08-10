@@ -569,6 +569,11 @@ done: ""    # Fable Step 1: done criterion declared in THINK, before the
 base_commit: ""    # HEAD captured when the task started; lets JUDGE diff
                     # against it even after the task has been committed.
                     # The CLI also stores an independent Git ref anchor.
+approved_commit: ""  # R14: HEAD at the moment of approval. JUDGE diffs
+                    # base_commit..approved_commit instead of base_commit..HEAD,
+                    # so files changed by LATER tasks don't count as
+                    # "undeclared" for this one. Absent in legacy tasks
+                    # (approved before this round) — they keep diffing to HEAD.
 fit:
   trivial: false
   route: code-loop

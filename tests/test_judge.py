@@ -1144,6 +1144,47 @@ class TestJudgeTaskDetectsCommittedFraud:
 
         assert _read_baseline_ref("tarefa", cwd=tmp_path) == base
 
+    def test_approved_commit_limita_o_diff_do_scope_creep(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """R14: approved_commit é o TETO do diff. Arquivos alterados por tasks
+        POSTERIORES (depois da aprovação) não contam como 'não declarados'."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        # Tarefa altera src.py e é aprovada
+        (tmp_path / "src.py").write_text("x = 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "tarefa"], cwd=tmp_path, check=True)
+        approved = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        # Task POSTERIOR altera outro arquivo (não declarado nesta tarefa)
+        (tmp_path / "outro.py").write_text("y = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "task posterior"], cwd=tmp_path, check=True)
+
+        # Sem approved_commit: outro.py conta como não declarado → scope_creep
+        task = {
+            "task": "tarefa",
+            "base_commit": base,
+            "surgical": {"files": [{"path": "src.py", "necessary": True}]},
+            "verify": {},
+        }
+        result = judge_task(task, cwd=tmp_path)
+        assert any(f.type == "scope_creep" for f in result.frauds)
+
+        # Com approved_commit: o diff para em approved → outro.py não conta
+        task["approved_commit"] = approved
+        result = judge_task(task, cwd=tmp_path)
+        assert not any(f.type == "scope_creep" for f in result.frauds)
+
     def test_baseline_nao_resolve_mais_vira_blind_spot(
         self, repo_git, tmp_path, monkeypatch
     ) -> None:

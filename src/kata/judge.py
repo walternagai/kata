@@ -514,13 +514,20 @@ def _untracked_diff(files: list[str], cwd: Path | None = None) -> str:
     return "\n".join(chunks)
 
 
-def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> str:
+def _run_git_diff(
+    cwd: Path | None = None, base_commit: str | None = None, diff_end: str | None = None
+) -> str:
     """Retorna o diff da tarefa.
 
     Se `base_commit` (o HEAD registrado quando a tarefa começou, na fase
     FIT) estiver disponível, usa `git diff <base_commit>` — cobre commits,
     staged e unstaged de uma vez, então continua funcionando depois que a
     tarefa é commitada (o caso normal de uma tarefa "concluída").
+
+    `diff_end` (R14): o approved_commit — HEAD no momento da aprovação.
+    Quando presente, o diff é `git diff <base_commit> <diff_end>`: arquivos
+    alterados por tasks posteriores não contam como "não declarados" para
+    esta. Sem diff_end, o diff vai até HEAD.
 
     Sem base_commit (tarefas antigas, ou geradas fora do ciclo FIT), usa o
     diff contra HEAD para incluir staged e unstaged, com fallback para
@@ -531,7 +538,10 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
     ficaria invisível aos hunters.
     """
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
-        diff = _run(["git", "diff", base_commit], cwd=cwd).stdout
+        if diff_end:
+            diff = _run(["git", "diff", base_commit, diff_end], cwd=cwd).stdout
+        else:
+            diff = _run(["git", "diff", base_commit], cwd=cwd).stdout
     else:
         result = _run(["git", "diff", "HEAD"], cwd=cwd)
         if result.returncode != 0:
@@ -544,11 +554,16 @@ def _run_git_diff(cwd: Path | None = None, base_commit: str | None = None) -> st
     return f"{diff}\n{untracked}" if untracked else diff
 
 
-def _changed_files(cwd: Path | None = None, base_commit: str | None = None) -> list[str]:
+def _changed_files(
+    cwd: Path | None = None, base_commit: str | None = None, diff_end: str | None = None
+) -> list[str]:
     """Retorna a lista de arquivos alterados pela tarefa (mesma lógica de _run_git_diff)."""
     result = None
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
-        result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
+        if diff_end:
+            result = _run(["git", "diff", "--name-only", base_commit, diff_end], cwd=cwd)
+        else:
+            result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
     else:
         try:
             result = _run(["git", "diff", "HEAD", "--name-only"], cwd=cwd)
@@ -1120,6 +1135,16 @@ def judge_task(
                 )
             diff_base = anchor
 
+    # R14: approved_commit (HEAD no momento da aprovação) é o TETO do diff.
+    # Sem ele, o judge diffa base_commit..HEAD e arquivos alterados por tasks
+    # posteriores contam como "não declarados" para esta — o scope_creep
+    # estrutural que REFUTED 22 tasks antigas. Tasks sem approved_commit
+    # (antigas, ou aprovadas antes desta rodada) continuam diffando até HEAD.
+    approved_commit = task_data.get("approved_commit")
+    diff_end = None
+    if approved_commit and _base_commit_resolves(str(approved_commit), cwd=cwd):
+        diff_end = str(approved_commit)
+
     if diff_base:
         if not _base_commit_resolves(str(diff_base), cwd=cwd):
             blind_spots.append("baseline não resolve mais no histórico Git")
@@ -1135,8 +1160,8 @@ def judge_task(
             )
             diff_base = None
 
-    diff = _run_git_diff(cwd=cwd, base_commit=diff_base)
-    changed = _changed_files(cwd=cwd, base_commit=diff_base)
+    diff = _run_git_diff(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
+    changed = _changed_files(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
     claims = collect_claims(task_data)
     unverifiable = collect_unverifiable_claims(task_data)
 

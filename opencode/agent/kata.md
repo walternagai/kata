@@ -145,6 +145,12 @@ base_commit: ""       # HEAD do git no início da tarefa; usado pelo JUDGE
                         # para comparar mesmo depois que a tarefa é commitada.
                         # O CLI também ancora este SHA em refs/kata/base/*;
                         # divergência entre YAML e Git invalida o JUDGE.
+approved_commit: ""   # R14: HEAD no momento da aprovação. O JUDGE diffa
+                        # base_commit..approved_commit em vez de base_commit..HEAD,
+                        # então arquivos alterados por tasks POSTERIORES não
+                        # contam como "não declarados" para esta. Ausente em
+                        # tasks antigas (aprovadas antes desta rodada) — elas
+                        # continuam diffando até HEAD.
 fit:
   trivial: false
   route: code-loop     # code-loop | plan-first | question | research | inference

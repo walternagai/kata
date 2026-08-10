@@ -38,6 +38,19 @@ class TestSerializeDeserialize:
         result = cli._deserialize(cli._serialize({}))
         assert result == {}
 
+    def test_yaml_malformado_levanta_value_error(self) -> None:
+        """R12: YAML malformado não pode crashar com traceback — levanta
+        ValueError nomeado para o call site tratar (doutrina R11-1)."""
+        malformado = "assumptions:\n  - 'string com : não quotada'\n    quebra o yaml\n"
+        with pytest.raises(ValueError, match="ilegível"):
+            cli._deserialize(malformado)
+
+    def test_json_invalido_levanta_value_error(self, monkeypatch) -> None:
+        """R12: JSON inválido (sem PyYAML) também vira ValueError nomeado."""
+        monkeypatch.setattr("kata.cli._HAS_YAML", False)
+        with pytest.raises(ValueError, match="ilegível"):
+            cli._deserialize("{não é json")
+
 
 class TestExt:
     """Testa a extensão de arquivo (.yaml ou .json)."""
@@ -3328,3 +3341,35 @@ class TestResolveTaskOrSuggest:
         ]
         assert all("config" not in ln for ln in linhas_tarefas)
         assert any("real" in ln for ln in linhas_tarefas)
+
+
+class TestLoadTaskOrExit:
+    """R12: arquivo de tarefa malformado não pode crashar com traceback.
+
+    Doutrina R11-1: traceback sai com código 1, o mesmo de REFUTED — arquivo
+    quebrado virava indistinguível de fraude encontrada para quem lê o exit
+    code no CI. Agora _load_task_or_exit imprime mensagem clara e sai 1.
+    """
+
+    def test_arquivo_valido_retorna_dados(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        path = tmp_path / ".kata" / "t.yaml"
+        path.write_text("task: t\nstatus: draft\n", encoding="utf-8")
+        data = cli._load_task_or_exit(path)
+        assert data["task"] == "t"
+
+    def test_yaml_malformado_sai_com_mensagem(self, tmp_path, monkeypatch, capsys) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        path = tmp_path / ".kata" / "t.yaml"
+        path.write_text(
+            "assumptions:\n  - 'string com : não quotada'\n    quebra o yaml\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SystemExit) as exc_info:
+            cli._load_task_or_exit(path)
+        assert exc_info.value.code == 1
+        saida = capsys.readouterr().out
+        assert "ilegível" in saida
+        assert "Traceback" not in saida

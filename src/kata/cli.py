@@ -54,8 +54,10 @@ try:
     import yaml
 
     _HAS_YAML = True
+    _YAML_ERRORS: tuple[type[BaseException], ...] = (yaml.YAMLError,)
 except ImportError:
     _HAS_YAML = False
+    _YAML_ERRORS = ()
 
 # ── helpers ──────────────────────────────────────────────────────────────
 
@@ -110,9 +112,32 @@ def _save_task(path: Path, data: dict[str, Any]) -> None:
 
 
 def _deserialize(text: str) -> dict[str, Any]:
-    if _HAS_YAML:
-        return yaml.safe_load(text) or {}
-    return json.loads(text)
+    """Lê o YAML/JSON da tarefa, levantando ValueError nomeado se ilegível.
+
+    Doutrina R11-1: arquivo malformado não pode virar traceback — traceback
+    sai com código 1, o mesmo de REFUTED, tornando arquivo quebrado
+    indistinguível de fraude encontrada para quem lê o exit code no CI.
+    Os call sites capturam ValueError e imprimem mensagem clara.
+    """
+    try:
+        if _HAS_YAML:
+            return yaml.safe_load(text) or {}
+        return json.loads(text)
+    except (*_YAML_ERRORS, json.JSONDecodeError) as exc:
+        raise ValueError(f"arquivo de tarefa ilegível: {exc}") from exc
+
+
+def _load_task_or_exit(path: Path) -> dict[str, Any]:
+    """Lê e desserializa a tarefa, saindo com mensagem clara se ilegível.
+
+    R11-1: arquivo malformado não pode virar traceback (exit 1 = mesmo de
+    REFUTED). Mensagem nomeada + exit 1, sem stack trace.
+    """
+    try:
+        return _deserialize(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        print(f"⚠  {path.name}: {exc}")
+        sys.exit(1)
 
 
 def _ext() -> str:
@@ -1737,7 +1762,7 @@ def main() -> None:
         path = _task_path(args.init)
         if not created or not path.exists():
             return
-        data = _deserialize(path.read_text(encoding="utf-8"))
+        data = _load_task_or_exit(path)
         data = _capture_base_commit(data, task=args.init)
         _avisa_domain_desconhecido(data)
         _save_task(path, data)
@@ -1754,7 +1779,7 @@ def main() -> None:
         path = _resolve_task_or_suggest(task)
         if path is None:
             sys.exit(1)
-        data = _deserialize(path.read_text(encoding="utf-8"))
+        data = _load_task_or_exit(path)
         _step_report(task, data)
         # Só `rejected` é falha. Uma tarefa em andamento (draft,
         # think-complete — o estado normal de `--plan`) está funcionando como
@@ -1768,7 +1793,7 @@ def main() -> None:
         path = _resolve_task_or_suggest(task)
         if path is None:
             sys.exit(1)
-        data = _deserialize(path.read_text(encoding="utf-8"))
+        data = _load_task_or_exit(path)
         _print_header(f"JUDGE — Verificação adversarial de '{task}'")
         result = judge_task(
             data,
@@ -1799,7 +1824,7 @@ def main() -> None:
         path = _resolve_task_or_suggest(task)
         if path is None:
             sys.exit(1)
-        data = _deserialize(path.read_text(encoding="utf-8"))
+        data = _load_task_or_exit(path)
         _print_header(f"AUDIT — Graduação das fases de '{task}'")
         achados = _audit_task(data)
         _print_audit(achados)
@@ -1832,11 +1857,7 @@ def main() -> None:
     if not path.exists():
         _init_task(task)
 
-    data = (
-        _deserialize(path.read_text(encoding="utf-8"))
-        if path.exists()
-        else {"task": task, "status": "draft"}
-    )
+    data = _load_task_or_exit(path) if path.exists() else {"task": task, "status": "draft"}
     data = _capture_base_commit(data, task=task)
     _avisa_domain_desconhecido(data)
     _save_task(path, data)

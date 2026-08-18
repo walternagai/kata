@@ -3,7 +3,7 @@
 `parse_frauds` lê o formato humano que `cli._print_judge_verdict` imprime. O
 acoplamento é deliberado — um flag `--json` no CLI cujo único consumidor fosse
 o harness seria API especulativa — mas não pode ficar implícito: sem estes
-testes, mudar o layout de impressão reprovaria os 8 cenários com mensagens
+testes, mudar o layout de impressão reprovaria os cenários com mensagens
 sobre fraudes ausentes, e não sobre o parser.
 
 Aqui o formato é fixado pelas duas pontas: o judge imprime, o parser lê, e a

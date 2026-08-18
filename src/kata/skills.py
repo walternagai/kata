@@ -18,8 +18,12 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# As 10 fases. A ordem é a do ciclo, não alfabética, porque é assim que
-# aparecem no relatório do doctor e é assim que quem lê espera encontrá-las.
+# As skills de fase do ciclo. São 10 skills para 9 fases + JUDGE + QUESTION:
+# o ciclo real tem 9 fases (FIT, THINK, SIMPLIFY, INTENT, SURGICAL, VERIFY,
+# TWIN CHECK, ARTIFACT, REPORT) e o TWIN CHECK vive no orquestrador — JUDGE
+# e QUESTION são skills próprias fora das 9 (K-27). A ordem é a do ciclo,
+# não alfabética, porque é assim que aparecem no relatório do doctor e é
+# assim que quem lê espera encontrá-las.
 PHASE_SKILLS: tuple[str, ...] = (
     "kata-fit",
     "kata-think",

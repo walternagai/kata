@@ -51,7 +51,7 @@ class ScenarioError(Exception):
     """Falha ao preparar ou executar um cenário.
 
     Distinta de SystemExit de propósito: o problema é de um cenário, e derrubar
-    a suíte inteira por causa dele esconderia o resultado dos outros sete.
+    a suíte inteira por causa dele esconderia o resultado dos demais cenários.
     """
 
 
@@ -175,7 +175,7 @@ def init_git_repo(
     `kata_visivel` desliga essa exclusão. Ela imitava um projeto que ignora
     `.kata/`, mas o kata não pede isso a ninguém: `--init` não mexe no
     .gitignore e nenhum doc instrui a ignorá-lo. O efeito colateral foi que
-    os 14 cenários rodavam num ambiente onde o arquivo da própria tarefa era
+    os cenários rodavam num ambiente onde o arquivo da própria tarefa era
     invisível ao git — e o judge contá-lo como scope creep passou dez rodadas
     sem ser visto, inclusive pelo s07, que existe para pegar falso positivo
     (R11-3). Com isto, um cenário pode exigir o ambiente real.

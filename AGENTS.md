@@ -34,8 +34,8 @@ tests/          testes pytest (test_cli.py, test_config.py, test_fit.py,
                 DOCUMENTATION.md contra o código e o template do --init)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
-  skills/kata-*/SKILL.md 11 skills (10 fases + domain adapter kata-devops;
-                         TWIN CHECK vive no orquestrador)
+  skills/kata-*/SKILL.md 11 skills (9 fases + JUDGE + QUESTION + domain adapter
+                         kata-devops; TWIN CHECK vive no orquestrador)
 claude-code/    skills para o Claude Code
   skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
   skills/kata-*/SKILL.md as mesmas 11 skills (mesmo procedimento,

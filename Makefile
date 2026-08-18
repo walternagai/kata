@@ -31,7 +31,7 @@ check-skills:
 # === Desenvolvimento ===
 
 test:
-	python3 -m pytest tests/ -v --cov=kata --cov=build_skills --cov=run_traps --cov-report=term-missing
+	python3 -m pytest tests/ -v --cov --cov-report=term-missing
 
 lint:
 	python3 -m ruff check src/ tests/ eval/ scripts/

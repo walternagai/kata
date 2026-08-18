@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala o agente @kata e as 10 skills no OpenCode via symlinks.
+# Instala o agente @kata e as skills de fase (9 fases + JUDGE + QUESTION) no OpenCode via symlinks.
 #
 # Uso:
 #   bash scripts/install.sh             # instalar
@@ -138,6 +138,24 @@ uninstall() {
             echo "  ⚠  skills/$skill não é symlink — não foi criado por nós (pulando)"
         fi
     done
+
+    # K-22: symlinks órfãos — skills renomeadas/removidas do repo não estão
+    # mais em SKILLS (que vem do filesystem atual), então o laço acima não as
+    # encontra. Varre tudo cujo alvo resolva para DENTRO do catálogo do kata
+    # (prefixo, não igualdade: o alvo é $KATA_DIR/opencode/skills/<nome>) e
+    # remove: sem isto, `make uninstall` deixava instalação parcial
+    # permanente que o --doctor vê como link quebrado.
+    if [[ -d "$CONFIG_DIR/skills" ]]; then
+        catalogo_real="$(canonicalize "$KATA_DIR/opencode/skills")"
+        for orfao in "$CONFIG_DIR"/skills/*; do
+            [[ -L "$orfao" ]] || continue
+            alvo_real="$(canonicalize "$orfao")"
+            if [[ -n "$alvo_real" && -n "$catalogo_real" && "$alvo_real" == "$catalogo_real"/* ]]; then
+                rm "$orfao"
+                echo "  ✅ removido symlink órfão skills/$(basename "$orfao")"
+            fi
+        done
+    fi
 
     echo ""
     echo "✅ Kata removido."

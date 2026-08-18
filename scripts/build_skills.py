@@ -197,6 +197,11 @@ def _verifica_balanceamento(texto: str, origem: str) -> None:
     visíveis na skill instalada de TODOS os frontends, e o --check comparava
     gerado contra gerado — passando com o arquivo corrompido. O mesmo
     contrato de variável não declarada (erro, não literal) vale aqui.
+
+    K-24: `<!--if:-->` com lista de nomes VAZIA também é erro — a contagem
+    de pares casava (a substring `<!--if:` existe), mas o regex de resolução
+    exige 1+ nomes e o bloco vazava literalmente para o gerado. Um marcador
+    sem nomes não tem significado; é typo, não conteúdo condicional.
     """
     for marca in _MARCADORES:
         abre = len(re.findall(rf"<!--{marca}:", texto))
@@ -205,6 +210,12 @@ def _verifica_balanceamento(texto: str, origem: str) -> None:
             raise ValueError(
                 f"{origem}: marcador <!--{marca}:--> sem fechamento correspondente "
                 f"({abre} abertura(s), {fecha} fechamento(s))"
+            )
+        vazios = re.findall(rf"<!--{marca}:-->", texto)
+        if vazios:
+            raise ValueError(
+                f"{origem}: marcador <!--{marca}:--> sem nomes ({len(vazios)} "
+                "ocorrência(s)) — vazaria literal para o gerado"
             )
 
 
@@ -287,6 +298,17 @@ def _destino(slug: str, frontend: str) -> Path:
     return REPO / spec["fase"].format(slug=slug)
 
 
+def _destino_dir(frontend: str) -> Path:
+    """Diretório onde as skills de fase de um frontend são geradas.
+
+    `fase` é `opencode/skills/{slug}/SKILL.md`; o diretório que agrupa as
+    skills é dois níveis acima do arquivo (skills/<slug>/SKILL.md).
+    """
+    spec = FRONTENDS[frontend]
+    caminho = REPO / spec["fase"].format(slug="kata-fit")
+    return caminho.parent.parent
+
+
 def _fontes() -> list[Path]:
     if not FONTE.is_dir():
         raise SystemExit(f"fonte não encontrada: {FONTE}")
@@ -321,6 +343,7 @@ def build(check: bool = False) -> int:
     """Gera (ou confere) todos os arquivos. Retorna a contagem de divergências."""
     validate_frontends()
     divergentes: list[str] = []
+    gerados = set()
 
     for caminho in _fontes():
         slug = caminho.stem
@@ -331,6 +354,7 @@ def build(check: bool = False) -> int:
                 str(caminho.relative_to(REPO)),
             )
             destino = _destino(slug, frontend)
+            gerados.add(destino)
             atual = destino.read_text(encoding="utf-8") if destino.exists() else None
 
             if atual == saida:
@@ -341,6 +365,28 @@ def build(check: bool = False) -> int:
             destino.parent.mkdir(parents=True, exist_ok=True)
             destino.write_text(saida, encoding="utf-8")
             print(f"  ✅ {destino.relative_to(REPO)}")
+
+    # K-24: gerados órfãos — deletar phases/kata-x.md deixa o SKILL.md
+    # correspondente nos dois frontends sem fonte. O --check só compara o que
+    # existe, então passava com a skill morta; e os instaladores derivam a
+    # lista do filesystem e linkam o órfão. Remover (ou denunciar no --check)
+    # o que não tem fonte correspondente.
+    for frontend in FRONTENDS:
+        dest_dir = _destino_dir(frontend)
+        if not dest_dir.exists():
+            continue
+        for filho in dest_dir.iterdir():
+            if not filho.is_dir():
+                continue
+            destino = filho / "SKILL.md"
+            if destino in gerados or not destino.exists():
+                continue
+            rel = str(destino.relative_to(REPO))
+            if check:
+                divergentes.append(f"{rel} (órfão — sem fonte em phases/)")
+                continue
+            filho.unlink() if not any(filho.iterdir()) else destino.unlink()
+            print(f"  🗑  {rel} (órfão — fonte removida)")
 
     if check and divergentes:
         print("Arquivos gerados divergem da fonte em phases/:")

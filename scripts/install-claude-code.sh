@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala a skill @kata e as 10 skills de fase no Claude Code via symlinks.
+# Instala a skill @kata e as skills de fase (9 fases + JUDGE + QUESTION) no Claude Code via symlinks.
 #
 # Uso:
 #   bash scripts/install-claude-code.sh             # instalar
@@ -118,6 +118,23 @@ uninstall() {
             echo "  ⚠  skills/$skill não é symlink — não foi criado por nós (pulando)"
         fi
     done
+
+    # K-22: symlinks órfãos — skills renomeadas/removidas do repo não estão
+    # mais em SKILLS (que vem do filesystem atual), então o laço acima não as
+    # encontra. Varre tudo cujo alvo resolva para DENTRO do catálogo do kata
+    # (prefixo, não igualdade) e remove: sem isto, `make uninstall` deixava
+    # instalação parcial permanente que o --doctor vê como link quebrado.
+    if [[ -d "$CONFIG_DIR/skills" ]]; then
+        catalogo_real="$(canonicalize "$KATA_DIR/claude-code/skills")"
+        for orfao in "$CONFIG_DIR"/skills/*; do
+            [[ -L "$orfao" ]] || continue
+            alvo_real="$(canonicalize "$orfao")"
+            if [[ -n "$alvo_real" && -n "$catalogo_real" && "$alvo_real" == "$catalogo_real"/* ]]; then
+                rm "$orfao"
+                echo "  ✅ removido symlink órfão skills/$(basename "$orfao")"
+            fi
+        done
+    fi
 
     echo ""
     echo "✅ Kata removido."

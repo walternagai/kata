@@ -5,7 +5,7 @@ description: Fase JUDGE do ciclo Karpathy (kata). Verificação adversarial de t
 
 # Skill: kata-judge
 
-Fase 5 do Karpathy Development Cycle — **JUDGE** (adversarial verification).
+Fase 6 do Karpathy Development Cycle — **JUDGE** (adversarial verification).
 
 Inspirado no **fable-judge** do [The Fable Method](https://github.com/Sahir619/fable-method),
 que trata um relatório como um conjunto de claims e não acredita em nada
@@ -77,8 +77,8 @@ Seis disparam hoje:
    reproduzir, então nada é re-executado. Declarar os comandos do projeto em
    `.kata/config.yaml` é o que desarma este ponto cego.
 2. **Teste em linguagem sem sondas** — o juiz conhece a sintaxe de Python,
-   JS/TS, Go, Ruby, Rust e Java/Kotlin. Um teste fora dessa lista (`.php`,
-   `.swift`, `.exs`…) não pode ser lido, e o juiz diz isso em vez de calar.
+   JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP e Swift. Um teste fora dessa
+   lista (`.exs`…) não pode ser lido, e o juiz diz isso em vez de calar.
 3. **Código/teste ignorado pelo Git** — candidatos relevantes sob `.gitignore`
    não entram no diff e são listados como ponto cego.
 4. **Seção da tarefa ilegível** — `verify`, `surgical`, `intent` ou `artifact`

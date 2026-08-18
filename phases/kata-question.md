@@ -82,22 +82,24 @@ A rota `question` é escolhida quando o usuário quer entender algo antes de dec
 2. **Colete evidências** — use {{RUN}}, {{READ}} e {{SEARCH}} para obter dados.
 3. **Não altere código** — a menos que o usuário autorize explicitamente.
 4. **Entregue achados** — organize em: contexto, evidências, recomendação.
-5. **Registre** em `.kata/<task>.yaml` (via {{WRITE}}/{{EDIT}}) sob `question` e finalize o ciclo.
+5. **Registre** em `.kata/<task>.yaml` (via {{WRITE}}/{{EDIT}}) e finalize o ciclo.
+
+> A rota `question` NÃO tem seção própria no schema: o audit, o relatório e o
+> judge não leem `question:` no YAML (K-19). Registre os achados nas chaves
+> existentes — `think.problem`/`think.unknowns` para contexto e `fit.reason`
+> para a recomendação — e deixe `status` como `think-complete`: o CLI para
+> após o THINK nesta rota e não aprova a tarefa.
 
 ```yaml
-status: approved
+status: think-complete
 fit:
   trivial: false
   route: question
-  reason: "Usuário perguntou por que cobertura caiu no módulo X"
-question:
-  question: "Por que a cobertura caiu no módulo X?"
-  findings: |
-    - Arquivo X.py adicionou 120 linhas sem testes
-    - Função Y não é chamada por nenhum teste
-  recommendation: "Adicionar testes para Y e extrair lógica testável"
-  action_taken: false
-  user_approved: false
+  reason: "Diagnóstico: cobertura caiu no módulo X — achados: 120 linhas sem teste em X.py, função Y sem chamada; recomendação: testar Y e extrair lógica testável. Usuário não autorizou alteração."
+think:
+  problem: "Por que a cobertura caiu no módulo X?"
+  unknowns: "RESOLVIDO: X.py ganhou 120 linhas sem testes; Y não é chamada por teste nenhum."
+  answered: true
 ```
 
 ## Uso geral de perguntas

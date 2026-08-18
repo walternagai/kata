@@ -100,7 +100,7 @@ src/kata/
   re-runs claimed checks, and hunts seven fraud categories: weakened checks, false completion, scope
   creep, unauthorized action, spec betrayal, debris, and baseline tampering (the YAML's `base_commit`
   diverging from the Git anchor recorded at task start). Weakening patterns are per-language
-  (`_LANGUAGES`: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin); a test in an unlisted language becomes a
+  (`_LANGUAGES`: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift); a test in an unlisted language becomes a
   declared blind spot instead of silence. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
   (medium/low findings only), `UNVERIFIABLE` (no fraud, but nothing could be
   observed — one of six blind spots), `REFUTED` (any high-severity finding).

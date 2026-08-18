@@ -137,6 +137,28 @@ def test_uninstall_cleans_nested_orphan(script, env_var, src, tmp_path) -> None:
     assert (alvo / "NOTAS.md").read_text(encoding="utf-8") == "do usuário"
 
 
+@pytest.mark.parametrize("script,env_var,src", INSTALADORES)
+def test_uninstall_removes_orphan_of_renamed_skill(script, env_var, src, tmp_path) -> None:
+    """K-22: skill renomeada/removida do repo deixa symlink órfão que o
+    catálogo atual (vindo do filesystem) não conhece. O uninstall precisa
+    varrer o diretório e remover todo link cujo alvo resolva para dentro
+    do catálogo do kata — sem isto, instalação parcial permanente."""
+    skills = tmp_path / "skills"
+    skills.mkdir(parents=True)
+    orfao = skills / "kata-skill-antiga"
+    orfao.symlink_to(REPO / src / "kata-fit", target_is_directory=True)
+    # Link de terceiros apontando para fora do catálogo — intocado
+    estranho = skills / "link-terceiro"
+    estranho.symlink_to(tmp_path / "destino", target_is_directory=True)
+    (tmp_path / "destino").mkdir()
+
+    result = _run(script, env_var, tmp_path, "--uninstall")
+
+    assert result.returncode == 0, result.stderr
+    assert not orfao.is_symlink()
+    assert estranho.is_symlink()
+
+
 def test_agent_file_is_not_overwritten(tmp_path) -> None:
     """Só o instalador do OpenCode liga um arquivo (o agente): `ln -sf`
     substituiria o arquivo do usuário sem aviso."""

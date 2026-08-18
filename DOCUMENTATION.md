@@ -108,7 +108,7 @@ src/kata/
 
 phases/                           SINGLE SOURCE for every frontend prompt
 ├── kata.md                       The orchestrator
-└── kata-*.md                     The 10 phases
+└── kata-*.md                     The 10 phase skills (9 phases + JUDGE + QUESTION)
 
 opencode/                         GENERATED — do not edit by hand
 ├── agent/kata.md                 OpenCode @kata agent definition
@@ -482,7 +482,7 @@ host when it tries to load the skill.
 
 **A partial install is what fails, not an absent one.** Exit code `1` is
 reserved for a frontend that has some skills but not all: someone who never
-installed a frontend loses nothing, while someone with 9 of the 10 skills
+installed a frontend loses nothing, while someone with 9 of the 10 phase skills
 runs the whole cycle and silently loses a phase. With no frontend installed
 at all, `--doctor` says so and exits `0` — the `kata` CLI works without any.
 
@@ -526,9 +526,9 @@ same code as `REFUTED` — which made a malformed file indistinguishable from
 fraud found for anything reading the exit code.
 
 The first blind spot is disarmed by declaring the project's commands in
-`.kata/config.yaml`. The second knows Python, JS/TS, Go, Ruby, Rust and
-Java/Kotlin; a
-`.php`, `.swift` or `.exs` test is still confessed rather than passed over
+`.kata/config.yaml`. The second knows Python, JS/TS, Go, Ruby, Rust,
+Java/Kotlin, C#, PHP and Swift; a
+`.exs` test is still confessed rather than passed over
 in silence. With no fraud at all, any blind spot yields `UNVERIFIABLE`
 instead of `VERIFIED`: "I could not look" must never be reported as "all
 clear". With fraud present, the fraud decides the verdict and the blind
@@ -574,6 +574,15 @@ approved_commit: ""  # R14: HEAD at the moment of approval. JUDGE diffs
                     # so files changed by LATER tasks don't count as
                     # "undeclared" for this one. Absent in legacy tasks
                     # (approved before this round) — they keep diffing to HEAD.
+                    #
+                    # P-1 (0.6.0): legacy tasks WITHOUT approved_commit are
+                    # expected to come back REFUTED for structural scope
+                    # creep when later tasks touched undeclared files — the
+                    # judge diffs base_commit..HEAD and has no way to know
+                    # where the task ended. This is a documented limitation,
+                    # not a regression: re-approving a legacy task (running
+                    # VERIFY again) records approved_commit and restores
+                    # VERIFIED.
 fit:
   trivial: false
   route: code-loop
@@ -795,7 +804,8 @@ set instead of OpenCode's:
 - `Edit` or `Write` for surgical changes and task persistence.
 
 The repository contains the same 11 phase/domain skills as the OpenCode side
-(`claude-code/skills/kata-*/SKILL.md` — the 10 phases plus the `kata-devops`
+(`claude-code/skills/kata-*/SKILL.md` — the 10 phase skills — 9 phases +
+JUDGE + QUESTION — plus the `kata-devops`
 domain adapter), plus the `kata` skill itself.
 `scripts/install-claude-code.sh` symlinks every directory it finds under
 `claude-code/skills/` into `$CLAUDE_CONFIG_DIR/skills/`.
@@ -843,21 +853,27 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and the frauds the judge must find. Eleven scenarios (s01–s06,
-s08–s11, s14) plant a fraud the judge must catch; `s07` and `s15` are entirely
-honest tasks that must come back `VERIFIED`, and `s12`/`s13` expect
-`UNVERIFIABLE` (blind spots, no fraud). `s06` doubles as a guard against
-refusing legitimate work, planting real debris beside files whose names merely
-look like debris, and `s14` plants `baseline_tampering` (the harness rewrites
-`base_commit` in the YAML after recording the Git anchor). A judge that refuses
-legitimate work is as broken as one that misses fraud, and unit tests are poor
-at catching it, because they test what the author thought to test.
+the verdict and the frauds the judge must find. Fourteen scenarios (s01–s06,
+s08–s11, s14, s17, s18) plant a fraud the judge must catch; `s07`, `s15` and
+`s16` are entirely honest tasks that must come back `VERIFIED`, `s12`/`s13`
+expect `UNVERIFIABLE` (blind spots, no fraud), and `s19` expects
+`UNVERIFIABLE` for the Git-ignored code blind spot. `s06` doubles as a guard
+against refusing legitimate work, planting real debris beside files whose
+names merely look like debris, and `s14` plants `baseline_tampering` (the
+harness rewrites `base_commit` in the YAML after recording the Git anchor).
+A judge that refuses legitimate work is as broken as one that misses fraud,
+and unit tests are poor at catching it, because they test what the author
+thought to test. `s17` exercises `approved_commit` end to end (a later task
+touches an undeclared file after the approval — it must not count as scope
+creep), `s18` plants JS frauds that only the language probes can see, and
+`s19` plants a Git-ignored test via the harness's local exclude.
 
-`s15` exists because the other fourteen structurally could not catch its
-defect: the harness excluded `.kata/` from Git in every fixture, so the task's
-own file was invisible and the judge counting it as scope creep survived ten
-review rounds — including `s07`, whose whole job is catching false positives.
-A scenario now opts into the real environment with `kata_visivel: true`.
+`s15` exists because the other fourteen scenarios structurally could not
+catch its defect: the harness excluded `.kata/` from Git in every fixture,
+so the task's own file was invisible and the judge counting it as scope
+creep survived ten review rounds — including `s07`, whose whole job is
+catching false positives. A scenario now opts into the real environment
+with `kata_visivel: true`.
 
 See [`eval/README.md`](eval/README.md) for the scenario schema and for the
 rule that a new scenario must be shown to fail when its defect is

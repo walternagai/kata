@@ -45,6 +45,38 @@ def test_gerados_estao_em_dia() -> None:
     )
 
 
+def test_build_denuncia_gerado_orfeo_no_check(tmp_path, monkeypatch) -> None:
+    """K-24: gerado sem fonte em phases/ é denunciado no --check e removido
+    no build — o --check só comparava o que existe, então uma skill morta
+    passava e o instalador a linkava."""
+    import build_skills as bs
+
+    monkeypatch.setattr(bs, "REPO", tmp_path)
+    fonte = tmp_path / "phases"
+    fonte.mkdir()
+    (fonte / "kata-fit.md").write_text("fonte\n", encoding="utf-8")
+    monkeypatch.setattr(bs, "FONTE", fonte)
+    dominios = tmp_path / "domains"
+    dominios.mkdir()
+    monkeypatch.setattr(bs, "DOMINIOS", dominios)
+    for frontend in FRONTENDS:
+        dest = tmp_path / bs.FRONTENDS[frontend]["fase"].format(slug="kata-fit")
+        dest.parent.mkdir(parents=True)
+        dest.write_text("gerado\n", encoding="utf-8")
+        # Órfão: diretório de skill sem fonte
+        orfao = tmp_path / bs.FRONTENDS[frontend]["fase"].format(slug="kata-morto")
+        orfao.parent.mkdir(parents=True)
+        orfao.write_text("orfao\n", encoding="utf-8")
+
+    divergentes = bs.build(check=True)
+    assert divergentes > 0, "órfão deveria ser denunciado no --check"
+
+    bs.build(check=False)
+    for frontend in FRONTENDS:
+        orfao = tmp_path / bs.FRONTENDS[frontend]["fase"].format(slug="kata-morto")
+        assert not orfao.exists(), "órfão deveria ter sido removido pelo build"
+
+
 @pytest.mark.parametrize("frontend", sorted(FRONTENDS))
 def test_todo_destino_existe(frontend: str) -> None:
     for caminho in _fontes():
@@ -116,6 +148,17 @@ class TestTemplate:
         with pytest.raises(ValueError, match="sem fechamento"):
             render(fonte, "opencode", "teste.md")
         with pytest.raises(ValueError, match="sem fechamento"):
+            render(fonte, "claude-code", "teste.md")
+
+    def test_marcador_sem_nomes_e_erro_de_build(self) -> None:
+        """K-24: `<!--if:-->` com lista vazia passava no balanceamento (a
+        contagem casa a substring `<!--if:`) e vazava literalmente para o
+        gerado. Marcador sem nomes não tem significado — é typo, não
+        conteúdo condicional."""
+        fonte = "# titulo\n<!--if:-->\nconteudo\n<!--/if-->\n"
+        with pytest.raises(ValueError, match="sem nomes"):
+            render(fonte, "opencode", "teste.md")
+        with pytest.raises(ValueError, match="sem nomes"):
             render(fonte, "claude-code", "teste.md")
 
 

@@ -196,8 +196,8 @@ omitido cai no default Python (ruff/pytest/pytest-cov), então dá para
 trocar só o linter e manter o pytest. Sem o arquivo, nada muda.
 
 O JUDGE segue a mesma linha: ele conhece a sintaxe de teste de Python,
-JS/TS, Go, Ruby, Rust e Java/Kotlin. Linguagem fora dessa lista vira
-ponto cego declarado, não silêncio.
+JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP e Swift. Linguagem fora
+dessa lista (ex.: Elixir `.exs`) vira ponto cego declarado, não silêncio.
 
 ## Fases do Ciclo
 
@@ -307,13 +307,14 @@ sem o adapter — ver `domains/TEMPLATE.md` para criar um novo.
 ```
 kata/
 ├── phases/                            ← FONTE ÚNICA dos prompts (11 arquivos:
-│                                         kata.md + as 10 fases). É aqui que se
-│                                         edita; o resto é gerado.
+│                                         kata.md + as 10 skills de fase —
+│                                         9 fases + JUDGE + QUESTION). É aqui
+│                                         que se edita; o resto é gerado.
 ├── opencode/                          ← GERADO (make build-skills)
 │   ├── agent/kata.md                  ← Agente @kata (OpenCode)
-│   └── skills/kata-*/SKILL.md         ← 11 skills (10 fases + domain adapter
-│                                         kata-devops; TWIN CHECK vive no
-│                                         orquestrador)
+│   └── skills/kata-*/SKILL.md         ← 11 skills (9 fases + JUDGE + QUESTION
+│                                         + domain adapter kata-devops; TWIN
+│                                         CHECK vive no orquestrador)
 ├── claude-code/                       ← GERADO (make build-skills)
 │   └── skills/kata-*/SKILL.md         ← 12 skills (orquestrador kata + as 11 acima)
 ├── domains/                           ← FONTE ÚNICA dos domain adapters

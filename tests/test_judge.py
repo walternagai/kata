@@ -13,8 +13,11 @@ from kata.judge import (
     JudgeFraud,
     JudgeResult,
     LanguageProbes,
+    _abre_docstring,
     _changed_files,
+    _eh_docstring,
     _empty_test_bodies,
+    _fecha_docstring,
     _ignored_code_files,
     _is_test_file,
     _normaliza_task,
@@ -196,7 +199,10 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         }
         assert all(f.severity == "high" for f in frauds)
 
-    def test_assert_false_removed(self) -> None:
+    def test_assert_false_trocado_por_assert_real_e_alteracao(self) -> None:
+        """K-01: `assert False` → `assert result is None` é ALTERAÇÃO (a
+        família `assert` permanece no lado `+`), não remoção — o par-par
+        revoga a remoção pendente."""
         diff = """
 diff --git a/tests/test_bar.py b/tests/test_bar.py
 --- a/tests/test_bar.py
@@ -204,6 +210,20 @@ diff --git a/tests/test_bar.py b/tests/test_bar.py
 @@ -1 +1 @@
 -    assert False
 +    assert result is None
+"""
+        frauds = hunt_weakened_checks(diff)
+        assert frauds == []
+
+    def test_assert_false_removido_sem_reposicao_e_fraude(self) -> None:
+        """K-01: sem asserção da família no lado `+`, a remoção de
+        `assert False` continua fraude."""
+        diff = """
+diff --git a/tests/test_bar.py b/tests/test_bar.py
+--- a/tests/test_bar.py
++++ b/tests/test_bar.py
+@@ -1 +1 @@
+-    assert False
++    pass
 """
         frauds = hunt_weakened_checks(diff)
         assert any("assert False" in f.description for f in frauds)
@@ -325,6 +345,198 @@ diff --git a/tests/test_b.py b/tests/test_b.py
             "tests/test_a.py",
             "tests/test_b.py",
         }
+
+    # ── K-01: asserção ALTERADA (par -/+) não é remoção ──
+
+    def test_js_assertion_alterada_nao_e_remocao(self) -> None:
+        """K-01: trocar a expressão de uma asserção existente (expect(x).toBe(1)
+        → toBe(2)) é ALTERAÇÃO — a família expect permanece no lado `+` e o
+        par-par revoga a remoção pendente. Antes: fraude high → REFUTED em
+        tarefa honesta."""
+        diff = _diff_modificado(
+            "src/soma.test.js",
+            "-  expect(soma(1, 2)).toBe(3);",
+            "+  expect(soma(1, 2)).toBe(4);",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_js_assertion_alterada_no_hunk_seguinte_revoga(self) -> None:
+        """K-01: a linha `+` pode vir depois da `-` (hunks distintos) — o
+        par-par varre o arquivo inteiro, não só o hunk imediato."""
+        diff = (
+            "diff --git a/src/soma.test.js b/src/soma.test.js\n"
+            "--- a/src/soma.test.js\n"
+            "+++ b/src/soma.test.js\n"
+            "@@ -1 +1 @@\n"
+            "-  expect(soma(1, 2)).toBe(3);\n"
+            "+  // movido para baixo\n"
+            "@@ -5 +5 @@\n"
+            "+  expect(soma(1, 2)).toBe(3);\n"
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_go_t_error_alterado_nao_e_remocao(self) -> None:
+        """K-01: t.Errorf com outra mensagem é a mesma verificação."""
+        diff = _diff_modificado(
+            "internal/soma_test.go",
+            '-		t.Errorf("esperava %d", esperado)',
+            '+		t.Errorf("esperava %d", outro)',
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_cs_assert_alterado_nao_e_remocao(self) -> None:
+        """K-01: Assert.Equal(3, ...) → Assert.Equal(4, ...) é alteração."""
+        diff = _diff_modificado(
+            "tests/SomaTest.cs",
+            "-  Assert.Equal(3, soma(1, 2));",
+            "+  Assert.Equal(4, soma(1, 2));",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_php_assert_alterado_nao_e_remocao(self) -> None:
+        diff = _diff_modificado(
+            "tests/SomaTest.php",
+            "-  $this->assertEquals(3, $r);",
+            "+  $this->assertEquals(4, $r);",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_swift_xctassert_alterado_nao_e_remocao(self) -> None:
+        diff = _diff_modificado(
+            "Tests/SomaTests.swift",
+            "-  XCTAssertEqual(3, soma(1, 2))",
+            "+  XCTAssertEqual(4, soma(1, 2))",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_java_assert_alterado_nao_e_remocao(self) -> None:
+        diff = _diff_modificado(
+            "src/SomaTest.java",
+            "-  assertEquals(3, soma(1, 2));",
+            "+  assertEquals(4, soma(1, 2));",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_rust_assert_alterado_nao_e_remocao(self) -> None:
+        diff = _diff_modificado(
+            "src/soma_test.rs",
+            "-    assert_eq!(soma(1, 2), 3);",
+            "+    assert_eq!(soma(1, 2), 4);",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_ruby_expect_alterado_nao_e_remocao(self) -> None:
+        diff = _diff_modificado(
+            "spec/soma_spec.rb",
+            "-  expect(soma(1, 2)).to eq(3)",
+            "+  expect(soma(1, 2)).to eq(4)",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_python_assert_expressao_alterada_nao_e_remocao(self) -> None:
+        """K-01: `assert x == 1` → `assert x == 2` é alteração — o par-par
+        cobre também as formas com expressão, que o padrão `-` (no-op,
+        R10-9) não casa por design."""
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            "-    assert x == 1",
+            "+    assert x == 2",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_python_assert_true_trocado_por_assert_real_nao_e_remocao(self) -> None:
+        """K-01: `assert True` (no-op) → `assert result is None` é correção
+        honesta — a família assert permanece."""
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            "-    assert True",
+            "+    assert result is None",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_remocao_real_sem_reposicao_continua_fraude(self) -> None:
+        """K-01: sem asserção da família no lado `+`, a remoção continua
+        fraude — o par-par não engole a detecção."""
+        diff = _diff_modificado(
+            "src/soma.test.js",
+            "-  expect(soma(1, 2)).toBe(3);",
+            "+  // nada",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("expect() removida" in f.description for f in frauds)
+
+    def test_remocao_em_arquivo_anterior_nao_revogada_por_outro_arquivo(self) -> None:
+        """K-01: o `+` do arquivo B não pode revogar a remoção do arquivo A —
+        o buffer é por arquivo (flush no próximo `diff --git`)."""
+        diff = "\n".join(
+            [
+                _diff_modificado(
+                    "src/soma.test.js",
+                    "-  expect(soma(1, 2)).toBe(3);",
+                    "+  // removido de verdade",
+                ),
+                _diff_modificado(
+                    "src/outro.test.js",
+                    "+  expect(1).toBe(1);",
+                ),
+            ]
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("soma.test.js" in f.description for f in frauds)
+
+    # ── K-02: remoção honesta de assert True == x não é fraude ──
+
+    def test_assert_true_comparacao_removida_nao_e_fraude(self) -> None:
+        """K-02: remover `assert True == x` (trocando por `assert x is None`)
+        é remoção de asserção REAL — a âncora no fim do statement (R10-9)
+        agora vale também no lado `-`. Antes: fraude high."""
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            "-    assert True == result.is_valid()",
+            "+    assert result is None",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_assert_false_comparacao_removida_nao_e_fraude(self) -> None:
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            "-    assert False == result.is_valid()",
+            "+    assert result is not None",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    # ── K-08: pass com comentário inline em arquivo MODIFICADO ──
+
+    def test_pass_com_comentario_inline_em_arquivo_modificado(self) -> None:
+        """K-08: `pass` com comentário inline substituindo o corpo em arquivo
+        modificado é a fraude mais comum do R9-6 — o padrão exigia linha
+        limpa e o caso modificado escapava.
+
+        A linha é montada por concatenação de propósito (mesmo truque de
+        test_one_fraud_per_line_when_two_patterns_match): o judge varre o
+        diff da própria tarefa e acusaria "TODO deixado no código" se o
+        texto completo estivesse literal no arquivo de teste."""
+        linha_suspeita = "+    pass  # " + "TODO: implementar"
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            "-    assert result == 42",
+            linha_suspeita,
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("pass" in f.description for f in frauds)
+
+    def test_pass_com_noqa_inline_em_arquivo_modificado(self) -> None:
+        """K-08: `pass` com o supressor de lint inline — idem. (O marcador é
+        montado por concatenação para o judge não o acusar no próprio
+        diff.)"""
+        linha_suspeita = "+    pass  # " + "noqa"
+        diff = _diff_modificado(
+            "tests/test_foo.py",
+            "-    assert result == 42",
+            linha_suspeita,
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("pass" in f.description for f in frauds)
 
 
 class TestHuntFalseCompletion:
@@ -484,6 +696,14 @@ class TestHuntSpecBetrayal:
 
     def test_all_agree(self) -> None:
         task = {"intent": {"answered": True, "all_agree": True}}
+        frauds = hunt_spec_betrayal(task)
+        assert frauds == []
+
+    def test_all_agree_ausente_nao_e_discordancia(self) -> None:
+        """K-06: `all_agree` ausente (YAML escrito à mão, seção incompleta) é
+        omissão, não discordância — `not None` era True e `{answered: true}`
+        virava fraude high. Ausência é ponto cego, nunca acusação."""
+        task = {"intent": {"answered": True}}
         frauds = hunt_spec_betrayal(task)
         assert frauds == []
 
@@ -1970,6 +2190,53 @@ class TestCorpoVazioPorLinguagem:
         )
         assert any("pytest.skip" in f.description for f in hunt_weakened_checks(diff))
 
+    def test_python_docstring_antes_do_pass_e_corpo_vazio(self) -> None:
+        """K-07: docstring entre a declaração e o `pass` é o corpo vazio
+        "documentado" do R9-6 por outra porta — a docstring não verifica
+        nada e o `pass` que a segue é o corpo real. Antes: escapava."""
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            '+    """docstring que não verifica nada"""',
+            "+    pass",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("corpo vazio" in f.description for f in frauds)
+
+    def test_python_docstring_multilinha_antes_do_pass_e_corpo_vazio(self) -> None:
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            '+    """docstring',
+            "+    multilinha",
+            '+    """',
+            "+    pass",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("corpo vazio" in f.description for f in frauds)
+
+    def test_python_docstring_com_corpo_de_verdade_nao_acusa(self) -> None:
+        """K-07: docstring seguida de asserção real é teste honesto — só a
+        docstring sozinha (corpo `pass`) é suspeita."""
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            '+    """docstring"""',
+            "+    assert soma(1, 2) == 3",
+        )
+        assert hunt_weakened_checks(diff) == []
+
+    def test_python_ellipsis_como_corpo_e_corpo_vazio(self) -> None:
+        """K-07: `def test_x(): ...` é o corpo vazio idiomático em Python —
+        o `...` placeholder não verifica nada, equivalente ao `pass`."""
+        diff = _diff_novo(
+            "tests/test_soma.py",
+            "+def test_soma():",
+            "+    ...",
+        )
+        frauds = hunt_weakened_checks(diff)
+        assert any("corpo vazio" in f.description for f in frauds)
+
     def test_python_skip_condicional_em_arquivo_novo_nao_acusa(self) -> None:
         """Skip condicional é uso legítimo mesmo em arquivo novo — o mesmo
         cuidado do R10-8 aplicado ao corpo."""
@@ -2089,6 +2356,44 @@ class TestEmptyTestBodiesSemSondas:
         assert _empty_test_bodies(["+func TestA() {", "+}"], probes) == []
 
 
+class TestHelpersDocstring:
+    """K-07: helpers de reconhecimento de docstring na varredura de corpo.
+
+    A docstring entre a declaração e o `pass` é linha sem significado; os
+    três helpers discriminam os formatos que o git emite.
+    """
+
+    DELIM = ('"""', '"""')
+
+    def test_linha_vazia_nao_e_docstring(self) -> None:
+        assert _eh_docstring("+    ", self.DELIM) is False
+        assert _abre_docstring("+    ", self.DELIM) is False
+        assert _fecha_docstring("+    ", self.DELIM) is False
+
+    def test_docstring_uma_linha(self) -> None:
+        assert _eh_docstring('+    """doc"""', self.DELIM) is True
+        assert _abre_docstring('+    """doc"""', self.DELIM) is False
+
+    def test_fechamento_isolado(self) -> None:
+        assert _eh_docstring('+    """', self.DELIM) is True
+        assert _fecha_docstring('+    """', self.DELIM) is True
+
+    def test_abertura_isolada(self) -> None:
+        assert _abre_docstring('+    """', self.DELIM) is True
+
+    def test_abertura_com_conteudo_sem_fechamento(self) -> None:
+        assert _abre_docstring('+    """doc', self.DELIM) is True
+        assert _fecha_docstring('+    """doc', self.DELIM) is False
+
+    def test_fechamento_com_conteudo(self) -> None:
+        assert _fecha_docstring('+    doc"""', self.DELIM) is True
+
+    def test_linha_comum_nao_casa(self) -> None:
+        assert _eh_docstring("+    pass", self.DELIM) is False
+        assert _abre_docstring("+    x = 1", self.DELIM) is False
+        assert _fecha_docstring("+    x = 1", self.DELIM) is False
+
+
 class TestEscrituracaoDoKata:
     """R11-3: `.kata/<task>.yaml` é escrituração da ferramenta, não trabalho.
 
@@ -2176,7 +2481,7 @@ class TestNormalizaTask:
         assert data == {}
         assert any("topo do arquivo" in a for a in avisos)
 
-    @pytest.mark.parametrize("secao", ["verify", "surgical", "intent", "artifact"])
+    @pytest.mark.parametrize("secao", ["verify", "surgical", "intent", "artifact", "fit"])
     def test_secao_que_nao_e_mapa(self, secao: str) -> None:
         data, avisos = _normaliza_task({"task": "t", secao: True})
         assert data[secao] == {}
@@ -2216,7 +2521,7 @@ class TestJudgeTaskTarefaMalformada:
     quebrado era indistinguível de fraude encontrada para quem lê o CI.
     """
 
-    @pytest.mark.parametrize("secao", ["verify", "surgical", "intent", "artifact"])
+    @pytest.mark.parametrize("secao", ["verify", "surgical", "intent", "artifact", "fit"])
     def test_secao_nao_mapa_entrega_veredito(
         self,
         mock_diff: MagicMock,

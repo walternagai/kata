@@ -55,6 +55,17 @@ class LanguageProbes:
             própria linha da declaração quando ela já é um teste desativado
             (`it.skip`, `xit`, `skip`) — o corpo é irrelevante, o teste
             inteiro não verifica nada (R10-10).
+        assertion_family: regex que reconhece uma asserção da MESMA família
+            das de `weakened` que começam com `-`. Usada pelo par-par do
+            K-01: uma linha `-` que casa padrão de remoção só é fraude se
+            nenhuma linha `+` do mesmo arquivo contiver asserção da família
+            — trocar `expect(x).toBe(1)` por `expect(x).toBe(2)` é
+            ALTERAÇÃO, não remoção. `None` desliga o par-par (a linha é
+            acusada imediatamente).
+        docstring: (abertura, fechamento) de docstring por linguagem, para a
+            varredura de corpo vazio tratar a docstring entre a declaração
+            e o `pass` como linha sem significado (K-07) — a mesma classe
+            do R9-6, agora com docstring no lugar do comentário.
     """
 
     weakened: tuple[tuple[str, str], ...]
@@ -63,12 +74,18 @@ class LanguageProbes:
     empty_inline: re.Pattern[str] | None = None
     skippable: re.Pattern[str] = re.compile(r"^\+\s*$")
     noop_body: tuple[tuple[str, str], ...] = ()
+    assertion_family: re.Pattern[str] | None = None
+    docstring: tuple[str, str] | None = None
 
 
 _PY_PROBES = LanguageProbes(
     weakened=(
-        (r"^-.*assert\s+True\b", "assert True (sempre passa se True for literal)"),
-        (r"^-.*assert\s+False\b", "assert False (sempre falha ou foi removido)"),
+        # R10-9, no lado `-` (K-02): o mesmo cuidado do lado `+` — `assert
+        # True == x` é asserção real e honesta. A âncora no fim da linha
+        # limita a remoção suspeita à forma no-op (`assert True` como
+        # statement inteiro, com comentário opcional).
+        (r"^-.*\bassert\s+True\s*(?:#.*)?$", "assert True (sempre passa se True for literal)"),
+        (r"^-.*\bassert\s+False\s*(?:#.*)?$", "assert False (sempre falha ou foi removido)"),
         (r"^\+#\s+.*(?:assert|def test|expect|self\.)", "teste virado em comentário"),
         # Ancorado no fim da afirmação de propósito: `assert True == x` é
         # asserção real e honesta — `\b` depois de True não impede `==`/`is`/`in`
@@ -82,7 +99,10 @@ _PY_PROBES = LanguageProbes(
         # HAS_DEPS: pytest.skip(...)` é uso condicional legítimo, e linha
         # comentada não desativa nada (R10-8).
         (r"^\+\s*pytest\.skip\s*\(", "teste desativado com pytest.skip"),
-        (r"^\+\s*pass\s*$", "corpo de teste substituído por pass"),
+        # R9-6 no caminho de arquivo modificado (K-08): `pass  # comentário`
+        # também substitui o corpo — o padrão da linha limpa (`^\+\s*pass\s*$`)
+        # deixava a fraude mais comum do R9-6 passar no caso modificado.
+        (r"^\+\s*pass\s*(?:#.*)?$", "corpo de teste substituído por pass"),
         (r"^\+.*#\s*noqa", "noqa adicionado — pode esconder erro de lint"),
     ),
     test_declaration=re.compile(r"^\+\s*(?:async\s+)?def\s+test\w*\s*\("),
@@ -100,6 +120,14 @@ _PY_PROBES = LanguageProbes(
         (r"^\+.*\bassert\s+True\s*(?:#.*)?$", "corpo só com assert True (sempre passa)"),
         (r"^\+\s*pytest\.skip\s*\(", "teste desativado com pytest.skip"),
     ),
+    # K-01: `assert` é a família de remoção do Python — `assert True` →
+    # `assert result is None` é alteração, não remoção. O par-par protege
+    # também as formas com expressão (`assert x == 1`), que o padrão `-`
+    # (no-op) não cobre por design (R10-9).
+    assertion_family=re.compile(r"\bassert\s+\S"),
+    # K-07: docstring entre a declaração e o `pass` é linha sem significado
+    # (mesma classe do R9-6, com docstring no lugar do comentário).
+    docstring=('"""', '"""'),
 )
 
 _JS_PROBES = LanguageProbes(
@@ -133,6 +161,9 @@ _JS_PROBES = LanguageProbes(
         (r"^\+.*\b(?:it|test|describe)\.skip\b", "teste desativado com .skip"),
         (r"^\+.*\bx(?:it|test|describe)\s*\(", "teste desativado (xit/xdescribe)"),
     ),
+    # K-01: famílias das remoções `-` (expect/assert) — alterar a expressão
+    # de uma asserção existente não é removê-la.
+    assertion_family=re.compile(r"\b(?:expect|assert)\s*\("),
 )
 
 _GO_PROBES = LanguageProbes(
@@ -152,6 +183,9 @@ _GO_PROBES = LanguageProbes(
     # skippable entre declaração e corpo (P1-2).
     skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
     noop_body=((r"^\+\s*t\.Skip\s*\(", "teste pulado com t.Skip"),),
+    # K-01: `t.Errorf`/`t.Fatal` são a família — a alteração é a mesma
+    # verificação com outra mensagem.
+    assertion_family=re.compile(r"\bt\.(?:Error|Fatal)\w*"),
 )
 
 _RB_PROBES = LanguageProbes(
@@ -171,6 +205,9 @@ _RB_PROBES = LanguageProbes(
         (r"^\+.*\bxit\b", "teste desativado (xit)"),
         (r"^\+\s*skip\b", "teste desativado (skip)"),
     ),
+    # K-01: `expect`/`assert_*` são as famílias — `expect(x).to eq 1` →
+    # `expect(x).to eq 2` é alteração.
+    assertion_family=re.compile(r"\b(?:expect|assert\w*)\s*[\s(]"),
 )
 
 _RS_PROBES = LanguageProbes(
@@ -189,6 +226,8 @@ _RS_PROBES = LanguageProbes(
     # Comentário de linha (`//`) e de bloco (`/* */`) são igualmente
     # skippable entre declaração e corpo (P1-2).
     skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
+    # K-01: `assert!`/`assert_eq!`/`assert_ne!` são a mesma família.
+    assertion_family=re.compile(r"\bassert(?:_eq|_ne)!"),
 )
 
 _JAVA_PROBES = LanguageProbes(
@@ -207,6 +246,9 @@ _JAVA_PROBES = LanguageProbes(
     # Comentário de linha (`//`) e de bloco (`/* */`) são igualmente
     # skippable entre declaração e corpo (P1-2).
     skippable=re.compile(r"^\+\s*(?:(?://.*)|(?:/\*.*?\*/\s*))?$"),
+    # K-01: `assert*`/`Assert.*` são a família — a alteração é a mesma
+    # verificação com outro argumento.
+    assertion_family=re.compile(r"\b(?:assert\w*|Assert\.\w+)\s*\("),
 )
 
 _CS_PROBES = LanguageProbes(
@@ -226,6 +268,9 @@ _CS_PROBES = LanguageProbes(
         (r"^\+.*\bAssert\.True\s*\(\s*true\s*\)", "corpo só com Assert.True(true)"),
         (r"^\+.*\bAssert\.Pass\s*\(", "teste desativado com Assert.Pass"),
     ),
+    # K-01: `Assert.*` e os atributos de teste são as famílias — alterar o
+    # valor esperado ou o atributo não é remover a verificação.
+    assertion_family=re.compile(r"\bAssert\.\w+\s*\(|\[(?:Fact|Theory|Test(?:Case)?)\]"),
 )
 
 _PHP_PROBES = LanguageProbes(
@@ -247,6 +292,9 @@ _PHP_PROBES = LanguageProbes(
         (r"^\+.*\bassertTrue\s*\(\s*true\s*\)", "corpo só com assertTrue(true)"),
         (r"^\+.*\bmarkTestSkipped\s*\(", "teste desativado com markTestSkipped"),
     ),
+    # K-01: `assert*`/`expect*` são as famílias — `assertEquals(3, $r)` →
+    # `assertEquals(4, $r)` é alteração.
+    assertion_family=re.compile(r"\b(?:assert|expect)\w*\s*\("),
 )
 
 _SWIFT_PROBES = LanguageProbes(
@@ -265,6 +313,9 @@ _SWIFT_PROBES = LanguageProbes(
         (r"^\+.*\bXCTSkip\s*\(", "teste desativado com XCTSkip"),
         (r"^\+.*\bXCTAssert\w*\s*\(\s*true\s*\)", "corpo só com XCTAssert(true)"),
     ),
+    # K-01: `XCTAssert*` é a família — `XCTAssertEqual(3, x)` →
+    # `XCTAssertEqual(4, x)` é alteração.
+    assertion_family=re.compile(r"\bXCTAssert\w*\s*\("),
 )
 
 # Extensão → o que o juiz sabe procurar ali. Uma extensão ausente daqui é um
@@ -735,6 +786,59 @@ def is_debris_file(filepath: str) -> bool:
     return any(re.search(pat, filepath, re.IGNORECASE) for pat in _DEBRIS_FILE_PATTERNS)
 
 
+def _eh_docstring(line: str, delimitadores: tuple[str, str]) -> bool:
+    """A linha `+` é uma docstring inteira ou apenas o fechamento? (K-07)
+
+    Casa a docstring de uma linha (abertura e fechamento no mesmo line,
+    aspas triplas dos dois lados) e o fechamento isolado — ambos não
+    verificam nada.
+    """
+    conteudo = line.lstrip("+").strip()
+    abertura, fechamento = delimitadores
+    if not conteudo:
+        return False
+    if conteudo == fechamento:
+        return True
+    return conteudo.startswith(abertura) and conteudo.endswith(fechamento)
+
+
+def _abre_docstring(line: str, delimitadores: tuple[str, str]) -> bool:
+    """A linha `+` abre uma docstring multilinha sem fechá-la? (K-07)
+
+    Casa a abertura com conteúdo (aspas triplas seguidas de texto, sem
+    fechamento na mesma linha) e a abertura isolada — o chamador pula o
+    bloco até `_fecha_docstring`.
+    """
+    conteudo = line.lstrip("+").strip()
+    abertura, fechamento = delimitadores
+    if not conteudo or not conteudo.startswith(abertura):
+        return False
+    if conteudo == abertura:
+        return True
+    return not conteudo.endswith(fechamento)
+
+
+def _fecha_docstring(line: str, delimitadores: tuple[str, str]) -> bool:
+    """A linha `+` fecha uma docstring multilinha aberta? (K-07)"""
+    conteudo = line.lstrip("+").strip()
+    abertura, fechamento = delimitadores
+    if not conteudo:
+        return False
+    if conteudo == fechamento:
+        return True
+    return conteudo.endswith(fechamento) and not conteudo.startswith(abertura)
+
+
+def _eh_ellipsis(line: str) -> bool:
+    """A linha `+` é um corpo vazio em ellipsis (`...`)? (K-07)
+
+    `def test_x(): ...` é o corpo vazio idiomático em Python — o `...`
+    é um placeholder que não verifica nada, equivalente ao `pass`. Só a
+    forma como statement inteiro (com comentário opcional) conta.
+    """
+    return bool(re.match(r"^\+\s*\.\.\.\s*(?:#.*)?$", line))
+
+
 def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[tuple[str, str]]:
     """Testes novos que não verificam nada: (linha, descrição).
 
@@ -751,6 +855,10 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[t
     linha deixa de casar `skippable` e o corpo vazio escapava (R9-6). Por
     isso o corpo é decidido por `empty_body`, que também casa o marcador
     com comentário inline.
+
+    Docstring entre a declaração e o corpo também é linha sem significado
+    (K-07): a docstring não verifica nada e o `pass` que a segue é o corpo
+    real do teste — o corpo vazio "documentado" do R9-6 por outra porta.
 
     Além do corpo vazio, a primeira instrução significativa pode ser um
     no-op que não verifica nada — `assert True` (sempre passa) ou um
@@ -784,10 +892,34 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[t
         if probes.empty_inline is not None and probes.empty_inline.search(line):
             achados.append((line.lstrip("+").strip(), "corpo vazio na própria linha"))
             continue
-        for seguinte in added_lines[i + 1 :]:
+        # Varredura do corpo com índice explícito: a docstring multilinha
+        # (K-07) precisa saltar o bloco inteiro (abertura + conteúdo +
+        # fechamento), o que um `for seguinte in slice` não faz — ele
+        # retomaria no conteúdo da docstring.
+        j = i + 1
+        while j < len(added_lines):
+            seguinte = added_lines[j]
             if probes.skippable.match(seguinte):
+                j += 1
                 continue
-            if probes.empty_body.match(seguinte):
+            # K-07: docstring entre a declaração e o corpo é linha sem
+            # significado — sozinha, não verifica nada.
+            if probes.docstring is not None and _eh_docstring(seguinte, probes.docstring):
+                j += 1
+                continue
+            if probes.docstring is not None and _abre_docstring(seguinte, probes.docstring):
+                # Pula a abertura, o conteúdo e o fechamento do bloco. A
+                # varredura retoma na primeira linha significativa depois
+                # da docstring — que pode ser o `pass` suspeito ou uma
+                # asserção real.
+                j += 1
+                while j < len(added_lines) and not _fecha_docstring(
+                    added_lines[j], probes.docstring
+                ):
+                    j += 1
+                j += 1  # pula também a linha de fechamento
+                continue
+            if probes.empty_body.match(seguinte) or _eh_ellipsis(seguinte):
                 achados.append((line.lstrip("+").strip(), "corpo vazio (só pass)"))
                 break
             # Primeira instrução do corpo é um no-op (assert True, skip...):
@@ -823,9 +955,34 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
     is_new_file = False
     is_deleted_file = False
     new_test_bodies: dict[str, list[str]] = {}
+    # K-01: linhas `-` suspeitas por arquivo, pendentes de decisão. O diff
+    # git intercala `-`/`+` por hunk: uma linha `-` que casa padrão de
+    # remoção só é fraude se nenhuma linha `+` do MESMO arquivo (em
+    # qualquer hunk) contiver asserção da mesma família — trocar
+    # `expect(x).toBe(1)` por `expect(x).toBe(2)` é ALTERAÇÃO, não remoção.
+    # A linha `+` pode vir depois da `-` (modificação no lugar) ou antes
+    # (linha movida dentro do hunk); por isso a decisão é adiada para o fim
+    # de cada arquivo (flush no próximo `diff --git`), e não tomada na hora.
+    removals_pendentes: list[tuple[str, str]] = []  # (linha, descrição)
+
+    def _flush_pendentes(file_atual: str) -> None:
+        """Emiti as remoções pendentes que nenhum `+` revogou."""
+        for removida, desc in removals_pendentes:
+            frauds.append(
+                JudgeFraud(
+                    type="weakened_checks",
+                    severity="high",
+                    description=f"{file_atual}: {desc}",
+                    evidence=removida,
+                )
+            )
+        removals_pendentes.clear()
 
     for line in diff.split("\n"):
         if line.startswith("diff --git"):
+            # Fim do arquivo anterior: as remoções pendentes não revogadas
+            # viram fraude, com o nome do arquivo a que pertencem.
+            _flush_pendentes(current_file)
             parts = line.split()
             current_file = parts[3].replace("b/", "", 1) if len(parts) >= 4 else ""
             is_new_file = False
@@ -851,16 +1008,32 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
             continue
         if is_deleted_file:
             continue
+        if line.startswith("+"):
+            # K-01: uma linha `+` com asserção da família revoga as remoções
+            # pendentes do MESMO arquivo (qualquer hunk) — a asserção foi
+            # alterada, não removida. A revogação NÃO se aplica a padrões de
+            # adição suspeitos (`+ pass`, `+ noqa`, `+ // comentário`), que
+            # acusam abaixo; a asserção adicionada é o teste REAL que
+            # substitui o que a linha `-` tinha. Linguagem sem
+            # `assertion_family` acusa na hora, sem buffer.
+            if probes.assertion_family is not None and probes.assertion_family.search(line):
+                removals_pendentes.clear()
         for pattern, desc in probes.weakened:
             if re.match(pattern, line):
-                frauds.append(
-                    JudgeFraud(
-                        type="weakened_checks",
-                        severity="high",
-                        description=f"{current_file}: {desc}",
-                        evidence=line.strip(),
+                if line.startswith("-") and probes.assertion_family is not None:
+                    # K-02: o padrão `-` do Python (assert True/False) já
+                    # está ancorado no fim do statement — só as formas no-op
+                    # casam. Buffer para a decisão par-par do K-01.
+                    removals_pendentes.append((line.strip(), desc))
+                else:
+                    frauds.append(
+                        JudgeFraud(
+                            type="weakened_checks",
+                            severity="high",
+                            description=f"{current_file}: {desc}",
+                            evidence=line.strip(),
+                        )
                     )
-                )
                 # Uma fraude por linha de diff, não por padrão casado: a mesma
                 # linha pode casar dois padrões (ex.: teste comentado com
                 # noqa inline casa "teste virado em comentário" e "noqa
@@ -868,6 +1041,9 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
                 # casado é o mais específico (assert literal > comentário >
                 # pass > noqa).
                 break
+
+    # Último arquivo do diff.
+    _flush_pendentes(current_file)
 
     for path, added in new_test_bodies.items():
         probes = probes_for(path)
@@ -971,10 +1147,18 @@ def hunt_unauthorized_action(task_data: dict[str, Any]) -> list[JudgeFraud]:
 
 
 def hunt_spec_betrayal(task_data: dict[str, Any]) -> list[JudgeFraud]:
-    """Caça 5: traição da spec — código mudou contra a especificação."""
+    """Caça 5: traição da spec — código mudou contra a especificação.
+
+    Só acusa discordância DECLARADA: `all_agree: false` registrado no
+    INTENT. Ausência da chave é omissão (YAML escrito à mão, seção
+    incompleta), não discordância — `not None` seria True e um
+    `{answered: true}` sem `all_agree` viraria fraude high (K-06). O
+    tratamento de omissão é o mesmo das demais seções: vira ponto cego na
+    normalização, nunca acusação.
+    """
     frauds: list[JudgeFraud] = []
     intent = task_data.get("intent", {})
-    if intent.get("answered") and not intent.get("all_agree"):
+    if intent.get("answered") and intent.get("all_agree") is False:
         frauds.append(
             JudgeFraud(
                 type="spec_betrayal",
@@ -1033,6 +1217,10 @@ _SECOES_MAPA: tuple[tuple[str, str], ...] = (
     ("surgical", "arquivos declarados ignorados"),
     ("intent", "checagem de intenção ignorada"),
     ("artifact", "checagem de AUTH ignorada"),
+    # K-05: `hunt_scope_creep` lê `fit.trivial` — `fit: true` em YAML à mão
+    # derrubava o judge com AttributeError, a mesma classe que o R11-1
+    # fechou para as quatro seções acima.
+    ("fit", "checagem de trivialidade ignorada"),
 )
 
 

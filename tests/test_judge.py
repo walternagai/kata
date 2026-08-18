@@ -14,6 +14,9 @@ from kata.judge import (
     JudgeResult,
     LanguageProbes,
     _abre_docstring,
+    _base_commit_is_ancestor,
+    _base_commit_is_ancestor_of,
+    _base_commit_resolves,
     _changed_files,
     _eh_docstring,
     _empty_test_bodies,
@@ -22,6 +25,7 @@ from kata.judge import (
     _is_test_file,
     _normaliza_task,
     _oversized_untracked,
+    _resolve_commit,
     _run_git_diff,
     _unreadable_test_files,
     _untracked_diff,
@@ -1078,7 +1082,6 @@ class TestRunGitDiff:
 
     @patch("kata.judge._run")
     def test_git_diff_unstaged(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
-        from kata.judge import _run_git_diff
 
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
@@ -1092,7 +1095,6 @@ class TestRunGitDiff:
 
     @patch("kata.judge._run")
     def test_git_diff_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
-        from kata.judge import _run_git_diff
 
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no HEAD"),
@@ -1112,7 +1114,6 @@ class TestRunGitDiff:
         """Com base_commit válido, compara direto contra ele — mesmo se
         não houver diff local (unstaged/staged), o que é o caso de uma
         tarefa já commitada."""
-        from kata.judge import _run_git_diff
 
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),  # cat-file
@@ -1131,7 +1132,6 @@ class TestRunGitDiff:
     ) -> None:
         """base_commit inválido (ex: histórico reescrito) não deve travar
         o judge — cai de volta no diff local."""
-        from kata.judge import _run_git_diff
 
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad revision"),
@@ -1241,7 +1241,6 @@ class TestChangedFiles:
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
         """CR-010: _resolve_commit retorna None quando git rev-parse falha."""
-        from kata.judge import _resolve_commit
 
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=1, stdout="", stderr=""
@@ -1253,7 +1252,6 @@ class TestChangedFiles:
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
         """CR-010: _resolve_commit retorna None quando stdout está vazio."""
-        from kata.judge import _resolve_commit
 
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="\n", stderr=""
@@ -1277,6 +1275,60 @@ class TestChangedFiles:
         """CR-010: OSError ao gravar baseline ref -> record_baseline_ref retorna False."""
         mock_run.side_effect = OSError("git not found")
         assert record_baseline_ref("task", "deadbeef") is False
+
+    # ── K-03: OSError nos helpers de baseline/diff (caminho base do judge) ──
+
+    @patch("kata.judge._run")
+    def test_oserror_em_run_git_diff_retorna_diff_vazio(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """K-03: OSError em _run_git_diff vira diff vazio, nunca traceback —
+        antes, git ausente derrubava o judge com traceback (exit 1 = REFUTED)."""
+
+        mock_run.side_effect = OSError("git not found")
+        assert _run_git_diff() == ""
+
+    @patch("kata.judge._run")
+    def test_oserror_em_run_git_diff_com_base_commit_retorna_vazio(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+
+        mock_run.side_effect = OSError("git not found")
+        assert _run_git_diff(base_commit="deadbeef") == ""
+
+    @patch("kata.judge._run")
+    def test_oserror_em_base_commit_resolves_retorna_false(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """K-03: OSError em _base_commit_resolves vira False (ponto cego)."""
+
+        mock_run.side_effect = OSError("git not found")
+        assert _base_commit_resolves("deadbeef") is False
+
+    @patch("kata.judge._run")
+    def test_oserror_em_base_commit_is_ancestor_retorna_false(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+
+        mock_run.side_effect = OSError("git not found")
+        assert _base_commit_is_ancestor("deadbeef") is False
+
+    @patch("kata.judge._run")
+    def test_oserror_em_base_commit_is_ancestor_of_retorna_false(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+
+        mock_run.side_effect = OSError("git not found")
+        assert _base_commit_is_ancestor_of("abc", "def") is False
+
+    @patch("kata.judge._run")
+    def test_oserror_em_resolve_commit_retorna_none(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """K-03: OSError em _resolve_commit vira None (ponto cego)."""
+
+        mock_run.side_effect = OSError("git not found")
+        assert _resolve_commit("deadbeef") is None
 
 
 class TestJudgeTaskDetectsCommittedFraud:
@@ -1436,6 +1488,70 @@ class TestJudgeTaskDetectsCommittedFraud:
         result = judge_task({"task": "t", "base_commit": base, "verify": {}}, cwd=tmp_path)
         assert any(f.type == "baseline_tampering" for f in result.frauds)
         assert any("não é ancestral" in f.description for f in result.frauds)
+
+    def test_approved_commit_anterior_ao_baseline_e_fraude(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """K-04: approved_commit ANTERIOR ao base_commit (YAML adulterado)
+        produziria `git diff base..approved` vazio — escondendo todo o
+        scope creep e todo o enfraquecimento. O teto agora exige ser
+        descendente do piso; falha vira baseline_tampering, não diff
+        vazio silencioso."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "commit anterior"], cwd=tmp_path, check=True)
+        anterior = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        (tmp_path / "src.py").write_text("x = 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base da tarefa"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        task = {
+            "task": "t",
+            "base_commit": base,
+            "approved_commit": anterior,
+            "verify": {},
+        }
+        result = judge_task(task, cwd=tmp_path)
+        assert any(f.type == "baseline_tampering" for f in result.frauds)
+        assert any("anterior ao baseline" in f.description for f in result.frauds)
+
+    def test_approved_commit_nao_ancestral_do_head_e_fraude(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """K-04: approved_commit que resolve mas não é ancestral do HEAD
+        atual (rebase/poda) não pode ser usado como teto — fraude."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        # approved_commit existe num branch órfão — resolve mas não é ancestral
+        subprocess.run(["git", "checkout", "--orphan", "outro"], cwd=tmp_path, check=True)
+        (tmp_path / "outro.py").write_text("y = 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "approved"], cwd=tmp_path, check=True)
+        approved = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        task = {
+            "task": "t",
+            "base_commit": base,
+            "approved_commit": approved,
+            "verify": {},
+        }
+        result = judge_task(task, cwd=tmp_path)
+        assert any(f.type == "baseline_tampering" for f in result.frauds)
 
 
 class TestIsDebrisFile:

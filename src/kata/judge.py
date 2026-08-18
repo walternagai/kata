@@ -484,14 +484,27 @@ def _read_baseline_ref(task: str, cwd: Path | None = None) -> str | None:
 
 
 def _base_commit_resolves(base_commit: str, cwd: Path | None = None) -> bool:
-    """Confirma que base_commit ainda existe no histórico (não foi rebaseado/podado)."""
-    result = _run(["git", "cat-file", "-e", f"{base_commit}^{{commit}}"], cwd=cwd)
+    """Confirma que base_commit ainda existe no histórico (não foi rebaseado/podado).
+
+    K-03: git ausente/indisponível vira False — o chamador trata como
+    "não dá para saber", nunca traceback (mesmo padrão de _changed_files).
+    """
+    try:
+        result = _run(["git", "cat-file", "-e", f"{base_commit}^{{commit}}"], cwd=cwd)
+    except OSError:
+        return False
     return result.returncode == 0
 
 
 def _resolve_commit(base_commit: str, cwd: Path | None = None) -> str | None:
-    """Expande um commit válido para seu SHA completo."""
-    result = _run(["git", "rev-parse", "--verify", f"{base_commit}^{{commit}}"], cwd=cwd)
+    """Expande um commit válido para seu SHA completo.
+
+    K-03: git ausente vira None (ponto cego), nunca traceback.
+    """
+    try:
+        result = _run(["git", "rev-parse", "--verify", f"{base_commit}^{{commit}}"], cwd=cwd)
+    except OSError:
+        return None
     if result.returncode != 0:
         return None
     value = result.stdout.strip()
@@ -499,8 +512,28 @@ def _resolve_commit(base_commit: str, cwd: Path | None = None) -> str | None:
 
 
 def _base_commit_is_ancestor(base_commit: str, cwd: Path | None = None) -> bool:
-    """Confirma que o baseline está no caminho histórico do HEAD atual."""
-    result = _run(["git", "merge-base", "--is-ancestor", base_commit, "HEAD"], cwd=cwd)
+    """Confirma que o baseline está no caminho histórico do HEAD atual.
+
+    K-03: git ausente vira False (ponto cego), nunca traceback.
+    """
+    try:
+        result = _run(["git", "merge-base", "--is-ancestor", base_commit, "HEAD"], cwd=cwd)
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
+def _base_commit_is_ancestor_of(ancestor: str, descendant: str, cwd: Path | None = None) -> bool:
+    """Confirma que `ancestor` está no caminho histórico de `descendant`.
+
+    K-04: valida o TETO do diff (approved_commit) contra o piso
+    (base_commit) — approved anterior ao base produziria janela vazia.
+    K-03: git ausente vira False, nunca traceback.
+    """
+    try:
+        result = _run(["git", "merge-base", "--is-ancestor", ancestor, descendant], cwd=cwd)
+    except OSError:
+        return False
     return result.returncode == 0
 
 
@@ -587,18 +620,36 @@ def _run_git_diff(
     Em ambos os casos, o conteúdo dos arquivos untracked é anexado como
     diff sintético: `git diff` nunca os mostra, e sem isso um arquivo novo
     ficaria invisível aos hunters.
+
+    K-03: git ausente/indisponível vira diff vazio — o veredito sai com o
+    ponto cego, nunca traceback (exit 1 = mesmo código de REFUTED).
     """
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
         if diff_end:
-            diff = _run(["git", "diff", base_commit, diff_end], cwd=cwd).stdout
+            try:
+                diff = _run(["git", "diff", base_commit, diff_end], cwd=cwd).stdout
+            except OSError:
+                return ""
         else:
-            diff = _run(["git", "diff", base_commit], cwd=cwd).stdout
+            try:
+                diff = _run(["git", "diff", base_commit], cwd=cwd).stdout
+            except OSError:
+                return ""
     else:
-        result = _run(["git", "diff", "HEAD"], cwd=cwd)
-        if result.returncode != 0:
-            result = _run(["git", "diff"], cwd=cwd)
+        try:
+            result = _run(["git", "diff", "HEAD"], cwd=cwd)
+        except OSError:
+            result = None
+        if result is None or result.returncode != 0:
+            try:
+                result = _run(["git", "diff"], cwd=cwd)
+            except OSError:
+                return ""
             if not result.stdout.strip():
-                result = _run(["git", "diff", "--cached"], cwd=cwd)
+                try:
+                    result = _run(["git", "diff", "--cached"], cwd=cwd)
+                except OSError:
+                    return ""
         diff = result.stdout
 
     untracked = _untracked_diff(_sem_escrituracao(untracked_files(cwd=cwd)), cwd=cwd)
@@ -1328,6 +1379,14 @@ def judge_task(
     # posteriores contam como "não declarados" para esta — o scope_creep
     # estrutural que REFUTED 22 tasks antigas. Tasks sem approved_commit
     # (antigas, ou aprovadas antes desta rodada) continuam diffando até HEAD.
+    #
+    # K-04: o teto recebe a MESMA checagem adversarial que o piso. Antes,
+    # um approved_commit válido porém ANTERIOR ao base_commit (YAML escrito
+    # à mão ou adulterado) produzia `git diff base..approved` vazio/reverso
+    # — escondendo todo o scope creep e todos os enfraquecimentos sem
+    # acusar nada. O teto precisa: (a) resolver, (b) ser ancestral do HEAD,
+    # (c) ser descendente do piso. Falha em (b) ou (c) é fraude de
+    # baseline_tampering, não diff vazio silencioso.
     approved_commit = task_data.get("approved_commit")
     diff_end = None
     if approved_commit and _base_commit_resolves(str(approved_commit), cwd=cwd):
@@ -1347,6 +1406,33 @@ def judge_task(
                 )
             )
             diff_base = None
+
+    if diff_end and diff_base:
+        # (b) o teto é ancestral do HEAD atual.
+        if not _base_commit_is_ancestor(str(diff_end), cwd=cwd):
+            baseline_frauds.append(
+                JudgeFraud(
+                    type="baseline_tampering",
+                    severity="high",
+                    description="approved_commit não é ancestral do HEAD atual",
+                    evidence=str(diff_end),
+                )
+            )
+            diff_end = None
+        # (c) o teto é descendente do piso — approved_commit anterior ao
+        # base_commit produziria diff vazio/reverso e esconderia fraude.
+        elif not _base_commit_is_ancestor_of(diff_base, str(diff_end), cwd=cwd):
+            baseline_frauds.append(
+                JudgeFraud(
+                    type="baseline_tampering",
+                    severity="high",
+                    description=(
+                        "approved_commit anterior ao baseline — janela de diff vazia manipulável"
+                    ),
+                    evidence=f"approved={diff_end} | base={diff_base}",
+                )
+            )
+            diff_end = None
 
     diff = _run_git_diff(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
     changed = _changed_files(cwd=cwd, base_commit=diff_base, diff_end=diff_end)

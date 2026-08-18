@@ -118,13 +118,24 @@ def _deserialize(text: str) -> dict[str, Any]:
     sai com código 1, o mesmo de REFUTED, tornando arquivo quebrado
     indistinguível de fraude encontrada para quem lê o exit code no CI.
     Os call sites capturam ValueError e imprimem mensagem clara.
+
+    K-10: o topo precisa ser um mapa. `yaml.safe_load` devolve lista para
+    um arquivo `- a\n- b` (lista é truthy, o `or {}` não converte) e o
+    ciclo morria com `AttributeError: 'list' object has no attribute 'get'`
+    — exatamente o traceback que esta doutrina proíbe.
     """
     try:
         if _HAS_YAML:
-            return yaml.safe_load(text) or {}
-        return json.loads(text)
+            dados = yaml.safe_load(text) or {}
+        else:
+            dados = json.loads(text)
     except (*_YAML_ERRORS, json.JSONDecodeError) as exc:
         raise ValueError(f"arquivo de tarefa ilegível: {exc}") from exc
+    if not isinstance(dados, dict):
+        raise ValueError(
+            f"arquivo de tarefa deve ter um mapa no topo (veio {type(dados).__name__})"
+        )
+    return dados
 
 
 def _load_task_or_exit(path: Path) -> dict[str, Any]:
@@ -463,13 +474,27 @@ def _avisa_domain_desconhecido(data: dict[str, Any]) -> None:
         )
 
 
+def _secao(data: dict[str, Any], nome: str) -> dict[str, Any]:
+    """Seção da tarefa em forma de mapa, ou {} se ausente ou não-mapa.
+
+    K-11: YAML escrito à mão pode ter `fit: true`, `verify: "x"`, etc. As
+    fases do ciclo morriam com AttributeError (mesma classe que o R11-1
+    fechou para --audit/--judge). O que não pôde ser lido vira seção
+    vazia — a fase re-pergunta ou aplica o default, nunca traceback.
+    """
+    secao = data.get(nome)
+    if isinstance(secao, dict):
+        return secao
+    return {}
+
+
 def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
     """Fase 0: FIT — triviality gate + classificação da tarefa antes do THINK.
 
     Inspirado no fit gate do fable-method (think → act → prove → grow)
     e no Karpathy Development Cycle.
     """
-    fit = data.get("fit", {})
+    fit = _secao(data, "fit")
     if fit.get("answered"):
         print("(fit gate já respondido)")
         return data
@@ -643,7 +668,7 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
     if not has_changes:
         print("(nenhuma alteração detectada — pulando confirmações)")
 
-    simplify = data.get("simplify", {})
+    simplify = _secao(data, "simplify")
     if has_changes:
         simplify["minimum_code"] = _confirm("  O código mínimo resolve o problema?")
         simplify["no_single_use_abstractions"] = _confirm(
@@ -673,7 +698,7 @@ def _step_intent(task: str, data: dict[str, Any]) -> dict[str, Any]:
     de comportamento, registrar o que o código faz, o que o teste espera,
     e o que a especificação diz.
     """
-    intent = data.get("intent", {})
+    intent = _secao(data, "intent")
     if intent.get("answered"):
         print("(intent gate já respondido)")
         return data
@@ -739,7 +764,7 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     files = _changed_paths()
 
-    surgical = data.get("surgical", {})
+    surgical = _secao(data, "surgical")
     file_checks: list[dict[str, Any]] = []
 
     if files:
@@ -776,7 +801,8 @@ def _step_verify(
     _print_header("4. GOAL-DRIVEN — Verificação de qualidade")
     # Parte do verify existente (ex.: attempts de uma execução anterior) para
     # que o contador de tentativas sobreviva entre retomadas da tarefa.
-    verify: dict[str, Any] = dict(data.get("verify", {}))
+    # K-11: seção não-mapa (YAML à mão) vira {} — nunca AttributeError.
+    verify: dict[str, Any] = dict(_secao(data, "verify"))
     all_ok = True
 
     results = run_all(
@@ -847,7 +873,12 @@ def _step_verify(
     # persistido na tarefa. Após MAX_VERIFY_ATTEMPTS falhas, o ciclo devolve
     # a tarefa ao usuário com o que foi tentado, o output real e a hipótese
     # atual — não fica repetindo o mesmo fix-verify indefinidamente.
-    attempts = int(verify.get("attempts") or 0) + 1
+    # K-11: attempts não-numérico (YAML à mão) não pode derrubar o ciclo.
+    try:
+        attempts_base = int(verify.get("attempts") or 0)
+    except (TypeError, ValueError):
+        attempts_base = 0
+    attempts = attempts_base + 1
     verify["attempts"] = attempts
     verify["hand_back"] = not all_ok and attempts >= MAX_VERIFY_ATTEMPTS
     if verify["hand_back"]:
@@ -891,11 +922,11 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
     if data.get("status") != "approved":
         return data
 
-    twins = data.get("twins", {})
+    twins = _secao(data, "twins")
     if twins.get("searched"):
         return data
 
-    intent = data.get("intent", {})
+    intent = _secao(data, "intent")
     defect_fixed = not intent.get("all_agree", True) or _confirm(
         "  Um defeito foi corrigido? Deseja buscar padrão similar?", default=False
     )
@@ -1017,7 +1048,7 @@ def _detect_intent_owed(data: dict[str, Any]) -> bool:
     justamente onde não há ninguém para notar a ausência. Sem declaração,
     cai para o git.
     """
-    declared = [f.get("path", "") for f in data.get("surgical", {}).get("files", [])]
+    declared = [f.get("path", "") for f in _secao(data, "surgical").get("files", [])]
     paths = [p for p in declared if p] or _changed_paths()
     return any(Path(p).suffix.lower() not in _DOC_SUFFIXES for p in paths)
 
@@ -1032,7 +1063,7 @@ def _detect_auth_owed(data: dict[str, Any]) -> bool:
     Por isso a detecção depende de quem executou a ação (o agente ou o
     usuário) registrar `auth.action_taken` explicitamente.
     """
-    auth = data.get("auth", {})
+    auth = _secao(data, "auth")
     return bool(auth.get("action_taken"))
 
 
@@ -1042,7 +1073,7 @@ def _detect_pending_owed(data: dict[str, Any]) -> bool:
     if data.get("status") == "approved" and _has_deploy_docs():
         return True
     # Heurística 2: dados de pending já existentes
-    pending = data.get("pending", {})
+    pending = _secao(data, "pending")
     if pending.get("action"):
         return True
     return False
@@ -1057,11 +1088,11 @@ def _detect_twins_owed(data: dict[str, Any]) -> bool:
     Sobram os sinais que de fato indicam correção de defeito.
     """
     # Sinal 1: intent teve conflito (spec betrayal potencial)
-    intent = data.get("intent", {})
+    intent = _secao(data, "intent")
     if intent.get("answered") and not intent.get("all_agree"):
         return True
     # Sinal 2: o TWIN CHECK registrou que um defeito foi corrigido
-    twins = data.get("twins", {})
+    twins = _secao(data, "twins")
     return bool(twins.get("defect_fixed") or twins.get("pattern"))
 
 
@@ -1073,7 +1104,7 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
     """
     _print_header("4.5 ARTIFACT — Verificação de linhas devidas")
 
-    intent = data.get("intent", {})
+    intent = _secao(data, "intent")
 
     # INTENT: devida se a tarefa alterou algum arquivo que não é documentação
     intent_owed = _detect_intent_owed(data)
@@ -1081,15 +1112,15 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     # AUTH: devida se ação irreversível foi tomada
     auth_owed = _detect_auth_owed(data)
-    auth_present = bool(_format_auth_line(data.get("auth", {})))
+    auth_present = bool(_format_auth_line(_secao(data, "auth")))
 
     # PENDING: devida se docs prescrevem follow-up e não foi tomado
     pending_owed = _detect_pending_owed(data)
-    pending_present = bool(_format_pending_line(data.get("pending", {})))
+    pending_present = bool(_format_pending_line(_secao(data, "pending")))
 
     # TWINS: devida se defeito foi corrigido
     twins_owed = _detect_twins_owed(data)
-    twins_present = bool(_format_twins_line(data.get("twins", {})))
+    twins_present = bool(_format_twins_line(_secao(data, "twins")))
 
     checks: dict[str, Any] = {
         "intent_owed": intent_owed,
@@ -1148,11 +1179,11 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
                     }
 
         # Recompute present flags after user input so YAML reflects reality.
-        intent = data.get("intent", {})
+        intent = _secao(data, "intent")
         checks["intent_present"] = bool(_format_intent_line(intent))
-        checks["auth_present"] = bool(_format_auth_line(data.get("auth", {})))
-        checks["pending_present"] = bool(_format_pending_line(data.get("pending", {})))
-        checks["twins_present"] = bool(_format_twins_line(data.get("twins", {})))
+        checks["auth_present"] = bool(_format_auth_line(_secao(data, "auth")))
+        checks["pending_present"] = bool(_format_pending_line(_secao(data, "pending")))
+        checks["twins_present"] = bool(_format_twins_line(_secao(data, "twins")))
     else:
         print("  ✅ Todas as linhas devidas estão presentes")
 
@@ -1216,7 +1247,7 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     """
     status = data.get("status", "unknown")
     icon = "✅" if status == "approved" else "❌"
-    verify = data.get("verify", {})
+    verify = _secao(data, "verify")
 
     # Outcome first
     print()
@@ -1229,8 +1260,8 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
         return
 
     # O que foi feito
-    intent = data.get("intent", {})
-    surgical = data.get("surgical", {})
+    intent = _secao(data, "intent")
+    surgical = _secao(data, "surgical")
     think = data.get("think", {})
 
     print()
@@ -1315,7 +1346,7 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     scratch = _detect_scratch_files()
     if scratch:
         caveats.append(f"Arquivos temporários detectados: {', '.join(scratch)}")
-    artifact = data.get("artifact", {})
+    artifact = _secao(data, "artifact")
     if artifact.get("intent_owed") and not artifact.get("intent_present"):
         caveats.append("INTENT não documentada — comportamento alterado sem registro de intenção")
     if artifact.get("auth_owed") and not artifact.get("auth_present"):
@@ -1333,13 +1364,13 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
 
     # Forced artifact lines
     lines: list[str] = []
-    auth_line = _format_auth_line(data.get("auth", {}))
+    auth_line = _format_auth_line(_secao(data, "auth"))
     if auth_line:
         lines.append(auth_line)
-    pending_line = _format_pending_line(data.get("pending", {}))
+    pending_line = _format_pending_line(_secao(data, "pending"))
     if pending_line:
         lines.append(pending_line)
-    twins_line = _format_twins_line(data.get("twins", {}))
+    twins_line = _format_twins_line(_secao(data, "twins"))
     if twins_line:
         lines.append(twins_line)
     if lines:
@@ -1874,8 +1905,8 @@ def main() -> None:
     data = _step_fit(task, data)
     _save_task(path, data)
 
-    fit_route = data.get("fit", {}).get("route", "code-loop")
-    fit_trivial = data.get("fit", {}).get("trivial", False)
+    fit_route = _secao(data, "fit").get("route", "code-loop")
+    fit_trivial = _secao(data, "fit").get("trivial", False)
 
     if not fit_trivial or args.plan or fit_route in {"question", "plan-first"}:
         data = _step_think(task, data)

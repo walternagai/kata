@@ -51,6 +51,18 @@ class TestSerializeDeserialize:
         with pytest.raises(ValueError, match="ilegível"):
             cli._deserialize("{não é json")
 
+    def test_lista_no_topo_levanta_value_error(self) -> None:
+        """K-10: YAML com lista no topo (`- a\n- b`) não pode virar
+        AttributeError no ciclo — levanta ValueError nomeado (doutrina
+        R11-1). Antes, `yaml.safe_load or {}` devolvia a lista truthy e o
+        ciclo morria com `'list' object has no attribute 'get'`."""
+        with pytest.raises(ValueError, match="mapa no topo"):
+            cli._deserialize("- a\n- b")
+
+    def test_string_no_topo_levanta_value_error(self) -> None:
+        with pytest.raises(ValueError, match="mapa no topo"):
+            cli._deserialize("apenas uma string")
+
 
 class TestExt:
     """Testa a extensão de arquivo (.yaml ou .json)."""
@@ -598,6 +610,45 @@ class TestStepVerify:
         assert result["status"] == "approved"
         captured = capsys.readouterr()
         assert "check-only" in captured.out
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_verify_nao_mapa_nao_crasha(
+        self, mock_run_all, mock_confirm, capsys
+    ) -> None:
+        """K-11: `verify: "texto"` em YAML à mão não pode derrubar o ciclo
+        com AttributeError — a seção vira {} e o VERIFY roda do zero."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="5 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = True
+        data: dict = {"verify": "texto estranho"}
+        result = cli._step_verify("my-task", data)
+        assert result["status"] == "approved"
+        assert result["verify"]["attempts"] == 1
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_attempts_nao_numerico_nao_crasha(
+        self, mock_run_all, mock_confirm, capsys
+    ) -> None:
+        """K-11: `attempts: "abc"` (YAML à mão) não pode derrubar o int()."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="5 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = True
+        data: dict = {"verify": {"attempts": "abc"}}
+        result = cli._step_verify("my-task", data)
+        assert result["verify"]["attempts"] == 1
+        assert result["status"] == "approved"
 
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
@@ -1664,6 +1715,13 @@ class TestStepFit:
         result = cli._step_fit("task", data)
         assert result["fit"]["trivial"] is True
         assert "já respondido" in capsys.readouterr().out
+
+    def test_step_fit_secao_nao_mapa_nao_crasha(self, capsys) -> None:
+        """K-11: `fit: true` em YAML à mão não pode derrubar o ciclo com
+        AttributeError — a seção vira {} e o FIT re-pergunta do zero."""
+        data: dict = {"fit": True}
+        result = cli._step_fit("task", data)
+        assert "fit" in result
 
     @patch("kata.cli.diff_stats")
     @patch("kata.cli.input")

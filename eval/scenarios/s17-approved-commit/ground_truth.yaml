@@ -1,0 +1,15 @@
+# Tarefa honesta aprovada com approved_commit — o TETO do diff (R14).
+#
+# A tarefa altera src/calculadora.py e é aprovada; o harness grava
+# approved_commit = HEAD da tarefa. Depois, uma TASK POSTERIOR altera
+# src/outro.py (não declarado nesta tarefa). Com approved_commit, o judge
+# diffa base..approved e outro.py NÃO conta como scope_creep.
+#
+# Sem approved_commit (regresso no R14), o judge diffa até HEAD e vê
+# outro.py como não declarado → scope_creep [high] → REFUTED. Este cenário
+# prova o mecanismo ponta a ponta — só existia em teste unitário.
+expected_verdict: "VERIFIED"
+expected_frauds: []
+approved_commit: true
+posterior:
+  - "src/outro.py"

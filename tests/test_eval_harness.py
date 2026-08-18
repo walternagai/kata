@@ -328,6 +328,70 @@ class TestTamperaBaseCommit:
         assert f"base_commit: {head}" in yaml_text
 
 
+class TestGravaApprovedCommit:
+    """K-20: _grava_approved_commit grava o teto do diff (R14) no YAML."""
+
+    def test_grava_approved_commit_para_head(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "t.yaml").write_text("task: t\n", encoding="utf-8")
+        import subprocess as sp
+
+        sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        (tmp_path / "x.txt").write_text("x\n", encoding="utf-8")
+        sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        sp.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        head = sp.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        harness._grava_approved_commit(tmp_path, "t")
+
+        yaml_text = (tmp_path / ".kata" / "t.yaml").read_text(encoding="utf-8")
+        assert f"approved_commit: {head}" in yaml_text
+
+
+class TestAplicaPosterior:
+    """K-20: _aplica_posterior cria a task posterior após o approved_commit."""
+
+    def test_aplica_posterior_altera_arquivo_e_commita(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "t.yaml").write_text("task: t\n", encoding="utf-8")
+        (tmp_path / "outro.py").write_text("y = 1\n", encoding="utf-8")
+        import subprocess as sp
+
+        sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        sp.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+
+        harness._aplica_posterior(tmp_path, ["outro.py"])
+
+        conteudo = (tmp_path / "outro.py").read_text(encoding="utf-8")
+        assert "task posterior" in conteudo
+        log = sp.run(
+            ["git", "log", "--oneline"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout
+        assert "task posterior" in log
+
+    def test_aplica_posterior_cria_arquivo_que_nao_existe(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "t.yaml").write_text("task: t\n", encoding="utf-8")
+        import subprocess as sp
+
+        sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+
+        harness._aplica_posterior(tmp_path, ["novo.py"])
+        assert (tmp_path / "novo.py").exists()
+
+
 class TestRunJudge:
     """CR-005: cobrir run_judge."""
 

@@ -210,6 +210,43 @@ def _tampera_base_commit(path: Path, task: str) -> None:
     caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
+def _grava_approved_commit(path: Path, task: str) -> None:
+    """Grava approved_commit = HEAD do commit da tarefa no YAML (s17/K-20).
+
+    É o mesmo estado que _step_verify produz no approve: o teto do diff.
+    Sem isto o approved_commit só era exercitado em teste unitário — um
+    regresso na leitura ou nas validações do K-04 passaria no CI.
+    """
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    caminho_task = path / ".kata" / f"{task}.yaml"
+    dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
+    dados["approved_commit"] = sha
+    caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def _aplica_posterior(path: Path, arquivos: list[str]) -> None:
+    """Planta a 'task posterior': altera arquivos DEPOIS do approved_commit.
+
+    É o estado que o R14 existe para isolar: mudanças feitas por tasks
+    posteriores não podem contar como scope_creep para esta. Sem o
+    approved_commit (regresso), o judge diffa até HEAD e vê o arquivo
+    alterado como não declarado.
+    """
+    for nome in arquivos:
+        caminho = path / nome
+        if caminho.exists():
+            conteudo = caminho.read_text(encoding="utf-8")
+            caminho.write_text(conteudo + "# mudança de task posterior\n", encoding="utf-8")
+        else:
+            caminho.parent.mkdir(parents=True, exist_ok=True)
+            caminho.write_text("# criado por task posterior\n", encoding="utf-8")
+    git = _git_em(path)
+    git("add", "-A")
+    git("commit", "-q", "-m", "task posterior")
+
+
 def run_judge(path: Path, task: str) -> dict:
     """Executa kata --judge no diretório do fixture e retorna o resultado.
 
@@ -250,10 +287,12 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             valor = data.get(chave)
             if valor is not None and not isinstance(valor, list):
                 raise ScenarioError(f"ground_truth.yaml: {chave} deve ser uma lista")
-        for chave in ("tamper_base_commit", "kata_visivel"):
+        for chave in ("tamper_base_commit", "kata_visivel", "approved_commit"):
             valor = data.get(chave)
             if valor is not None and not isinstance(valor, bool):
                 raise ScenarioError(f"ground_truth.yaml: {chave} deve ser booleano")
+        if data.get("posterior") is not None and not isinstance(data.get("posterior"), list):
+            raise ScenarioError("ground_truth.yaml: posterior deve ser uma lista")
         return data
     except (OSError, yaml.YAMLError) as exc:
         raise ScenarioError(f"ground_truth.yaml ilegível: {exc}") from exc
@@ -418,6 +457,10 @@ def main() -> None:
                     )
                 if gt.get("tamper_base_commit"):
                     _tampera_base_commit(work_dir, tarefa)
+                if gt.get("approved_commit"):
+                    _grava_approved_commit(work_dir, tarefa)
+                if gt.get("posterior"):
+                    _aplica_posterior(work_dir, gt["posterior"])
 
                 judge_output = run_judge(work_dir, tarefa)
                 passed, messages = evaluate(scenario, gt, judge_output)

@@ -59,3 +59,46 @@ jobs:
       # Sem isto, eval/ só roda quando alguém lembra de rodar à mão.
       - name: Adversarial eval traps
         run: python3 eval/run_traps.py
+
+  # K-21: os instaladores PowerShell nunca foram executados — o CI só rodava
+  # ubuntu e os .ps1 admitiam "não foi executado" no cabeçalho. Este job
+  # espelha o que test_install.py faz para os .sh, em ambiente real: instala
+  # (-Copy e default) e desinstala, tudo em dirs temporários via
+  # OPENCODE_CONFIG_DIR/CLAUDE_CONFIG_DIR.
+  installers-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Instala skills do OpenCode (-Copy)
+        shell: pwsh
+        run: |
+          $env:OPENCODE_CONFIG_DIR = "$env:RUNNER_TEMP/opencode-config"
+          .\scripts\install.ps1 -Copy
+          if (-not (Test-Path "$env:OPENCODE_CONFIG_DIR/agent/kata.md")) { throw "agente não instalado" }
+          $skills = Get-ChildItem -Directory "$env:OPENCODE_CONFIG_DIR/skills"
+          if ($skills.Count -lt 10) { throw "skills insuficientes: $($skills.Count)" }
+
+      - name: Desinstala skills do OpenCode
+        shell: pwsh
+        run: |
+          $env:OPENCODE_CONFIG_DIR = "$env:RUNNER_TEMP/opencode-config"
+          .\scripts\install.ps1 -Uninstall
+          if (Test-Path "$env:OPENCODE_CONFIG_DIR/agent/kata.md") { throw "agente não removido" }
+
+      - name: Instala skills do Claude Code (-Copy)
+        shell: pwsh
+        run: |
+          $env:CLAUDE_CONFIG_DIR = "$env:RUNNER_TEMP/claude-config"
+          .\scripts\install-claude-code.ps1 -Copy
+          $skills = Get-ChildItem -Directory "$env:CLAUDE_CONFIG_DIR/skills"
+          if ($skills.Count -lt 10) { throw "skills insuficientes: $($skills.Count)" }
+
+      - name: Desinstala skills do Claude Code
+        shell: pwsh
+        run: |
+          $env:CLAUDE_CONFIG_DIR = "$env:RUNNER_TEMP/claude-config"
+          .\scripts\install-claude-code.ps1 -Uninstall
+          $skills = Get-ChildItem -Directory "$env:CLAUDE_CONFIG_DIR/skills" -ErrorAction SilentlyContinue
+          if ($skills.Count -gt 0) { throw "skills não removidas: $($skills.Count)" }

@@ -1,0 +1,47 @@
+task: sondas-js-ponta-a-ponta
+status: approved
+base_commit: BASE_COMMIT_PLACEHOLDER
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Cobertura adversarial de sondas JS."
+  answered: true
+think:
+  problem: "Exercitar as sondas JS do judge em cenário de trap."
+  answered: true
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  answered: true
+surgical:
+  files:
+    - path: src/soma.test.js
+      necessary: true
+    - path: src/subtracao.test.js
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+intent:
+  code_does: "soma e subtracao retornam numeros"
+  check_expects: "numeros"
+  spec_says: "numeros"
+  all_agree: true
+  answered: true
+# Fixture JS puro sem runner Python: nenhuma claim reproduzível — o judge
+# não re-executa nada (mesmo padrão do s13). As fraudes vêm das sondas.
+verify:
+  ruff_clean: null
+  tests_pass: null
+  coverage_pct: null
+  coverage_pass: null
+  success_criteria_met: null
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: false
+  twins_present: true

@@ -172,14 +172,8 @@ class TestInitTask:
 class TestCaptureBaseCommit:
     """Testa _capture_base_commit — registro do HEAD no início da tarefa."""
 
-    def test_captures_head_in_git_repo(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.chdir(tmp_path)
-        subprocess.run(["git", "init", "-q"], check=True)
-        subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
-        subprocess.run(["git", "config", "user.name", "t"], check=True)
-        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "init"], check=True)
+    def test_captures_head_in_git_repo(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
         ).stdout.strip()
@@ -189,7 +183,6 @@ class TestCaptureBaseCommit:
 
     def test_does_not_overwrite_existing(self, tmp_path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
-        subprocess.run(["git", "init", "-q"], check=True)
         data = cli._capture_base_commit({"base_commit": "already-set"})
         assert data["base_commit"] == "already-set"
 
@@ -198,15 +191,8 @@ class TestCaptureBaseCommit:
         data = cli._capture_base_commit({})
         assert "base_commit" not in data
 
-    def test_init_task_captures_base_commit(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.chdir(tmp_path)
-        subprocess.run(["git", "init", "-q"], check=True)
-        subprocess.run(["git", "config", "user.email", "t@t.com"], check=True)
-        subprocess.run(["git", "config", "user.name", "t"], check=True)
-        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "init"], check=True)
-
+    def test_init_task_captures_base_commit(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
         cli._kata_dir().mkdir(parents=True, exist_ok=True)
         cli._init_task("with-base-commit")
         data = cli._deserialize(cli._task_path("with-base-commit").read_text(encoding="utf-8"))
@@ -460,6 +446,29 @@ class TestStepSimplify:
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
+    def test_step_simplify_fallback_quando_diff_head_falha(
+        self, mock_stdin, mock_run, mock_confirm, mock_untracked
+    ) -> None:
+        """K-25: `git diff HEAD --stat` falha (repo sem commit) → fallback
+        para `git diff --stat` (ramos 620-624)."""
+        mock_stdin.isatty.return_value = True
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="fatal"),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="1 file changed\n", stderr=""
+            ),
+        ]
+        mock_confirm.side_effect = [True, False, False]
+        with patch("kata.cli.input", return_value="observação importante"):
+            data: dict = {}
+            result = cli._step_simplify("task", data)
+        assert result["simplify"]["minimum_code"] is True
+        # K-25: notes preenchido é gravado (ramo 657).
+        assert result["simplify"]["notes"] == "observação importante"
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli._run_git")
+    @patch("kata.cli.sys.stdin")
     def test_step_simplify_no_changes(
         self, mock_stdin, mock_run, mock_confirm, mock_untracked
     ) -> None:
@@ -593,19 +602,13 @@ class TestStepVerify:
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
     def test_step_verify_approved_grava_approved_commit(
-        self, mock_run_all, mock_confirm, capsys, tmp_path, monkeypatch
+        self, mock_run_all, mock_confirm, capsys, repo_git, monkeypatch
     ) -> None:
         """R14: ao aprovar, _step_verify grava approved_commit (HEAD atual) —
         o teto do diff que o JUDGE usa para não contar tasks posteriores."""
-        monkeypatch.chdir(tmp_path)
-        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
-        (tmp_path / "x.txt").write_text("x\n", encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        monkeypatch.chdir(repo_git)
         head = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
         ).stdout.strip()
 
         mock_run_all.return_value = {
@@ -1835,6 +1838,21 @@ class TestStepFit:
         assert result["fit"]["trivial"] is True
         assert result["fit"]["route"] == "plan-first"
 
+    @patch("kata.cli.diff_stats")
+    @patch("kata.cli.input")
+    @patch("kata.cli.sys.stdin")
+    def test_step_fit_trivial_recusado_mantem_gates(
+        self, mock_stdin, mock_input, mock_diff_stats, capsys
+    ) -> None:
+        """K-25: usuário recusa a trivialidade (responde 'n') — os gates
+        completos são mantidos por segurança (ramo 504-506)."""
+        mock_stdin.isatty.return_value = True
+        mock_diff_stats.return_value = (["src/foo.py"], 3)
+        mock_input.side_effect = ["n", "1", "não é tão trivial"]
+        result = cli._step_fit("task", {})
+        assert result["fit"]["trivial"] is False
+        assert "gates completos" in capsys.readouterr().out
+
 
 class TestMainPlanMode:
     """Testa main() no modo --plan."""
@@ -2513,7 +2531,10 @@ class TestHasDeployDocs:
 
     @patch("kata.cli.Path.read_text")
     def test_read_error_returns_false(self, mock_read) -> None:
-        mock_read.side_effect = Exception("read error")
+        """K-28: OSError/UnicodeDecodeError vira warning + False — o
+        `except Exception` antigo engolia bugs reais; agora só as exceções
+        esperadas de leitura são capturadas."""
+        mock_read.side_effect = OSError("permission denied")
         assert cli._has_deploy_docs() is False
 
 
@@ -2531,15 +2552,9 @@ class TestDetectAuthOwed:
         data = {"auth": {"action_taken": False}}
         assert cli._detect_auth_owed(data) is False
 
-    def test_unpushed_local_commits_do_not_imply_auth_owed(self, tmp_path, monkeypatch) -> None:
+    def test_unpushed_local_commits_do_not_imply_auth_owed(self, repo_git, monkeypatch) -> None:
         """Commits locais não enviados são reversíveis — não devem disparar AUTH."""
-        monkeypatch.chdir(tmp_path)
-        subprocess.run(["git", "init", "-q"], check=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], check=True)
-        subprocess.run(["git", "config", "user.name", "test"], check=True)
-        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "local only"], check=True)
+        monkeypatch.chdir(repo_git)
         assert cli._detect_auth_owed({}) is False
 
 
@@ -2915,6 +2930,35 @@ class TestStepReport:
         assert "2 file(s)" in out
         assert "rollout to prod" in out
 
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_pending_nao_documentada_vira_caveat(self, mock_scratch, capsys) -> None:
+        """K-25: PENDING owed sem documentação e TWINS owed sem busca viram
+        caveats no relatório (ramos 1417-1420)."""
+        data = {
+            "status": "approved",
+            "think": {"problem": "bug fix"},
+            "verify": {"tests_pass": True},
+            "artifact": {"pending_owed": True, "twins_owed": True},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "PENDING não documentada" in out
+        assert "TWINS não documentada" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_domain_devops(self, mock_scratch, capsys) -> None:
+        """K-25: domínio diferente de coding é exibido no relatório (ramo
+        1332)."""
+        data = {
+            "status": "approved",
+            "domain": "devops",
+            "think": {"problem": "bug fix"},
+            "verify": {"tests_pass": True},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "devops" in out
+
 
 class TestMainReport:
     """Testa o modo --report (outcome-first reporting)."""
@@ -3149,6 +3193,28 @@ class TestStepTwin:
         assert result["twins"]["matches_count"] == 1
         assert result["twins"]["files_count"] == 1
         assert result["twins"]["fix_applied"] is False
+
+    @patch("kata.cli.search_pattern")
+    @patch("kata.cli.sys.stdin")
+    def test_defect_fixed_fix_others_confirmado_avisa(self, mock_stdin, mock_search) -> None:
+        """K-25: usuário confirma 'Corrigir as demais ocorrências?' — o CLI
+        avisa que não edita e grava fix_applied=False (ramo 1058-1061)."""
+        from kata.verify import SearchMatch, SearchResult
+
+        mock_stdin.isatty.return_value = True
+        mock_search.return_value = SearchResult(
+            pattern="parse_date",
+            matches=[SearchMatch(file="src/parser.py", line=42, content="parse_date(x)")],
+            total_files=1,
+        )
+        data = {"status": "approved", "intent": {"all_agree": True}}
+        with patch("builtins.input", side_effect=["parse_date"]):
+            with patch("kata.cli._confirm") as mock_cf:
+                mock_cf.side_effect = [True, True]  # defeito + corrigir agora
+                result = cli._step_twin("task", data)
+
+        assert result["twins"]["fix_applied"] is False
+        assert result["twins"]["searched"] is True
 
     @patch("kata.cli._confirm", return_value=True)
     @patch("kata.cli.search_pattern")

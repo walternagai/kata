@@ -1084,7 +1084,11 @@ def _has_deploy_docs() -> bool:
     try:
         text = readme.read_text(encoding="utf-8").lower()
         return any(kw in text for kw in deploy_keywords)
-    except Exception:
+    except (OSError, UnicodeDecodeError) as exc:
+        # K-28: gêmeo do CR-009 — `except Exception` engolia bugs reais e
+        # fazia a heurística de deploy falhar em silêncio. README ilegível
+        # vira warning, não silêncio.
+        logging.warning("README.md ilegível (%s); assumindo sem docs de deploy", exc)
         return False
 
 

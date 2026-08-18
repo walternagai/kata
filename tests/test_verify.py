@@ -121,6 +121,19 @@ class TestRun:
         assert result.returncode == 124
         assert "excedeu" in result.stderr
 
+    @patch(
+        "kata.verify.subprocess.run",
+        side_effect=subprocess.TimeoutExpired("sleep", 300, output=b"parcial"),
+    )
+    def test_run_timeout_com_bytes_nao_crasha(self, mock_subprocess_run: MagicMock) -> None:
+        """P-3: TimeoutExpired com stdout/stderr em bytes (comportamento real
+        quando text=True não é respeitado) precisa decodificar com
+        errors='replace', não crashar."""
+        result = _run(["sleep", "999"])
+        assert result.returncode == 124
+        assert "parcial" in result.stdout
+        assert "excedeu" in result.stderr
+
 
 class TestRunPytest:
     """Testa run_pytest com subprocess mockado."""

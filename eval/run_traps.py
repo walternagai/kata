@@ -226,6 +226,23 @@ def _grava_approved_commit(path: Path, task: str) -> None:
     caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
+def _ignora_arquivo(path: Path, caminho_relativo: str) -> None:
+    """Planta um arquivo ignorado via .git/info/exclude (s19/K-20).
+
+    O ignore local é o estado real de um projeto que ignora arquivos sem
+    rastrear o .gitignore. O `exclude` é local ao repo do fixture — não
+    vaza para o repositório do kata como um .gitignore rastreado faria.
+
+    O `git add -A` do init_git_repo já pode ter adicionado o arquivo ao
+    índice (o ignore ainda não existia); `rm --cached` tira o caminho de
+    lá para que `ls-files --others --ignored` o veja.
+    """
+    with open(path / ".git" / "info" / "exclude", "a", encoding="utf-8") as f:
+        f.write(f"{caminho_relativo}\n")
+    git = _git_em(path)
+    git("rm", "--cached", "-q", caminho_relativo)
+
+
 def _aplica_posterior(path: Path, arquivos: list[str]) -> None:
     """Planta a 'task posterior': altera arquivos DEPOIS do approved_commit.
 
@@ -293,6 +310,8 @@ def load_ground_truth(scenario_dir: Path) -> dict:
                 raise ScenarioError(f"ground_truth.yaml: {chave} deve ser booleano")
         if data.get("posterior") is not None and not isinstance(data.get("posterior"), list):
             raise ScenarioError("ground_truth.yaml: posterior deve ser uma lista")
+        if data.get("ignore_file") is not None and not isinstance(data.get("ignore_file"), str):
+            raise ScenarioError("ground_truth.yaml: ignore_file deve ser uma string")
         return data
     except (OSError, yaml.YAMLError) as exc:
         raise ScenarioError(f"ground_truth.yaml ilegível: {exc}") from exc
@@ -444,6 +463,8 @@ def main() -> None:
                     gt.get("leave_untracked"),
                     kata_visivel=bool(gt.get("kata_visivel")),
                 )
+                if gt.get("ignore_file"):
+                    _ignora_arquivo(work_dir, gt["ignore_file"])
 
                 tarefa = task_name(work_dir)
                 baseline = scenario / "baseline"

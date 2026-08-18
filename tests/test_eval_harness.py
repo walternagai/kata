@@ -392,6 +392,37 @@ class TestAplicaPosterior:
         assert (tmp_path / "novo.py").exists()
 
 
+class TestIgnoraArquivo:
+    """K-20: _ignora_arquivo planta o ignore local sem vazar para o repo."""
+
+    def test_ignora_arquivo_tira_do_indice(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_segredo.py").write_text("x = 1\n", encoding="utf-8")
+        import subprocess as sp
+
+        sp.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+        sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+        sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+
+        harness._ignora_arquivo(tmp_path, "tests/test_segredo.py")
+
+        # Saiu do índice e aparece como ignorado
+        rastreados = sp.run(
+            ["git", "ls-files"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout
+        assert "test_segredo.py" not in rastreados
+        ignorados = sp.run(
+            ["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert "tests/test_segredo.py" in ignorados
+
+
 class TestRunJudge:
     """CR-005: cobrir run_judge."""
 

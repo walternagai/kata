@@ -71,12 +71,13 @@ MAX_VERIFY_ATTEMPTS = 3
 # Versão do schema de .kata/<task>.yaml (CR-014/S5). O --init grava no topo
 # do template; a leitura tolera ausência (YAMLs antigos) tratando como 1.
 # Quando uma mudança obrigatória for necessária, incremente e falhe com
-# mensagem clara em vez de .get() silencioso.
+# mensagem clara em vez de .get() silencioso. A leitura vive em
+# _deserialize — sem ela, o mecanismo era write-only (K-14).
 SCHEMA_VERSION = 1
 
 # Extensões que _task_path pode concatenar, conforme PyYAML esteja
 # presente ou não. A validação rejeita as duas independentemente.
-_SERIALIZATION_EXTS = (".yaml", ".json")
+_SERIALIZATION_EXTS = (".yaml", ".yml", ".json")
 
 
 def _cwd() -> Path:
@@ -123,6 +124,8 @@ def _deserialize(text: str) -> dict[str, Any]:
     um arquivo `- a\n- b` (lista é truthy, o `or {}` não converte) e o
     ciclo morria com `AttributeError: 'list' object has no attribute 'get'`
     — exatamente o traceback que esta doutrina proíbe.
+
+    K-14: valida a versão do schema na leitura (ver SCHEMA_VERSION).
     """
     try:
         if _HAS_YAML:
@@ -134,6 +137,22 @@ def _deserialize(text: str) -> dict[str, Any]:
     if not isinstance(dados, dict):
         raise ValueError(
             f"arquivo de tarefa deve ter um mapa no topo (veio {type(dados).__name__})"
+        )
+    # K-14: valida a versão do schema na LEITURA. Antes, o mecanismo era
+    # write-only (o --init gravava, ninguém lia) e a promessa do comentário
+    # de SCHEMA_VERSION ("quando uma mudança obrigatória for necessária,
+    # incremente e falhe com mensagem clara") não existia no código. Ausência
+    # (YAMLs antigos) tolerada como 1.
+    try:
+        versao = int(dados.get("schema_version", SCHEMA_VERSION))
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"schema_version inválido: {dados.get('schema_version')!r} (esperava um inteiro)"
+        ) from None
+    if versao > SCHEMA_VERSION:
+        raise ValueError(
+            f"tarefa usa schema_version {versao}, mas este kata suporta até "
+            f"{SCHEMA_VERSION} — atualize a ferramenta (pip install -U kata)"
         )
     return dados
 
@@ -195,6 +214,12 @@ def _is_invalid_task_name(task: str) -> bool:
     regra ao formato ativo fazia `--init foo.yaml` passar quando PyYAML está
     ausente, criando `.kata/foo.yaml.json`. Nome de tarefa é escolha do
     usuário e não deve depender de qual biblioteca está instalada.
+
+    K-16: "check-only" também é rejeitado — o VERIFY usa o nome da tarefa
+    como magic string para pular a confirmação do critério de sucesso
+    (task == "check-only"); uma tarefa legítima com esse nome teria o
+    sucesso assumido silenciosamente, a classe de "sucesso afirmado sem
+    confirmação" que o audit caça.
     """
     if not task or not task.strip():
         return True
@@ -204,7 +229,7 @@ def _is_invalid_task_name(task: str) -> bool:
         return True
     if task.endswith(_SERIALIZATION_EXTS):
         return True
-    if task == "config":
+    if task == "config" or task == "check-only":
         return True
     return "/" in task or "\\" in task or ".." in task
 
@@ -220,7 +245,7 @@ def _validate_task_name(task: str) -> None:
             f"⚠  Nome de tarefa inválido: '{task}'. "
             "Não pode ser vazio, conter espaços, começar com '.', "
             f"terminar em {' ou '.join(_SERIALIZATION_EXTS)}, "
-            "nem ser 'config' ou conter '/', '\\' ou '..'."
+            "nem ser 'config', 'check-only' ou conter '/', '\\' ou '..'."
         )
         sys.exit(1)
 
@@ -261,14 +286,14 @@ def _pick_task() -> str:
         for i, name in enumerate(existing, 1):
             print(f"  {i}. {name}")
         print(f"  {len(existing) + 1}. [Nova tarefa]")
-        choice = input("\nEscolha (número ou nome): ").strip()
+        choice = _ask_text("\nEscolha (número ou nome): ")
         if choice.isdigit():
             idx = int(choice) - 1
             if 0 <= idx < len(existing):
                 return existing[idx]
         elif choice in existing:
             return choice
-    name = input("Nome da tarefa: ").strip().replace(" ", "-") or "untitled"
+    name = _ask_text("Nome da tarefa: ").replace(" ", "-") or "untitled"
     if _is_invalid_task_name(name):
         print("⚠  Nome de tarefa inválido. Usando 'untitled'")
         return "untitled"
@@ -355,6 +380,19 @@ def _confirm(prompt: str, default: bool = True) -> bool:
     if not answer:
         return default
     return answer in ("s", "sim", "y", "yes")
+
+
+def _ask_text(prompt: str, default: str = "") -> str:
+    """Pergunta em texto livre tratando EOF/Ctrl-C (K-17).
+
+    Os input() crus das fases (rota, THINK, INTENT, TWIN, observações)
+    morriam com traceback em Ctrl-D — _confirm já tratava, os demais não.
+    EOF/Ctrl-C devolve o default (ou ""), nunca traceback.
+    """
+    try:
+        return input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        return default
 
 
 def _print_header(text: str) -> None:
@@ -538,7 +576,7 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
     print("    [4] research    — precisa pesquisar antes de agir")
     print("    [5] inference   — baseado só em inferência (baixa confiança)")
 
-    choice = input("\n  Rota escolhida [1]: ").strip() or "1"
+    choice = _ask_text("\n  Rota escolhida [1]: ") or "1"
     route_map = {
         "1": "code-loop",
         "2": "plan-first",
@@ -547,7 +585,7 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
         "5": "inference",
     }
     route = route_map.get(choice, "code-loop")
-    reason = input("  Justificativa breve (opcional): ").strip()
+    reason = _ask_text("  Justificativa breve (opcional): ")
 
     # `answered` fecha o guard no topo desta função: sem gravá-la, FIT
     # repergunta a cada retomada da tarefa. think e intent já gravavam a sua.
@@ -589,15 +627,15 @@ def _step_think(task: str, data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     print("Pergunte-se:")
-    problem = input("  Qual o problema exato que estou resolvendo? ").strip()
-    assumptions_raw = input("  Quais assumptions estou fazendo? (separadas por ;) ").strip()
-    alternatives_raw = input("  Quais alternativas considerei? (separadas por ;) ").strip()
-    unknowns = input("  O que NÃO sei? (preciso perguntar antes?) ").strip()
+    problem = _ask_text("  Qual o problema exato que estou resolvendo? ")
+    assumptions_raw = _ask_text("  Quais assumptions estou fazendo? (separadas por ;) ")
+    alternatives_raw = _ask_text("  Quais alternativas considerei? (separadas por ;) ")
+    unknowns = _ask_text("  O que NÃO sei? (preciso perguntar antes?) ")
     # Fable Step 1: definir "pronto" ANTES da evidência, com verificação
     # nomeada ("done = este teste passa, o build fica verde, esta página
     # renderiza"). O VERIFY confronta este critério declarado com o resultado
     # final — sem isso, o critério só existe depois que tudo já foi feito.
-    done = input("  O que é 'pronto'? (critério de sucesso + como vou verificar) ").strip()
+    done = _ask_text("  O que é 'pronto'? (critério de sucesso + como vou verificar) ")
 
     data["think"] = {
         "problem": problem,
@@ -618,6 +656,14 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
     identificação no YAML, mas não é usado na lógica desta fase.
     """
     _print_header("2. SIMPLIFY — O código é mínimo?")
+
+    # K-12: guard de retomada, no mesmo contrato de FIT/THINK/INTENT/TWIN.
+    # Antes, SIMPLIFY e SURGICAL re-perguntavam tudo a cada retomada de
+    # tarefa rejeitada enquanto as irmãs pulavam — e o `answered: True`
+    # gravado era dead code para o ciclo (só o audit o lia).
+    if _secao(data, "simplify").get("answered"):
+        print("(simplify já respondido)")
+        return data
 
     if not sys.stdin.isatty():
         print("(modo não-interativo — pulando SIMPLIFY)")
@@ -677,7 +723,7 @@ def _step_simplify(task: str, data: dict[str, Any]) -> dict[str, Any]:
         simplify["no_speculative_config"] = _confirm(
             "  Código livre de configurabilidade não solicitada?", default=True
         )
-        notes = input("  Observações (opcional): ").strip()
+        notes = _ask_text("  Observações (opcional): ")
         if notes:
             simplify["notes"] = notes
     else:
@@ -721,15 +767,15 @@ def _step_intent(task: str, data: dict[str, Any]) -> dict[str, Any]:
     _print_header("2.5 INTENT — Antes de mudar, verifique a intenção")
 
     print("  Se esta tarefa muda comportamento, responda:")
-    code_does = input("  O que o código FAZ hoje? ").strip()
-    check_expects = input("  O que o teste/check ESPERA? ").strip()
-    spec_says = input("  O que a especificação/README DIZ? ").strip()
+    code_does = _ask_text("  O que o código FAZ hoje? ")
+    check_expects = _ask_text("  O que o teste/check ESPERA? ")
+    spec_says = _ask_text("  O que a especificação/README DIZ? ")
 
     all_agree = _confirm("  Código, teste e especificação concordam?", default=True)
     if not all_agree:
         print("  ⚠  Conflito detectado! A ordem de autoridade é:")
         print("     declaração do usuário > spec > testes > código")
-        resolve = input("  Como resolver o conflito? ").strip()
+        resolve = _ask_text("  Como resolver o conflito? ")
     else:
         resolve = ""
 
@@ -751,6 +797,11 @@ def _step_surgical(task: str, data: dict[str, Any]) -> dict[str, Any]:
     identificação no YAML, mas não é usado na lógica desta fase.
     """
     _print_header("3. SURGICAL — Cada linha toca só o necessário")
+
+    # K-12: guard de retomada (mesmo contrato de FIT/THINK/INTENT/TWIN).
+    if _secao(data, "surgical").get("answered"):
+        print("(surgical já respondido)")
+        return data
 
     if not sys.stdin.isatty():
         print("(modo não-interativo — pulando SURGICAL)")
@@ -869,7 +920,7 @@ def _step_verify(
     if not success_met:
         all_ok = False
 
-    # Hard bound (Fable Step 5): contador de tentativas de verificação
+    # Hard bound (Fable Step 5): contador de tentativas FALHAS de verificação
     # persistido na tarefa. Após MAX_VERIFY_ATTEMPTS falhas, o ciclo devolve
     # a tarefa ao usuário com o que foi tentado, o output real e a hipótese
     # atual — não fica repetindo o mesmo fix-verify indefinidamente.
@@ -878,7 +929,14 @@ def _step_verify(
         attempts_base = int(verify.get("attempts") or 0)
     except (TypeError, ValueError):
         attempts_base = 0
-    attempts = attempts_base + 1
+    # K-13: o contador mede FALHAS, não execuções. Antes, toda execução
+    # incrementava e o relatório dizia "N tentativa(s) falharam" quando uma
+    # tinha passado — tarefa aprovada (1) + 2 falhas disparava hand_back
+    # com apenas 2 falhas reais.
+    if not all_ok:
+        attempts = attempts_base + 1
+    else:
+        attempts = attempts_base
     verify["attempts"] = attempts
     verify["hand_back"] = not all_ok and attempts >= MAX_VERIFY_ATTEMPTS
     if verify["hand_back"]:
@@ -957,7 +1015,7 @@ def _step_twin(task: str, data: dict[str, Any]) -> dict[str, Any]:
 
     _print_header("TWIN CHECK — Busca de padrão recorrente")
 
-    pattern = input("  Padrão a buscar (regex): ").strip()
+    pattern = _ask_text("  Padrão a buscar (regex): ")
     if not pattern:
         data["twins"] = {
             "searched": False,
@@ -1151,8 +1209,8 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
             print()
             for msg in missing:
                 if msg.startswith("AUTH"):
-                    action = input("  Ação realizada: ").strip()
-                    auth_line = input("  Citação exata da autorização: ").strip()
+                    action = _ask_text("  Ação realizada: ")
+                    auth_line = _ask_text("  Citação exata da autorização: ")
                     data["auth"] = {
                         "action_taken": True,
                         "authorized": True,
@@ -1769,6 +1827,14 @@ def main() -> None:
         parser.error(
             "--audit é mutuamente exclusivo com --init, --plan, --check-only, --judge e --report"
         )
+    # K-17: --init/--check-only com os modos de tarefa eram descartados em
+    # silêncio (o branch do --init roda primeiro). `--init foo --judge`
+    # parecia julgar e ganhava um init; `--task x --check-only` rodava o
+    # check-only sobre a task resolvida de outro jeito. Agora é erro nomeado.
+    if args.init and (args.judge or args.report or args.plan or args.check_only):
+        parser.error("--init é mutuamente exclusivo com --judge, --report, --plan e --check-only")
+    if args.task and args.check_only:
+        parser.error("--task é mutuamente exclusivo com --check-only")
 
     # --doctor não toca em tarefa nem precisa de .kata/: é sobre a
     # instalação das skills, e tem de funcionar de qualquer diretório.

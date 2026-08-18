@@ -84,11 +84,20 @@ class VerifyConfig:
 
 
 def _parse_command(value: Any, role: str) -> list[str] | None:
-    """Aceita string ("npx eslint src") ou lista (["npx", "eslint", "src"])."""
+    """Aceita string ("npx eslint src") ou lista (["npx", "eslint", "src"]).
+
+    K-09: aspas não fechadas ("npx eslint 'src") levantam ValueError do
+    shlex — antes escapavam do `except ConfigError` do main e viravam
+    traceback. Config ilegível é erro nomeado, nunca traceback (mesma
+    doutrina do docstring de ConfigError).
+    """
     if value is None:
         return None
     if isinstance(value, str):
-        cmd = shlex.split(value)
+        try:
+            cmd = shlex.split(value)
+        except ValueError as exc:
+            raise ConfigError(f"verify.{role}: comando inválido ({exc})") from exc
         if not cmd:
             raise ConfigError(f"verify.{role}: comando vazio")
         return cmd
@@ -117,15 +126,18 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
     if caminho is None:
         return VerifyConfig()
 
-    texto = caminho.read_text(encoding="utf-8")
+    texto = ""
     try:
+        texto = caminho.read_text(encoding="utf-8")
         if caminho.suffix == ".json" or not _HAS_YAML:
             dados = json.loads(texto)
         else:
             dados = yaml.safe_load(texto)
     except Exception as exc:
-        # YAML e JSON levantam exceções de famílias diferentes; o que importa
-        # é que config ilegível vire erro nomeado, nunca default silencioso.
+        # YAML, JSON e OSError levantam exceções de famílias diferentes; o
+        # que importa é que config ilegível vire erro nomeado, nunca default
+        # silencioso. O read_text fora do try deixava OSError (permissão,
+        # diretório quebrado) escapar como traceback (K-09).
         raise ConfigError(f"{caminho}: não foi possível ler ({exc})") from exc
 
     if dados is None:

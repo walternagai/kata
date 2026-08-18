@@ -145,6 +145,21 @@ class TestInitTask:
         data = cli_mod._deserialize(cli._task_path("test-task").read_text(encoding="utf-8"))
         assert data["schema_version"] == cli.SCHEMA_VERSION == 1
 
+    def test_deserialize_rejeita_schema_futuro(self, monkeypatch) -> None:
+        """K-14: a leitura valida a versão do schema — antes o mecanismo era
+        write-only (o --init gravava, ninguém lia). Schema futuro falha com
+        mensagem clara, nunca .get() silencioso."""
+        texto = "task: t\nschema_version: 99\nstatus: draft\n"
+        with pytest.raises(ValueError, match="schema_version 99"):
+            cli._deserialize(texto)
+
+    def test_deserialize_aceita_schema_ausente(self, monkeypatch) -> None:
+        """K-14: YAMLs antigos sem schema_version continuam funcionando
+        (tolerados como versão 1)."""
+        texto = "task: t\nstatus: draft\n"
+        result = cli._deserialize(texto)
+        assert result["task"] == "t"
+
     def test_init_existing_warns(self, tmp_path, monkeypatch, capsys) -> None:
         monkeypatch.chdir(tmp_path)
         cli._kata_dir().mkdir(parents=True, exist_ok=True)
@@ -263,6 +278,28 @@ class TestConfirm:
         mock_stdin.isatty.return_value = True
         assert cli._confirm("Continuar?", default=True) is True
 
+    @patch("kata.cli.input", side_effect=EOFError)
+    @patch("kata.cli.sys.stdin")
+    def test_confirm_eof_returns_default(self, mock_stdin, mock_input) -> None:
+        mock_stdin.isatty.return_value = True
+        assert cli._confirm("Continuar?", default=True) is True
+
+
+class TestAskText:
+    """K-17: _ask_text trata EOF/Ctrl-C nos input() crus das fases."""
+
+    @patch("kata.cli.input", return_value="  resposta  ")
+    def test_ask_text_strips(self, mock_input) -> None:
+        assert cli._ask_text("Pergunta?") == "resposta"
+
+    @patch("kata.cli.input", side_effect=EOFError)
+    def test_ask_text_eof_returns_default(self, mock_input) -> None:
+        assert cli._ask_text("Pergunta?", default="fallback") == "fallback"
+
+    @patch("kata.cli.input", side_effect=KeyboardInterrupt)
+    def test_ask_text_keyboard_interrupt_returns_default(self, mock_input) -> None:
+        assert cli._ask_text("Pergunta?") == ""
+
     @patch("kata.cli.input", return_value="")
     @patch("kata.cli.sys.stdin")
     def test_confirm_empty_returns_default_false(self, mock_stdin, mock_input) -> None:
@@ -372,6 +409,18 @@ class TestStepSimplify:
         assert result["simplify"]["answered"] is False
         assert result["simplify"]["skipped"] is True
 
+    @patch("kata.cli.sys.stdin")
+    def test_step_simplify_guard_answered_nao_repergunta(
+        self, mock_stdin, mock_untracked, capsys
+    ) -> None:
+        """K-12: SIMPLIFY respondeu (retomada de tarefa) → pula, no mesmo
+        contrato de FIT/THINK/INTENT/TWIN. Antes, re-perguntava tudo."""
+        mock_stdin.isatty.return_value = True
+        data: dict = {"simplify": {"answered": True, "minimum_code": False}}
+        result = cli._step_simplify("task", data)
+        assert result["simplify"]["minimum_code"] is False
+        assert "já respondido" in capsys.readouterr().out
+
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
     @patch("kata.cli.sys.stdin")
@@ -469,6 +518,18 @@ class TestStepSurgical:
         # R9-2: o fix R7-1 (skipped, não answered) tem de valer aqui também.
         assert result["surgical"]["answered"] is False
         assert result["surgical"]["skipped"] is True
+
+    @patch("kata.cli.sys.stdin")
+    def test_step_surgical_guard_answered_nao_repergunta(
+        self, mock_stdin, mock_untracked, capsys
+    ) -> None:
+        """K-12: SURGICAL respondeu (retomada) → pula, mesmo contrato das
+        irmãs. Antes, re-perguntava arquivo por arquivo."""
+        mock_stdin.isatty.return_value = True
+        data: dict = {"surgical": {"answered": True, "files": []}}
+        result = cli._step_surgical("task", data)
+        assert result["surgical"]["files"] == []
+        assert "já respondido" in capsys.readouterr().out
 
     @patch("kata.cli._confirm")
     @patch("kata.cli._run_git")
@@ -629,7 +690,8 @@ class TestStepVerify:
         data: dict = {"verify": "texto estranho"}
         result = cli._step_verify("my-task", data)
         assert result["status"] == "approved"
-        assert result["verify"]["attempts"] == 1
+        # K-13: aprovado não incrementa o contador de falhas.
+        assert result["verify"]["attempts"] == 0
 
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
@@ -647,7 +709,8 @@ class TestStepVerify:
         mock_confirm.return_value = True
         data: dict = {"verify": {"attempts": "abc"}}
         result = cli._step_verify("my-task", data)
-        assert result["verify"]["attempts"] == 1
+        # K-13: aprovado não incrementa — "abc" vira 0 na normalização.
+        assert result["verify"]["attempts"] == 0
         assert result["status"] == "approved"
 
     @patch("kata.cli._confirm")
@@ -689,7 +752,11 @@ class TestStepVerify:
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
     def test_step_verify_counts_attempts(self, mock_run_all, mock_confirm) -> None:
-        """Fable Step 5: o VERIFY persiste um contador de tentativas na tarefa."""
+        """Fable Step 5: o VERIFY persiste um contador de tentativas na tarefa.
+
+        K-13: o contador mede FALHAS, não execuções — execução aprovada não
+        incrementa (antes, aprovado com attempts=2 virava 3 e o relatório
+        dizia '3 tentativas falharam' quando uma tinha passado)."""
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=True, output="All clear"),
             "pytest": VerifyResult(ok=True, output="5 passed"),
@@ -700,8 +767,26 @@ class TestStepVerify:
         mock_confirm.return_value = True
         data: dict = {"verify": {"attempts": 2}}
         result = cli._step_verify("my-task", data)
-        assert result["verify"]["attempts"] == 3
+        # K-13: aprovado NÃO incrementa — falha é que conta.
+        assert result["verify"]["attempts"] == 2
         assert result["verify"]["hand_back"] is False  # sucesso não devolve
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_falha_incrementa_attempts(self, mock_run_all, mock_confirm) -> None:
+        """K-13: falha incrementa — 2 falhas + 1 nova = 3 → hand_back."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="5 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = False  # critério NÃO satisfeito → falha
+        data: dict = {"verify": {"attempts": 2}}
+        result = cli._step_verify("my-task", data)
+        assert result["verify"]["attempts"] == 3
+        assert result["verify"]["hand_back"] is True
 
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
@@ -1203,16 +1288,18 @@ class TestIsInvalidTaskName:
             "tab\tname",
             "foo.yaml",  # viraria ".kata/foo.yaml.yaml"
             "foo.json",  # idem quando PyYAML está ausente
+            "foo.yml",  # K-15: .yml é extensão de serialização aceita pelo config
+            "check-only",  # K-16: colidiria com o modo --check-only
         ],
     )
     def test_rejected(self, name: str) -> None:
         assert cli._is_invalid_task_name(name) is True
 
-    @pytest.mark.parametrize("name", ["foo.yaml", "foo.json"])
+    @pytest.mark.parametrize("name", ["foo.yaml", "foo.json", "foo.yml"])
     def test_extension_rejected_regardless_of_pyyaml(self, name: str, monkeypatch) -> None:
         """A regra amarrada a _ext() deixava `--init foo.yaml` passar sem
         PyYAML, criando `.kata/foo.yaml.json`. Nome de tarefa não pode depender
-        de qual biblioteca está instalada."""
+        de qual biblioteca está instalada. K-15: .yml também é rejeitado."""
         for has_yaml in (True, False):
             monkeypatch.setattr(cli, "_HAS_YAML", has_yaml)
             assert cli._is_invalid_task_name(name) is True
@@ -1818,6 +1905,44 @@ class TestMainPlanCheckOnlyConflict:
                 cli.main()
             except SystemExit as e:
                 assert e.code == 2  # parser.error exit code
+
+    def test_init_and_judge_conflict(self) -> None:
+        """K-17: --init com --judge era descartado em silêncio (o branch do
+        --init roda primeiro) — `--init foo --judge` parecia julgar e ganhava
+        um init. Agora é erro nomeado."""
+        with patch("sys.argv", ["kata", "--init", "foo", "--judge"]):
+            try:
+                cli.main()
+            except SystemExit as e:
+                assert e.code == 2
+
+    def test_init_and_report_conflict(self) -> None:
+        with patch("sys.argv", ["kata", "--init", "foo", "--report"]):
+            try:
+                cli.main()
+            except SystemExit as e:
+                assert e.code == 2
+
+    def test_init_and_plan_conflict(self) -> None:
+        with patch("sys.argv", ["kata", "--init", "foo", "--plan"]):
+            try:
+                cli.main()
+            except SystemExit as e:
+                assert e.code == 2
+
+    def test_init_and_check_only_conflict(self) -> None:
+        with patch("sys.argv", ["kata", "--init", "foo", "--check-only"]):
+            try:
+                cli.main()
+            except SystemExit as e:
+                assert e.code == 2
+
+    def test_task_and_check_only_conflict(self) -> None:
+        with patch("sys.argv", ["kata", "--task", "foo", "--check-only"]):
+            try:
+                cli.main()
+            except SystemExit as e:
+                assert e.code == 2
 
 
 class TestMainRouteHandling:

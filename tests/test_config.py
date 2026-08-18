@@ -68,6 +68,14 @@ class TestComandos:
         cfg = load_verify_config(cwd=tmp_path)
         assert cfg.test == ["npm", "test", "--", "--reporter", "dot compact"]
 
+    def test_aspas_nao_fechadas_vira_config_error(self, tmp_path) -> None:
+        """K-09: aspas não fechadas ("npx eslint 'src) levantavam ValueError
+        do shlex e escapavam do `except ConfigError` do main — traceback.
+        Config ilegível é erro nomeado, nunca traceback."""
+        _escreve(tmp_path, 'verify:\n  lint: "npx eslint \'src"\n')
+        with pytest.raises(ConfigError, match="comando inválido"):
+            load_verify_config(cwd=tmp_path)
+
     def test_lista_e_usada_como_veio(self, tmp_path) -> None:
         _escreve(tmp_path, 'verify:\n  test: ["go", "test", "./..."]\n')
         assert load_verify_config(cwd=tmp_path).test == ["go", "test", "./..."]

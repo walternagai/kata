@@ -97,7 +97,8 @@ the following situations:
 
 ```text
 src/kata/
-├── cli.py       CLI, task persistence, cycle orchestration, and reports
+├── cli.py       CLI, task persistence, and cycle orchestration
+├── report.py    Report/audit/doctor I/O (`_step_report`, `_print_judge_verdict`, `_audit_task`)
 ├── config.py    `.kata/config.yaml` — the target project's own check commands
 ├── skills.py    Which phase skills the cycle needs, and whether they are installed
 ├── fit.py       Diff measurement and triviality gate

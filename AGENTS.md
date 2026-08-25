@@ -24,7 +24,7 @@ O ciclo é inspirado em duas fontes complementares:
 
 ```
 src/kata/       código Python (cli.py, config.py, fit.py, verify.py, judge.py,
-                skills.py, __init__.py, __main__.py)
+                report.py, skills.py, __init__.py, __main__.py)
 tests/          testes pytest (test_cli.py, test_config.py, test_fit.py,
                 test_verify.py, test_judge.py, test_skills.py,
                 test_domains.py, test_install.py — roda os instaladores .sh
@@ -106,7 +106,9 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
   reprova; ausente não. Uma fase rodada sem a skill dela vai para
   `preflight.skills_missing` e o `--audit` a gradua como `degraded`.
 - O CLI (`cli.py`) orquestra as 9 fases + audit + judge opcional e chama
-  `fit.py`, `verify.py`, `judge.py`.
+  `fit.py`, `verify.py`, `judge.py`; o I/O de relatório/auditoria
+  (`_step_report`, `_print_judge_verdict`, `_audit_task`, `_print_doctor`) vive
+  em `report.py` (S7-refactor) e é re-exportado pelo `cli` para os testes.
 - Entry point do CLI: `kata.cli:main` (declarado em `pyproject.toml`).
 
 ## Desenvolvimento

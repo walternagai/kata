@@ -339,6 +339,7 @@ kata/
 │   └── kata-devops.md                 ← primeiro adapter (gera a skill)
 ├── src/kata/
 │   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
+│   ├── report.py               ← I/O de relatório/auditoria (S7-refactor)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
 │   ├── config.py               ← .kata/config.yaml (comandos do projeto alvo)
 │   ├── skills.py               ← Preflight: as skills de fase estão instaladas?

@@ -179,6 +179,24 @@ kata --version
 python3 -m kata --version
 ```
 
+To run or install the CLI without touching the current environment, use
+`pipx` or `uv` (both isolate the package and its bin in their own venv;
+no editable install needed):
+
+```bash
+# One-off run — nothing installed permanently (CI/headless friendly)
+pipx run --spec . kata --version
+uv tool run --from . kata --version
+
+# Permanent install — creates a `kata` bin on the runner's PATH
+pipx install .
+uv tool install . --force
+```
+
+All routes share the same `kata.cli:main` entry point from
+`pyproject.toml`; `pip`, `pipx` and `uv` only deliver the binary
+differently.
+
 ### OpenCode agent
 
 Install the agent and skills through symlinks:

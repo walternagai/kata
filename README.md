@@ -95,6 +95,23 @@ subagente isolado que só reporta um resumo ao final.
 pip install -e '.[dev]'
 ```
 
+Sem precisar instalar no ambiente (pipx/uv isolam o pacote e o binário na
+primeira execução):
+
+```bash
+# Uso pontual — não instala nada permanente (bom para CI/headless)
+pipx run --spec . kata --version
+uv tool run --from . kata --version
+
+# Instalação permanente (cria um binário `kata` no PATH do runner)
+pipx install .
+uv tool install . --force
+```
+
+Todas as rotas usam o mesmo entry point `kata.cli:main` do
+`pyproject.toml` — `pip`, `pipx` e `uv` apenas entregam o binário de jeitos
+diferentes.
+
 ### O que o projeto alvo precisa
 
 O kata é aplicado a um projeto (não a este repositório). Para o `--check-only`

@@ -49,18 +49,26 @@ class TestTemplateSchema:
 
 
 class TestDomainAdapters:
+    ADAPTERS = ("kata-devops", "kata-data-analysis", "kata-research", "kata-docs")
+
     def test_adapter_devops_existe(self) -> None:
         assert (DOMAINS / "kata-devops.md").exists()
 
-    @pytest.mark.parametrize("secao", SECOES_OBRIGATORIAS)
-    def test_adapter_devops_tem_todas_as_secoes(self, secao: str) -> None:
-        texto = (DOMAINS / "kata-devops.md").read_text(encoding="utf-8")
-        assert secao in texto, f"kata-devops.md não tem a seção {secao!r}"
+    @pytest.mark.parametrize("adapter", ADAPTERS)
+    def test_adapter_existe(self, adapter: str) -> None:
+        assert (DOMAINS / f"{adapter}.md").exists(), f"{adapter}.md não existe em domains/"
 
-    def test_adapter_devops_tem_frontmatter(self) -> None:
-        texto = (DOMAINS / "kata-devops.md").read_text(encoding="utf-8")
+    @pytest.mark.parametrize("secao", SECOES_OBRIGATORIAS)
+    @pytest.mark.parametrize("adapter", ADAPTERS)
+    def test_adapter_tem_todas_as_secoes(self, adapter: str, secao: str) -> None:
+        texto = (DOMAINS / f"{adapter}.md").read_text(encoding="utf-8")
+        assert secao in texto, f"{adapter}.md não tem a seção {secao!r}"
+
+    @pytest.mark.parametrize("adapter", ADAPTERS)
+    def test_adapter_tem_frontmatter(self, adapter: str) -> None:
+        texto = (DOMAINS / f"{adapter}.md").read_text(encoding="utf-8")
         assert texto.startswith("---\n"), "frontmatter não começa com ---"
-        assert "name: kata-devops" in texto
+        assert f"name: {adapter}" in texto
         assert "description:" in texto
 
     def test_load_domain_esta_no_contrato(self) -> None:
@@ -71,8 +79,11 @@ class TestDomainAdapters:
         assert "{{LOAD_DOMAIN}}" in texto, "orquestrador não usa {{LOAD_DOMAIN}}"
 
     @pytest.mark.parametrize("frontend", ["opencode", "claude-code"])
-    def test_adapter_renderizado_sem_vazamento_de_marcadores(self, frontend: str) -> None:
-        fonte = DOMAINS / "kata-devops.md"
+    @pytest.mark.parametrize("adapter", ADAPTERS)
+    def test_adapter_renderizado_sem_vazamento_de_marcadores(
+        self, frontend: str, adapter: str
+    ) -> None:
+        fonte = DOMAINS / f"{adapter}.md"
         saida = render(fonte.read_text(encoding="utf-8"), frontend, str(fonte))
         for marcador in ("<!--only", "<!--if", "<!--ifnot", "<!--/", "{{{", "{{"):
             assert marcador not in saida, f"{frontend}: marcador/variável vazado: {marcador}"

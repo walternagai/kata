@@ -43,7 +43,7 @@ ORCHESTRATOR_SKILL = "kata"
 # não reprova se estiverem ausentes, porque uma tarefa coding não precisa delas.
 # O doctor as lista como aviso, e o orquestrador só as carrega quando o domínio
 # da tarefa não é coding.
-DOMAIN_SKILLS: tuple[str, ...] = ("kata-devops",)
+DOMAIN_SKILLS: tuple[str, ...] = ("kata-devops", "kata-data-analysis", "kata-research", "kata-docs")
 
 
 @dataclass(frozen=True)

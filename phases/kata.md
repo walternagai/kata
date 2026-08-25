@@ -334,9 +334,9 @@ Após o FIT, se o `.kata/<task>.yaml` declarar `domain` diferente de `coding`
 (ex.: `domain: devops`), carregue o adapter correspondente com {{LOAD_DOMAIN}}:
 
 - `domain: devops` → `kata-devops`
-- `domain: data-analysis` → `kata-data-analysis` (quando existir)
-- `domain: research` → `kata-research` (quando existir)
-- `domain: docs` → `kata-docs` (quando existir)
+- `domain: data-analysis` → `kata-data-analysis`
+- `domain: research` → `kata-research`
+- `domain: docs` → `kata-docs`
 
 O adapter define:
 

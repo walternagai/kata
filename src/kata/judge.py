@@ -1334,7 +1334,7 @@ def judge_task(
     ruff_paths: list[str] | None = None,
     test_paths: list[str] | None = None,
     ignore: list[str] | None = None,
-    cov_source: str = "src",
+    cov_source: str | list[str] = "src",
     gate: float = 70.0,
     config: VerifyConfig | None = None,
 ) -> JudgeResult:

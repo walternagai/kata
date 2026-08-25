@@ -1101,6 +1101,22 @@ class TestDetectCovSource:
         )
         assert cli._detect_cov_source() == "kata"
 
+    def test_multiplas_sources_retornam_lista(self, tmp_path, monkeypatch) -> None:
+        """R12-02: com 2+ sources, o pyproject declara o projeto inteiro — a
+        detecção devolve a lista completa, e o --cov mede todas (uma flag por
+        source), em vez de só a primeira."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.coverage.run]\nsource = ["src/kata", "scripts/build_skills.py", '
+            '"eval/run_traps.py"]\n',
+            encoding="utf-8",
+        )
+        assert cli._detect_cov_source() == [
+            "src/kata",
+            "scripts/build_skills.py",
+            "eval/run_traps.py",
+        ]
+
     def test_fallback_when_pyproject_missing(self, tmp_path, monkeypatch) -> None:
         monkeypatch.chdir(tmp_path)
         assert cli._detect_cov_source() == "src"

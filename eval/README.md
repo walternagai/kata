@@ -21,10 +21,11 @@ python3 eval/run_traps.py
 
 O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
 além do subprocesso `python3 -m kata`, então o pacote precisa estar
-instalado/resolvível — rodar num ambiente sem ele derruba os 16 cenários com
+instalado/resolvível — rodar num ambiente sem ele derruba os 19 cenários com
 "No module named kata". Os cenários com re-execução (s01, s03, s07, s10, s11,
-s12, s14, s15, s16) também precisam de ruff e pytest/pytest-cov instalados: sem
-eles, um cenário honesto vira REFUTED por ferramenta ausente, não por fraude.
+s12, s14, s15, s16, s17, s19) também precisam de ruff e pytest/pytest-cov
+instalados: sem eles, um cenário honesto vira REFUTED por ferramenta ausente,
+não por fraude.
 
 Roda também no CI, em Python 3.11 e 3.12.
 
@@ -131,6 +132,9 @@ Todos os campos são opcionais exceto `expected_verdict`.
 | `s14-baseline-tampering` | baseline_tampering | `base_commit` do YAML reescrito para o HEAD enquanto a âncora `refs/kata/base/` fica no baseline |
 | `s15-escrituracao-visivel` | **nenhuma** | Trabalho honesto com `.kata/` **visível ao git** (`kata_visivel: true`): o arquivo da própria tarefa não pode contar como scope creep. Veredito tem de ser `VERIFIED` |
 | `s16-trivial-scope-creep` | **nenhuma** | Tarefa trivial honesta com 3 arquivos pequenos e `surgical.files=[]` (SURGICAL pulado pelo triviality gate). Sem a regra S2/CR-002 em `hunt_scope_creep`, o juiz acusaria `scope_creep [high]` injustamente. Veredito tem de ser `VERIFIED` |
+| `s17-approved-commit` | **nenhuma** | `approved_commit` ponta a ponta: tarefa honesta aprovada com `approved_commit` no YAML; uma task **posterior** altera arquivo não declarado — o juiz diffa `base..approved` e não conta como scope creep. Veredito tem de ser `VERIFIED` |
+| `s18-sondas-js` | weakened_checks | Sondas não-Python em cenário de trap: teste JS virado em comentário (padrão `+` weakened) e teste novo desativado com `it.skip` — o juiz acusa os dois |
+| `s19-gitignore-blind-spot` | **nenhuma** (ponto cego) | Teste importante ignorado via `.git/info/exclude` (plantado pelo harness): o juiz não o vê no diff e o relatório deve confessar o ponto cego. Veredito tem de ser `UNVERIFIABLE` |
 
 ## Adicionar novo cenário
 

@@ -153,7 +153,7 @@ def run_pytest(
 
 
 def run_coverage(
-    source: str = "src",
+    source: str | list[str] = "src",
     testpaths: list[str] | None = None,
     ignore: list[str] | None = None,
     gate: float = 70.0,
@@ -162,7 +162,10 @@ def run_coverage(
     """Executa pytest com coverage e verifica o gate via --cov-fail-under.
 
     Args:
-        source: Pacote fonte para medir coverage (--cov=<source>).
+        source: Pacote fonte para medir coverage (--cov=<source>). Uma lista
+            vira um --cov por entrada — o pytest-cov soma todas as fontes na
+            linha TOTAL, então o gate mede o projeto inteiro que o
+            pyproject.toml declarou, não só a primeira (R12-02).
         testpaths: Diretórios de teste. Default: ["tests/"].
         ignore: Caminhos para ignorar.
         gate: Percentual mínimo de coverage (default: 70.0).
@@ -174,16 +177,16 @@ def run_coverage(
     """
     if testpaths is None:
         testpaths = ["tests/"]
+    sources = [source] if isinstance(source, str) else source
     cmd = [
         sys.executable,
         "-m",
         "pytest",
         *testpaths,
-        f"--cov={source}",
-        "--cov-report=term-missing",
-        f"--cov-fail-under={gate}",
-        "-q",
     ]
+    for src in sources:
+        cmd.extend([f"--cov={src}"])
+    cmd.extend(["--cov-report=term-missing", f"--cov-fail-under={gate}", "-q"])
     if ignore:
         for path in ignore:
             cmd.extend(["--ignore", path])
@@ -416,7 +419,7 @@ def run_all(
     ruff_paths: list[str] | None = None,
     test_paths: list[str] | None = None,
     ignore: list[str] | None = None,
-    cov_source: str = "src",
+    cov_source: str | list[str] = "src",
     gate: float = 70.0,
     cwd: Path | None = None,
     config: VerifyConfig | None = None,
@@ -433,7 +436,8 @@ def run_all(
 
     `cov_source` default é "src" — este módulo é genérico e não deve supor
     o nome do pacote de nenhum projeto, inclusive o próprio kata. Quem
-    conhece o projeto é o CLI, via cli._detect_cov_source().
+    conhece o projeto é o CLI, via cli._detect_cov_source(), que pode
+    entregar uma lista quando o pyproject declara várias fontes (R12-02).
 
     Returns:
         Dicionário com chaves "ruff", "pytest", "coverage" e seus resultados.

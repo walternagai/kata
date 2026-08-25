@@ -174,11 +174,14 @@ def _ext() -> str:
     return ".yaml" if _HAS_YAML else ".json"
 
 
-def _detect_cov_source() -> str:
-    """Detecta o pacote fonte de coverage a partir de pyproject.toml.
+def _detect_cov_source() -> str | list[str]:
+    """Detecta o(s) pacote(s) fonte de coverage a partir de pyproject.toml.
 
-    Lê `[tool.coverage.run] source` e retorna o primeiro item. Se não
-    encontrar, cai no fallback "src".
+    Lê `[tool.coverage.run] source` e retorna o primeiro item quando há um
+    só, ou a lista completa quando há vários — o `--cov` do pytest-cov aceita
+    múltiplas fontes via flags repetidas, e medir apenas a primeira (como
+    antes) reportava um gate baseado num subconjunto do que o projeto
+    declarou. Se não encontrar, cai no fallback "src".
     """
     pyproject = _cwd() / "pyproject.toml"
     if pyproject.exists():
@@ -190,8 +193,10 @@ def _detect_cov_source() -> str:
             sources = config.get("tool", {}).get("coverage", {}).get("run", {}).get("source", [])
             if isinstance(sources, str):
                 return sources
-            if sources:
+            if len(sources) == 1:
                 return sources[0]
+            if sources:
+                return list(sources)
         except (tomllib.TOMLDecodeError, OSError, UnicodeDecodeError) as exc:
             # CR-009/S4: pyproject malformado ou ilegível não pode ser
             # engolido em silêncio — o --cov rodaria contra um source que o
@@ -844,7 +849,7 @@ def _step_verify(
     ruff_paths: list[str] | None = None,
     test_paths: list[str] | None = None,
     ignore: list[str] | None = None,
-    cov_source: str = "src",
+    cov_source: str | list[str] = "src",
     gate: float = 70.0,
     config: VerifyConfig | None = None,
 ) -> dict[str, Any]:
@@ -1785,8 +1790,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--cov-source",
-        default=_detect_cov_source(),
-        help="Pacote fonte para coverage (default: %(default)s)",
+        nargs="*",
+        default=None,
+        help=(
+            "Pacote(s) fonte para coverage (default: %(default)s; lê "
+            "[tool.coverage.run] source do pyproject.toml — uma entrada por "
+            "fonte quando há várias)"
+        ),
     )
     parser.add_argument(
         "--gate",
@@ -1863,6 +1873,13 @@ def main() -> None:
     if gate is None:
         gate = DEFAULT_GATE
 
+    # R12-02: --cov-source aceita várias fontes (uma flag por source). Sem a
+    # flag, o default sai do pyproject.toml — string com 1 source, lista com
+    # várias — e cai na mesma resolução do gate (nargs="*" com default None
+    # não pode rodar _detect_cov_source() no próprio argumento, que é avaliado
+    # no parse, quando o pyproject ainda é do CWD de quem invoca).
+    cov_source = args.cov_source if args.cov_source is not None else _detect_cov_source()
+
     if config.customizado:
         print(f"▶ verificações de {config_path()} (declaradas pelo projeto)")
 
@@ -1910,7 +1927,7 @@ def main() -> None:
             ruff_paths=args.ruff_paths,
             test_paths=args.test_paths,
             ignore=args.ignore,
-            cov_source=args.cov_source,
+            cov_source=cov_source,
             gate=gate,
             config=config,
         )
@@ -1950,7 +1967,7 @@ def main() -> None:
             ruff_paths=args.ruff_paths,
             test_paths=args.test_paths,
             ignore=args.ignore,
-            cov_source=args.cov_source,
+            cov_source=cov_source,
             gate=gate,
             config=config,
         )
@@ -2007,7 +2024,7 @@ def main() -> None:
         ruff_paths=args.ruff_paths,
         test_paths=args.test_paths,
         ignore=args.ignore,
-        cov_source=args.cov_source,
+        cov_source=cov_source,
         gate=gate,
         config=config,
     )

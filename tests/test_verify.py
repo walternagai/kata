@@ -266,6 +266,27 @@ class TestRunCoverage:
         assert result.ok is True
 
     @patch("kata.verify._run")
+    def test_coverage_com_multiplas_sources_emite_uma_flag_por_source(
+        self, mock_run: MagicMock
+    ) -> None:
+        """R12-02: lista de sources vira um --cov por entrada — o gate mede o
+        projeto inteiro que o pyproject declarou, não só a primeira."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="TOTAL                2172     120    98%",
+            stderr="",
+        )
+        result = run_coverage(source=["src/kata", "scripts/build_skills.py", "eval/run_traps.py"])
+        called_cmd = mock_run.call_args[0][0]
+        assert [a for a in called_cmd if a.startswith("--cov=")] == [
+            "--cov=src/kata",
+            "--cov=scripts/build_skills.py",
+            "--cov=eval/run_traps.py",
+        ]
+        assert result.ok is True
+
+    @patch("kata.verify._run")
     def test_coverage_with_cwd(self, mock_run: MagicMock) -> None:
         from pathlib import Path
 

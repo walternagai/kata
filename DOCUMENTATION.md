@@ -853,9 +853,9 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and the frauds the judge must find. Fourteen scenarios (s01–s06,
-s08–s11, s14, s17, s18) plant a fraud the judge must catch; `s07`, `s15` and
-`s16` are entirely honest tasks that must come back `VERIFIED`, `s12`/`s13`
+the verdict and the frauds the judge must find. Twelve scenarios (s01–s06,
+s08–s11, s14, s18) plant a fraud the judge must catch; `s07`, `s15`, `s16`
+and `s17` are entirely honest tasks that must come back `VERIFIED`, `s12`/`s13`
 expect `UNVERIFIABLE` (blind spots, no fraud), and `s19` expects
 `UNVERIFIABLE` for the Git-ignored code blind spot. `s06` doubles as a guard
 against refusing legitimate work, planting real debris beside files whose
@@ -868,7 +868,7 @@ touches an undeclared file after the approval — it must not count as scope
 creep), `s18` plants JS frauds that only the language probes can see, and
 `s19` plants a Git-ignored test via the harness's local exclude.
 
-`s15` exists because the other fourteen scenarios structurally could not
+`s15` exists because the other eighteen scenarios structurally could not
 catch its defect: the harness excluded `.kata/` from Git in every fixture,
 so the task's own file was invisible and the judge counting it as scope
 creep survived ten review rounds — including `s07`, whose whole job is

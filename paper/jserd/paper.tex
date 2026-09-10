@@ -263,7 +263,12 @@ dimensions are: whether the tool executes verification (runs checks and
 reads exit codes) or only instructs the model; whether it has a shared
 executable core across agent hosts; whether it detects fraud
 adversarially; whether it audits completed work; and whether it verifies
-itself.
+itself. The assessments are the authors', based on each project's public
+documentation and repository as of September 2026: ``Partial'' for fraud
+detection means the tool performs adversarial review in prompt form
+without re-executing checks against the repository, as opposed to
+``Yes'' (executable re-execution with verdicts) and ``No'' (no
+adversarial step at all).
 
 \begin{table*}[!ht]
 \caption{Comparison of Kata with related tools and methodologies.}
@@ -423,19 +428,25 @@ A config file that exists but is invalid aborts with exit code 1. Falling
 back to ruff silently would report the success of a check the project
 never asked for, which is the class of lie the judge exists to hunt. The
 JUDGE follows the same line: it knows the test syntax of Python, JS/TS,
-Go, Ruby, Rust, Java/Kotlin, C\#, PHP, and Swift. A language outside this
+Go, Ruby, Rust, Java/Kotlin, C\#, PHP, and Swift (the language probes
+implemented in \texttt{kata/judge.py}). A language outside this
 list (for example, Elixir \texttt{.exs}) becomes a declared blind spot,
 not silence.
 
 The frontends are generated, not hand-maintained. The phase prompts live
 once in \texttt{phases/*.md} and are rendered into the OpenCode agent and
 the Claude Code skills by a build script; 93\% of the content is shared, and
-the remaining 7\% is declared difference (tool names of the host). This
+the remaining 7\% is declared difference (tool names of the host). Both
+figures were measured in the kata repository itself: the shared fraction
+comes from the build script's own accounting of shared versus
+frontend-specific blocks, and the 395 divergent lines are the diff the
+authors observed between the two hand-maintained copies before the
+single-source migration. This
 single-source design exists because the previous arrangement --- two
-hand-maintained copies --- failed: the copies accumulated 395 divergent
-lines, including an improvement applied to one frontend and forgotten in the
-other. A test fails when the generated files drift from the source, so the
-divergence cannot pass unnoticed.
+hand-maintained copies --- failed: the copies accumulated those 395
+divergent lines, including an improvement applied to one frontend and
+forgotten in the other. A test fails when the generated files drift from
+the source, so the divergence cannot pass unnoticed.
 
 \subsubsection{Domain adapters}
 
@@ -893,8 +904,9 @@ degraded & The phase ran without its own skill loaded (\texttt{preflight}) \\
 \label{tab:grades}
 \end{table}
 
-The faked pattern (R7-1) is a phase marked as answered without real
-content. This is only possible because there is objective logic behind it:
+The faked pattern (tracked in the project as issue R7-1) is a phase
+marked as answered without real content. This is only possible because
+there is objective logic behind it:
 the audit reads the YAML and detects \texttt{answered: true} with empty
 content. A skill has no way to know whether a phase was ``faked''; Kata
 does.\begin{lstlisting}
@@ -1018,7 +1030,11 @@ Command & Effect \\
 Verification is configurable per role. \texttt{--ruff-paths},
 \texttt{--test-paths}, \texttt{--ignore}, \texttt{--cov-source}, and
 \texttt{--gate} set the built-in Python defaults (ruff, pytest, pytest-cov
-with \texttt{--cov-fail-under}, gate 70\%). A role declared in
+with \texttt{--cov-fail-under}, gate 70\%). The 70\% default is a project
+convention, not a research finding: each target project is expected to set
+its own gate via \texttt{--gate} or \texttt{.kata/config.yaml}, and the
+JUDGE compares the measured coverage against whatever gate the project
+declared. A role declared in
 \texttt{.kata/config.yaml} runs verbatim instead, so non-Python projects
 declare their own lint, test, and coverage commands; every undeclared role
 keeps its Python default.
@@ -1079,7 +1095,13 @@ deliberately asymmetric in its coverage. Table~\ref{tab:traps} summarizes
 the 19 scenarios.
 
 \begin{table*}[!ht]
-\caption{The 19 adversarial trap scenarios of the evaluation suite.}
+\caption{The 19 adversarial trap scenarios of the evaluation suite.
+Each row summarizes one \texttt{eval/scenarios/<name>/} directory, which
+pairs a \texttt{fixture/} (the planted fraud or honest work) with a
+\texttt{ground\_truth.yaml} (the expected verdict and frauds). The
+scenario set is original to Kata, built incrementally across development
+sprints, each motivated by a real defect found in the JUDGE; the trap
+methodology follows the Fable Method's eval \cite{fable}.}
 \centering
 \begin{tabular}{@{}ll@{}}
 \hline\hline
@@ -1159,7 +1181,12 @@ verdict with no false accusations. Table~\ref{tab:results} summarizes the
 outcome by expected verdict.
 
 \begin{table*}[!ht]
-\caption{Trap suite execution results: 19/19 scenarios passed.}
+\caption{Trap suite execution results: 19/19 scenarios passed.
+Verdict counts derive from the \texttt{expected\_verdict} fields of the 19
+\texttt{ground\_truth.yaml} files; the run reported here executed
+\texttt{python3 eval/run\_traps.py} on the described code version, and the
+harness confirmed actual verdicts match expected ones with no false
+accusations.}
 \centering
 \begin{tabular}{@{}lcl@{}}
 \hline\hline

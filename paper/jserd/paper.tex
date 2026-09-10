@@ -125,7 +125,8 @@ Section~\ref{sec:design} describes the software design and the trade-offs
 weighed. Section~\ref{sec:cycle} walks through the development cycle in
 action with real output. Section~\ref{sec:judge} details the adversarial
 verification layer. Section~\ref{sec:audit} presents the audit mode.
-Section~\ref{sec:impact} reports the research impact and evaluation.
+Section~\ref{sec:usage} documents how to install and use the \texttt{kata}
+CLI. Section~\ref{sec:impact} reports the research impact and evaluation.
 Section~\ref{sec:conclusion} concludes.
 
 \section{Statement of need}
@@ -869,9 +870,30 @@ listed.
 \section{The audit mode}
 \label{sec:audit}
 
+\subsection{Audit grades and concrete risks}
+
 The audit mode (\texttt{kata --audit}) grades each phase of a task as
-followed, skipped, or faked, and names the concrete risk each skip or fake
-created. The faked pattern (R7-1) is a phase marked as answered without real
+followed, skipped, faked, or degraded, and names the concrete risk each
+skip or fake created. Table~\ref{tab:grades} summarizes the four grades
+and what each one means for the trustworthiness of the task.
+
+\begin{table}[!ht]
+\caption{The four audit grades and their meaning.}
+\centering
+\begin{tabular}{@{}lp{5.2cm}@{}}
+\hline\hline
+Grade & Meaning \\
+\hline
+followed & The phase has \texttt{answered: true} and real content \\
+skipped & The phase has \texttt{skipped: true} (documented, not hidden) \\
+faked & The phase has \texttt{answered: true} but default or empty content \\
+degraded & The phase ran without its own skill loaded (\texttt{preflight}) \\
+\hline\hline
+\end{tabular}
+\label{tab:grades}
+\end{table}
+
+The faked pattern (R7-1) is a phase marked as answered without real
 content. This is only possible because there is objective logic behind it:
 the audit reads the YAML and detects \texttt{answered: true} with empty
 content. A skill has no way to know whether a phase was ``faked''; Kata
@@ -925,6 +947,101 @@ audit grades such a phase as degraded, not followed, because whatever the
 other grades read was written without those instructions. VERIFY and JUDGE
 degrade best, because their logic lives in the Python package rather than
 in the skill text.
+
+\section{Using the kata CLI}
+\label{sec:usage}
+
+This section documents how to install Kata and use its command-line
+interface, so that the demonstrations of
+Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced.
+
+\subsection{Installation}
+
+Kata requires Python 3.11 or newer. The package exposes a single entry
+point, \texttt{kata.cli:main}, installable in development mode with the
+lint, test, and coverage tools the CLI itself executes:
+
+\begin{lstlisting}
+pip install -e '.[dev]'
+\end{lstlisting}
+
+To run or install the CLI without touching the current environment,
+\texttt{pipx} or \texttt{uv} isolate the package in their own virtual
+environment:
+
+\begin{lstlisting}
+# One-off run — nothing installed permanently (CI/headless friendly)
+pipx run --spec . kata --version
+uv tool run --from . kata --version
+
+# Permanent install — creates a `kata` binary on the PATH
+pipx install .
+uv tool install . --force
+\end{lstlisting}
+
+The agent frontends are installed separately through symlinks. \texttt{make
+install} links the OpenCode agent and skills into the OpenCode
+configuration directory (honoring \texttt{OPENCODE\_CONFIG\_DIR}, defaulting
+to \texttt{\~{}/.config/opencode}); \texttt{make install-claude-code} links
+the skills into the Claude Code configuration directory (honoring
+\texttt{CLAUDE\_CONFIG\_DIR}, defaulting to \texttt{\~{}/.claude}).
+Because the installer creates symlinks, rebuilding the generated frontends
+with \texttt{make build-skills} is immediately visible without
+reinstalling.
+
+\subsection{Command reference}
+
+Table~\ref{tab:cli} lists the CLI modes. All modes operate on task files
+under \texttt{.kata/} at the target project's root; \texttt{--doctor} is
+the exception, checking skill installation without touching any task.
+
+\begin{table*}[!ht]
+\caption{The \texttt{kata} CLI modes.}
+\centering
+\begin{tabular}{@{}ll@{}}
+\hline\hline
+Command & Effect \\
+\hline
+\texttt{kata --init TASK} & Create the task file, run FIT + THINK \\
+\texttt{kata [--task TASK]} & Run the full interactive cycle \\
+\texttt{kata --task TASK --plan} & Run FIT + THINK, save the plan, stop \\
+\texttt{kata --check-only} & Run lint + tests + coverage only (CI entry) \\
+\texttt{kata --task TASK --report} & Regenerate the outcome-first report \\
+\texttt{kata --task TASK --judge} & Adversarial verification (hunts frauds) \\
+\texttt{kata --task TASK --audit} & Grade phases: followed/skipped/faked \\
+\texttt{kata --doctor} & Check phase-skill installation per frontend \\
+\hline\hline
+\end{tabular}
+\label{tab:cli}
+\end{table*}
+
+Verification is configurable per role. \texttt{--ruff-paths},
+\texttt{--test-paths}, \texttt{--ignore}, \texttt{--cov-source}, and
+\texttt{--gate} set the built-in Python defaults (ruff, pytest, pytest-cov
+with \texttt{--cov-fail-under}, gate 70\%). A role declared in
+\texttt{.kata/config.yaml} runs verbatim instead, so non-Python projects
+declare their own lint, test, and coverage commands; every undeclared role
+keeps its Python default.
+
+\subsection{Typical workflow and exit codes}
+
+A typical bug-fix session follows three commands. First, create the task
+and classify it (\texttt{kata --init fix-login}); second, apply the fix
+and run the full cycle (\texttt{kata --task fix-login}), answering each
+phase; third, verify adversarially before merging (\texttt{kata --task
+fix-login --judge}). For continuous integration, \texttt{kata
+--check-only} runs the objective checks non-interactively.
+
+Exit codes make the CLI composable in scripts and CI pipelines. Exit code
+0 means the requested operation passed (an approved cycle, a VERIFIED or
+caveated judge verdict, a clean audit, a complete install). Exit code 1
+means failure: a rejected cycle, a REFUTED verdict, an audit with fakes or
+skips, or a partial skill installation. Exit code 2 means invalid CLI
+arguments. In particular, \texttt{VERIFIED WITH CAVEATS} and
+\texttt{UNVERIFIABLE} both exit 0: the judge verified what it could and
+approved with notes, or found no fraud but could observe nothing ---
+treating either as failure would equate a caveat or a confessed blind spot
+with a high-severity fraud.
 
 \section{Research impact and evaluation}
 \label{sec:impact}
@@ -1018,10 +1135,11 @@ triviality gate with three small files and an empty surgical list, where a
 naive scope-creep rule would falsely accuse the task. A third exercises
 the \texttt{approved\_commit} mechanism end to end: a later task touches
 an undeclared file after the approval, and the judge must not count it as
-scope creep for the earlier task. The remaining two scenarios expect
+scope creep for the earlier task. The remaining three scenarios expect
 UNVERIFIABLE for confessed blind spots: a test in a language the judge has
-no probes for (Elixir \texttt{.exs}), and a task that claims no
-reproducible check at all.
+no probes for (Elixir \texttt{.exs}), a task that claims no
+reproducible check at all, and a test hidden from Git via a local ignore
+rule that the judge cannot see in the diff.
 
 The trap suite also guards the evaluation harness itself. One scenario
 opts into the real environment with \texttt{kata\_visivel: true}, because
@@ -1030,6 +1148,44 @@ judge counting the task's own file as scope creep survived ten review
 rounds --- including the honest-work scenario whose whole job is catching
 false positives. A new scenario must be shown to fail when its defect is
 reintroduced, so a scenario that passes in both states protects nothing.
+
+\subsection{Trap scenario execution results}
+
+We executed the full trap suite (\texttt{python3 eval/run\_traps.py}) on
+the version of the code described in this paper. All 19 scenarios passed:
+every planted fraud was detected with the expected verdict and the
+expected fraud types, and every honest scenario returned the expected
+verdict with no false accusations. Table~\ref{tab:results} summarizes the
+outcome by expected verdict.
+
+\begin{table}[!ht]
+\caption{Trap suite execution results: 19/19 scenarios passed.}
+\centering
+\begin{tabular}{@{}lcl@{}}
+\hline\hline
+Expected verdict & Scenarios & Count \\
+\hline
+REFUTED & s01, s02, s03, s04, s05, s08, s09, & 11 \\
+& s10, s11, s14, s18 & \\
+VERIFIED WITH CAVEATS & s06 (debris found; look-alike names spared) & 1 \\
+VERIFIED & s07, s15, s16, s17 & 4 \\
+UNVERIFIABLE & s12, s13, s19 & 3 \\
+\hline\hline
+\end{tabular}
+\label{tab:results}
+\end{table}
+
+The result confirms the two-sided contract of the JUDGE. On the detection
+side, eleven scenarios returned REFUTED with high-severity frauds,
+covering all seven fraud categories; the s03 false-completion scenario
+shown in Section~\ref{sec:judge} is representative. On the restraint side,
+four honest scenarios returned VERIFIED, including the s06 scenario that
+plants real debris beside look-alike names (\texttt{templates/},
+\texttt{temperature.py}, \texttt{attempt\_parser.py}) and the s16 trivial
+task that a naive scope-creep rule would falsely accuse. Three scenarios
+returned UNVERIFIABLE, confessing blind spots instead of clearing work the
+judge could not observe. The suite runs in continuous integration on every
+push, so any regression in detection or restraint breaks the build.
 
 \section{Discussion}
 \label{sec:discussion}

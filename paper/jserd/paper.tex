@@ -1158,22 +1158,21 @@ expected fraud types, and every honest scenario returned the expected
 verdict with no false accusations. Table~\ref{tab:results} summarizes the
 outcome by expected verdict.
 
-\begin{table}[!ht]
+\begin{table*}[!ht]
 \caption{Trap suite execution results: 19/19 scenarios passed.}
 \centering
 \begin{tabular}{@{}lcl@{}}
 \hline\hline
 Expected verdict & Scenarios & Count \\
 \hline
-REFUTED & s01, s02, s03, s04, s05, s08, s09, & 11 \\
-& s10, s11, s14, s18 & \\
+REFUTED & s01, s02, s03, s04, s05, s08, s09, s10, s11, s14, s18 & 11 \\
 VERIFIED WITH CAVEATS & s06 (debris found; look-alike names spared) & 1 \\
 VERIFIED & s07, s15, s16, s17 & 4 \\
 UNVERIFIABLE & s12, s13, s19 & 3 \\
 \hline\hline
 \end{tabular}
 \label{tab:results}
-\end{table}
+\end{table*}
 
 The result confirms the two-sided contract of the JUDGE. On the detection
 side, eleven scenarios returned REFUTED with high-severity frauds,

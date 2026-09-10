@@ -17,9 +17,10 @@ agente diz "pronto", o que sustenta essa afirmação?
   teste enfraquecido (`pass` no lugar da asserção) que "passa" sem verificar
   nada.
 
-O [Karpathy Development Cycle](https://karpathy.ai/) (Andrej Karpathy) propõe
-disciplina: pensar antes de codar, código mínimo, mudanças cirúrgicas,
-verificação objetiva. O [The Fable Method](https://github.com/Sahir619/fable-method)
+O ciclo de desenvolvimento na tradição de Andrej Karpathy ([karpathy.ai](https://karpathy.ai/))
+propõe disciplina: pensar antes de codar, código mínimo, mudanças cirúrgicas,
+verificação objetiva — uma prática que o kata herda via o agente mushin, onde o
+ciclo foi primeiro implementado. O [The Fable Method](https://github.com/Sahir619/fable-method)
 (Sahir619) propõe gates: classificar a tarefa antes de agir, evidência antes de
 ação, verificação adversarial, relatório outcome-first.
 
@@ -542,11 +543,11 @@ compara e recusa. O resto é conversa.
 
 ### Metodologias que inspiraram o kata
 
-- **Karpathy Development Cycle** — Andrej Karpathy: pensar antes de codar,
-  código mínimo, mudanças cirúrgicas, verificação objetiva.
-  - [Karpathy's "Software 2.0" e o ciclo de desenvolvimento](https://karpathy.ai/)
-  - [karpathy-guidelines (skill)](https://github.com/): diretrizes
-    comportamentais para reduzir erros comuns de LLM ao escrever código.
+- **Ciclo de desenvolvimento na tradição Karpathy** — pensar antes de codar,
+  código mínimo, mudanças cirúrgicas, verificação objetiva. O ciclo foi
+  primeiro implementado no agente mushin (repositório privado do autor) e
+  herdado pelo kata; a referência geral é o site de
+  [Andrej Karpathy](https://karpathy.ai/).
 - **The Fable Method** — [Sahir619/fable-method](https://github.com/Sahir619/fable-method):
   fit gate, triviality gate, evidência antes de ação, verificação adversarial,
   relatório outcome-first. O fit gate e o modo `--plan` do kata são adaptações
@@ -599,7 +600,7 @@ compara e recusa. O resto é conversa.
 
 ### Ferramentas e padrões relacionados
 
-- [mushin](https://github.com/walternagai/mushin): agente local com o ciclo
+- **mushin**: agente local (repositório privado do autor) com o ciclo
   Karpathy (`scripts/karpathy_cycle.py`), schema `.karpathy/` compatível com
   `.kata/` via `ln -s .karpathy .kata`.
 - [claude-wizard](https://github.com/vlad-ko/claude-wizard): 8 fases de
@@ -607,8 +608,6 @@ compara e recusa. O resto é conversa.
   unificado (71 stars).
 - [ring](https://github.com/LerianStudio/ring): 76 skills e 33 agentes que
   impõem boas práticas de engenharia, com ciclos de 10 gates (212 stars).
-- [pre-commit-review](https://github.com/junit/pre-commit-review): AI Agent
-  skill para code review pré-commit e quality gating local.
 - [nova](https://github.com/TeamSPWK/nova): avaliador independente com revisão
   adversarial e pre-commit quality gate.
 - [intent-audit-harness](https://github.com/jeremylongshore/intent-audit-harness):

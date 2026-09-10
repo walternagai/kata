@@ -88,8 +88,8 @@ coverage, rather than in prompt text. claude-wizard [@claudewizard] is an
 only: there is no backend that executes the gates. Ring [@ring] is a large
 skills library (76 skills, 33 agents) that enforces engineering practices with
 10-gate development cycles, again as instructions rather than executable
-checks. pre-commit-review [@precommitreview] and nova [@nova] provide
-pre-commit quality gating, but as agent skills without a shared executable
+checks. nova [@nova] provides
+pre-commit quality gating, but as an agent skill without a shared executable
 core. On the research side, SpecBench [@specbench] measures reward hacking in
 coding agents, and SWE-bench [@swebench] benchmarks agent capability on real
 GitHub issues; both measure agents, neither provides a gate that a team can run
@@ -162,7 +162,8 @@ judge that refuses honest work is treated as broken as one that misses fraud.
 The unit suite also exercises the JUDGE against a real git repository in a
 temporary directory, because blindness to committed or untracked changes
 cannot be reproduced with mocks. The schema of the task file is compatible
-with the `.karpathy/` schema of the mushin agent, so legacy tasks migrate
+with the `.karpathy/` schema of the mushin agent (a private local project
+where the cycle was first implemented), so legacy tasks migrate
 through a symbolic link. The repository is public, MIT-licensed, and
 installable in both agent hosts through symlink installers.
 

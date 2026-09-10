@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE article PUBLIC "-//NLM//DTD JATS (Z39.96) Journal Publishing DTD v1.2 20190208//EN"
+                  "JATS-publishing1.dtd">
+<article xmlns:mml="http://www.w3.org/1998/Math/MathML" xmlns:xlink="http://www.w3.org/1999/xlink" dtd-version="1.2" article-type="other">
+<front>
+<journal-meta>
+<journal-id></journal-id>
+<journal-title-group>
+<journal-title>Journal of Open Source Software</journal-title>
+<abbrev-journal-title>JOSS</abbrev-journal-title>
+</journal-title-group>
+<issn publication-format="electronic">2475-9066</issn>
+<publisher>
+<publisher-name>Open Journals</publisher-name>
+</publisher>
+</journal-meta>
+<article-meta>
+<article-id pub-id-type="publisher-id">0</article-id>
+<article-id pub-id-type="doi">N/A</article-id>
+<title-group>
+<article-title>Kata: an executable quality gate for AI-assisted software
+changes</article-title>
+</title-group>
+<contrib-group>
+<contrib contrib-type="author" corresp="yes">
+<contrib-id contrib-id-type="orcid">https://orcid.org/0000-0001-9078-8396</contrib-id>
+<name>
+<surname>Nagai</surname>
+<given-names>Walter Aoiama</given-names>
+</name>
+<xref ref-type="aff" rid="aff-1"/>
+<xref ref-type="corresp" rid="cor-1"><sup>*</sup></xref>
+</contrib>
+<contrib contrib-type="author">
+<contrib-id contrib-id-type="orcid">https://orcid.org/0000-0002-2941-5299</contrib-id>
+<name>
+<surname>Izeki</surname>
+<given-names>Claudia Akemi</given-names>
+</name>
+<xref ref-type="aff" rid="aff-1"/>
+</contrib>
+<aff id="aff-1">
+<institution-wrap>
+<institution>Instituto de Ciências Tecnológicas, Universidade Federal de
+Itajubá, Brazil</institution>
+<institution-id institution-id-type="ROR">00235nr42</institution-id>
+</institution-wrap>
+</aff>
+</contrib-group>
+<author-notes>
+<corresp id="cor-1">* E-mail: <email></email></corresp>
+</author-notes>
+<pub-date date-type="pub" publication-format="electronic" iso-8601-date="2026-09-10">
+<day>10</day>
+<month>9</month>
+<year>2026</year>
+</pub-date>
+<volume>¿VOL?</volume>
+<issue>¿ISSUE?</issue>
+<fpage>¿PAGE?</fpage>
+<permissions>
+<copyright-statement>Authors of papers retain copyright and release the
+work under a Creative Commons Attribution 4.0 International License (CC
+BY 4.0)</copyright-statement>
+<copyright-year>1970</copyright-year>
+<copyright-holder>The article authors</copyright-holder>
+<license license-type="open-access" xlink:href="https://creativecommons.org/licenses/by/4.0/">
+<license-p>Authors of papers retain copyright and release the work under
+a Creative Commons Attribution 4.0 International License (CC BY
+4.0)</license-p>
+</license>
+</permissions>
+<kwd-group kwd-group-type="author">
+<kwd>Python</kwd>
+<kwd>AI agents</kwd>
+<kwd>software quality</kwd>
+<kwd>verification</kwd>
+<kwd>adversarial verification</kwd>
+<kwd>quality gates</kwd>
+<kwd>LLM</kwd>
+<kwd>Claude Code</kwd>
+<kwd>OpenCode</kwd>
+</kwd-group>
+</article-meta>
+</front>
+<body>
+<sec id="summary">
+  <title>Summary</title>
+  <p>Kata (the Japanese word for “form” or “pattern”, as in a martial
+  arts kata: a disciplined, repeatable sequence of movements) is a
+  quality gate for software changesassisted by artificial intelligence
+  (AI) agents. When an AI coding agent says “done”, Kata does not take
+  the claim at face value: it executes the checks the agent claims to
+  have passed, compares the claims against the actual repository state,
+  and refuses to approve work that does not hold up. Kata guides a
+  change through a nine-phase cycle — FIT, THINK, SIMPLIFY, INTENT,
+  SURGICAL, VERIFY, TWIN CHECK, ARTIFACT, REPORT — plus an optional
+  adversarial JUDGE phase that re-runs every claimed check and hunts for
+  seven categories of fraud, such as weakened tests, false completion
+  claims, and undeclared scope. Every phase is recorded in a task file
+  (<monospace>.kata/&lt;task&gt;.yaml</monospace>), so the evidence
+  behind an approval is persistent and auditable, not conversational.
+  Kata is implemented as a Python command-line interface (CLI) with two
+  agent frontends: an OpenCode agent and a set of Claude Code skills,
+  both generated from a single source of truth. It is designed for
+  developers, researchers, and teams who use AI agents to modify code
+  and need objective, reproducible verification that what was claimed
+  was actually done.</p>
+</sec>
+<sec id="statement-of-need">
+  <title>Statement of need</title>
+  <p>AI coding agents produce code faster than any developer can review,
+  and the oversight surface collapses onto the automated test suite.
+  Reward hacking naturally arises in this setup: agents optimize for
+  passing visible tests while deviating from the user’s true goal, and
+  the gap between visible and held-out test suites grows by 28
+  percentage points for every tenfold increase in code size
+  (<xref alt="Zhao et al., 2026" rid="ref-specbench" ref-type="bibr">Zhao
+  et al., 2026</xref>). Agents also end failure transcripts with “all
+  tests pass”, and tests get weakened until they agree with the code
+  (<xref alt="Sahir619, 2026" rid="ref-fable" ref-type="bibr">Sahir619,
+  2026</xref>). Large language models cannot reliably self-correct
+  without external feedback — sometimes their performance even degrades
+  after self-correction
+  (<xref alt="Huang et al., 2024" rid="ref-selfcorrect" ref-type="bibr">Huang
+  et al., 2024</xref>). The implication is that verification cannot be
+  left to the model checking itself: it must be external, executable,
+  and objective.</p>
+  <p>Existing responses to this problem are mostly instructions. Skills
+  and methodologies such as the Fable Method
+  (<xref alt="Sahir619, 2026" rid="ref-fable" ref-type="bibr">Sahir619,
+  2026</xref>) tell the agent what to value (“be careful, verify your
+  work”) and what to do, in order, with thresholds. They improve
+  behavior, but they depend on the model following the instruction:
+  nothing executes the checks, and nothing detects when a phase was
+  filled in without being observed. Kata’s contribution is to move the
+  objective parts of the discipline out of the prompt and into
+  executable, testable Python code. The lint, test, and coverage steps
+  read real exit codes; the JUDGE re-runs claimed checks against the
+  real repository, including committed and untracked files; and the
+  audit mode grades each phase of a completed task as followed, skipped,
+  or faked, naming the concrete risk each skip or fake created. A skill
+  asks for honesty; Kata detects its absence.</p>
+</sec>
+<sec id="state-of-the-field">
+  <title>State of the field</title>
+  <p>Several tools and methodologies address disciplined AI-assisted
+  development. The Fable Method
+  (<xref alt="Sahir619, 2026" rid="ref-fable" ref-type="bibr">Sahir619,
+  2026</xref>) is the closest conceptual ancestor: it defines a
+  think/act/prove loop with a fit gate, a triviality gate, evidence
+  before action, adversarial verification, and outcome-first reporting,
+  and it ships an eval that keeps the method honest. Kata adapts the fit
+  gate, the triviality gate, the intent gate, and the hard bounds
+  directly from it, but differs in one structural way: the objective
+  logic lives in a Python package (<monospace>kata.fit</monospace>,
+  <monospace>kata.verify</monospace>, <monospace>kata.judge</monospace>)
+  that is unit-tested and measured for coverage, rather than in prompt
+  text. claude-wizard
+  (<xref alt="vlad-ko, 2026" rid="ref-claudewizard" ref-type="bibr">vlad-ko,
+  2026</xref>) is an 8-phase development skill with TDD and adversarial
+  review, but it is a skill only: there is no backend that executes the
+  gates. Ring
+  (<xref alt="LerianStudio, 2026" rid="ref-ring" ref-type="bibr">LerianStudio,
+  2026</xref>) is a large skills library (76 skills, 33 agents) that
+  enforces engineering practices with 10-gate development cycles, again
+  as instructions rather than executable checks. pre-commit-review
+  (<xref alt="junit, 2026" rid="ref-precommitreview" ref-type="bibr">junit,
+  2026</xref>) and nova
+  (<xref alt="TeamSPWK, 2026" rid="ref-nova" ref-type="bibr">TeamSPWK,
+  2026</xref>) provide pre-commit quality gating, but as agent skills
+  without a shared executable core. On the research side, SpecBench
+  (<xref alt="Zhao et al., 2026" rid="ref-specbench" ref-type="bibr">Zhao
+  et al., 2026</xref>) measures reward hacking in coding agents, and
+  SWE-bench
+  (<xref alt="Jimenez et al., 2024" rid="ref-swebench" ref-type="bibr">Jimenez
+  et al., 2024</xref>) benchmarks agent capability on real GitHub
+  issues; both measure agents, neither provides a gate that a team can
+  run on its own changes.</p>
+  <p>Kata was built rather than contributed to existing projects for
+  three reasons. First, no existing tool executes the verification: the
+  closest alternatives are prompts that ask the model to verify itself,
+  which the self-correction literature shows is unreliable
+  (<xref alt="Huang et al., 2024" rid="ref-selfcorrect" ref-type="bibr">Huang
+  et al., 2024</xref>). Second, Kata needed to serve two agent hosts
+  (OpenCode and Claude Code) with identical behavior; a single Python
+  backend with generated frontends guarantees that the checks a task
+  claims to have passed are the same checks in both hosts. Third, Kata
+  needed to be verifiable itself: its own lint, tests, and coverage are
+  measured, and 19 adversarial trap scenarios run in continuous
+  integration to ensure the JUDGE catches planted frauds and does not
+  accuse honest work.</p>
+</sec>
+<sec id="software-design">
+  <title>Software design</title>
+  <p>Kata’s design is organized around one principle: the parts of the
+  cycle that can be objective must be executable, and the parts that
+  cannot must be declared before the evidence exists. The Python package
+  <monospace>src/kata/</monospace> implements the objective logic in
+  four modules. <monospace>kata.fit</monospace> measures the real diff
+  against <monospace>HEAD</monospace> (including untracked files) and
+  applies the triviality gate (at most one changed file and fewer than
+  ten changed lines). <monospace>kata.verify</monospace> runs lint,
+  tests, and coverage with a numeric gate, reading exit codes rather
+  than model intentions; a declared role in
+  <monospace>.kata/config.yaml</monospace> runs verbatim, so the tool
+  does not assume the target project is Python.
+  <monospace>kata.judge</monospace> treats the task file as a collection
+  of claims, re-runs the claimed checks, diffs the claims against the
+  repository, and hunts seven fraud categories: weakened checks, false
+  completion, scope creep, unauthorized actions, specification betrayal,
+  debris, and baseline tampering. <monospace>kata.cli</monospace>
+  orchestrates the nine phases, persists the task file, and exposes the
+  audit and judge modes.</p>
+  <p>The cycle itself encodes two design trade-offs worth making
+  explicit. The first is the done criterion (Fable Step 1): THINK
+  records what “ready” means and how it will be verified
+  <italic>before</italic> the evidence exists, and VERIFY confronts that
+  declared criterion with the final result. Without this, the success
+  criterion only exists after the work is done, and “is it satisfied?”
+  becomes unfalsifiable. The second is the hard bound (Fable Step 5):
+  after three failed verification attempts the task is handed back to
+  the user with what was tried, the real output, and the current
+  hypothesis, instead of looping fix-verify forever. The JUDGE also
+  confesses its blind spots: if it could not observe something (a test
+  language it has no probes for, a file outside the diff), the verdict
+  is UNVERIFIABLE, never VERIFIED — “I could not look” is never reported
+  as “all clear”.</p>
+  <p>The frontends are generated, not hand-maintained. The phase prompts
+  live once in <monospace>phases/*.md</monospace> and are rendered into
+  the OpenCode agent and the Claude Code skills by a build script; 93%
+  of the content is shared, and the remaining 7% is declared difference
+  (tool names of the host). This single-source design exists because the
+  previous arrangement — two hand-maintained copies — failed: the copies
+  accumulated 395 divergent lines, including an improvement applied to
+  one frontend and forgotten in the other. A test fails when the
+  generated files drift from the source, so the divergence cannot pass
+  unnoticed.</p>
+</sec>
+<sec id="research-impact-statement">
+  <title>Research impact statement</title>
+  <p>Kata is dogfooded: its own lint, tests, and coverage are measured
+  (gate 70%), and the continuous integration runs the Makefile rather
+  than restating the commands, so what is verified locally and remotely
+  cannot drift apart. The adversarial evaluation is the strongest
+  evidence of impact: 19 trap scenarios
+  (<monospace>eval/run_traps.py</monospace>) plant frauds the JUDGE must
+  catch and honest work it must not accuse. Twelve scenarios plant a
+  fraud that must be detected (weakened checks, false completion, scope
+  creep, unauthorized action, specification betrayal, debris, baseline
+  tampering); four are entirely honest tasks that must come back
+  VERIFIED; two expect UNVERIFIABLE for confessed blind spots. The trap
+  suite includes a guard against refusing legitimate work: one scenario
+  plants real debris beside files whose names merely look like debris,
+  and a judge that refuses honest work is treated as broken as one that
+  misses fraud. The unit suite also exercises the JUDGE against a real
+  git repository in a temporary directory, because blindness to
+  committed or untracked changes cannot be reproduced with mocks. The
+  schema of the task file is compatible with the
+  <monospace>.karpathy/</monospace> schema of the mushin agent, so
+  legacy tasks migrate through a symbolic link. The repository is
+  public, MIT-licensed, and installable in both agent hosts through
+  symlink installers.</p>
+</sec>
+<sec id="ai-usage-disclosure">
+  <title>AI usage disclosure</title>
+  <p>Generative AI tools were used in the development of this software
+  and in the writing of this manuscript. The software itself is a tool
+  for verifying AI-assisted code changes, and its development followed
+  the cycle it implements: the phase prompts were drafted with AI
+  assistance and validated against the adversarial trap suite, and the
+  Python backend was written with AI assistance and verified by unit
+  tests, coverage measurement, and the trap scenarios. This manuscript
+  was drafted with AI assistance and reviewed, edited, and validated by
+  the human authors, who made the core design decisions and verified all
+  technical claims against the repository.</p>
+</sec>
+<sec id="acknowledgements">
+  <title>Acknowledgements</title>
+  <p>We thank the open-source communities of the Fable Method
+  (<xref alt="Sahir619, 2026" rid="ref-fable" ref-type="bibr">Sahir619,
+  2026</xref>) and of the Karpathy Development Cycle for the
+  methodologies that inspired this work, and the maintainers of the
+  related tools surveyed in the State of the field section for the
+  comparison that sharpened Kata’s design.</p>
+</sec>
+</body>
+<back>
+<ref-list>
+  <title></title>
+  <ref id="ref-specbench">
+    <element-citation publication-type="article-journal">
+      <person-group person-group-type="author">
+        <name><surname>Zhao</surname><given-names>Bingchen</given-names></name>
+        <name><surname>Srikanth</surname><given-names>Dhruv</given-names></name>
+        <name><surname>Wu</surname><given-names>Yuxiang</given-names></name>
+        <name><surname>Jiang</surname><given-names>Zhengyao</given-names></name>
+      </person-group>
+      <article-title>SpecBench: Measuring reward hacking in long-horizon coding agents</article-title>
+      <source>arXiv preprint arXiv:2605.21384</source>
+      <year iso-8601-date="2026">2026</year>
+      <uri>https://arxiv.org/abs/2605.21384</uri>
+    </element-citation>
+  </ref>
+  <ref id="ref-fable">
+    <element-citation>
+      <person-group person-group-type="author">
+        <name><surname>Sahir619</surname></name>
+      </person-group>
+      <article-title>The fable method: The fable workflow</article-title>
+      <source>GitHub repository</source>
+      <publisher-name>GitHub</publisher-name>
+      <year iso-8601-date="2026">2026</year>
+      <uri>https://github.com/Sahir619/fable-method</uri>
+    </element-citation>
+  </ref>
+  <ref id="ref-selfcorrect">
+    <element-citation publication-type="article-journal">
+      <person-group person-group-type="author">
+        <name><surname>Huang</surname><given-names>Jie</given-names></name>
+        <name><surname>Chen</surname><given-names>Xinyun</given-names></name>
+        <name><surname>Mishra</surname><given-names>Swaroop</given-names></name>
+        <name><surname>Zheng</surname><given-names>Huaixiu Steven</given-names></name>
+        <name><surname>Yu</surname><given-names>Adams Wei</given-names></name>
+        <name><surname>Song</surname><given-names>Xinying</given-names></name>
+        <name><surname>Zhou</surname><given-names>Denny</given-names></name>
+      </person-group>
+      <article-title>Large language models cannot self-correct reasoning yet</article-title>
+      <source>International Conference on Learning Representations (ICLR)</source>
+      <year iso-8601-date="2024">2024</year>
+      <uri>https://arxiv.org/abs/2310.01798</uri>
+    </element-citation>
+  </ref>
+  <ref id="ref-swebench">
+    <element-citation publication-type="article-journal">
+      <person-group person-group-type="author">
+        <name><surname>Jimenez</surname><given-names>Carlos E.</given-names></name>
+        <name><surname>Yang</surname><given-names>John</given-names></name>
+        <name><surname>Wettig</surname><given-names>Alexander</given-names></name>
+        <name><surname>Yao</surname><given-names>Shunyu</given-names></name>
+        <name><surname>Pei</surname><given-names>Kexin</given-names></name>
+        <name><surname>Press</surname><given-names>Ofir</given-names></name>
+        <name><surname>Narasimhan</surname><given-names>Karthik</given-names></name>
+      </person-group>
+      <article-title>SWE-bench: Can language models resolve real-world GitHub issues?</article-title>
+      <source>International Conference on Learning Representations (ICLR)</source>
+      <year iso-8601-date="2024">2024</year>
+      <uri>https://arxiv.org/abs/2310.06770</uri>
+    </element-citation>
+  </ref>
+  <ref id="ref-claudewizard">
+    <element-citation>
+      <person-group person-group-type="author">
+        <name><surname>vlad-ko</surname></name>
+      </person-group>
+      <article-title>Claude-wizard: Turn claude code from a fast coder into a senior software architect</article-title>
+      <source>GitHub repository</source>
+      <publisher-name>GitHub</publisher-name>
+      <year iso-8601-date="2026">2026</year>
+      <uri>https://github.com/vlad-ko/claude-wizard</uri>
+    </element-citation>
+  </ref>
+  <ref id="ref-ring">
+    <element-citation>
+      <person-group person-group-type="author">
+        <name><surname>LerianStudio</surname></name>
+      </person-group>
+      <article-title>Ring: Skills library for AI agents</article-title>
+      <source>GitHub repository</source>
+      <publisher-name>GitHub</publisher-name>
+      <year iso-8601-date="2026">2026</year>
+      <uri>https://github.com/LerianStudio/ring</uri>
+    </element-citation>
+  </ref>
+  <ref id="ref-precommitreview">
+    <element-citation>
+      <person-group person-group-type="author">
+        <name><surname>junit</surname></name>
+      </person-group>
+      <article-title>Pre-commit-review: AI agent skill for code review pre-commit and quality gating</article-title>
+      <source>GitHub repository</source>
+      <publisher-name>GitHub</publisher-name>
+      <year iso-8601-date="2026">2026</year>
+      <uri>https://github.com/junit/pre-commit-review</uri>
+    </element-citation>
+  </ref>
+  <ref id="ref-nova">
+    <element-citation>
+      <person-group person-group-type="author">
+        <name><surname>TeamSPWK</surname></name>
+      </person-group>
+      <article-title>Nova: AI agent ops for claude code</article-title>
+      <source>GitHub repository</source>
+      <publisher-name>GitHub</publisher-name>
+      <year iso-8601-date="2026">2026</year>
+      <uri>https://github.com/TeamSPWK/nova</uri>
+    </element-citation>
+  </ref>
+</ref-list>
+</back>
+</article>

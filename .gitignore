@@ -30,3 +30,13 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# LaTeX auxiliares (paper/jserd)
+paper/jserd/*.aux
+paper/jserd/*.bbl
+paper/jserd/*.blg
+paper/jserd/*.log
+paper/jserd/*.out
+paper/jserd/*.toc
+paper/jserd/*.fls
+paper/jserd/*.fdb_latexmk

@@ -84,7 +84,7 @@ fixed by two agent models with and without the cycle.
 \end{abstract}
 
 \begin{keywords}
-AI agents, software quality, verification, adversarial verification, quality gates, LLM, Claude Code, OpenCode
+AI agents, software quality, verification, adversarial verification, quality gates, large language models, coding agents
 \end{keywords}
 
 \end{frontmatter}
@@ -103,8 +103,9 @@ gate'' without any of it having been executed. Or worse: it can have executed
 the checks, but with a weakened test (a \texttt{pass} in place of the
 assertion) that ``passes'' without verifying anything.
 
-The Karpathy Development Cycle proposes discipline: think before coding, keep
-the code minimal, make surgical changes, and verify objectively. The Fable
+The Karpathy Development Cycle \cite{karpathy} proposes discipline: think
+before coding, keep the code minimal, make surgical changes, and verify
+objectively. The Fable
 Method \cite{fable} proposes gates: classify the task before acting (fit
 gate), require evidence before action, verify adversarially, and report
 outcome-first. Both are methodologies --- text that instructs. The problem:
@@ -139,6 +140,8 @@ action with real output. Section~\ref{sec:judge} details the adversarial
 verification layer. Section~\ref{sec:audit} presents the audit mode.
 Section~\ref{sec:usage} documents how to install and use the \texttt{kata}
 CLI. Section~\ref{sec:impact} reports the research impact and evaluation.
+Section~\ref{sec:discussion} discusses the findings and their limitations.
+Section~\ref{sec:threats} states the threats to validity.
 Section~\ref{sec:conclusion} concludes.
 
 \section{Statement of need}
@@ -452,7 +455,7 @@ repository.
   arrowd/.style={-{Stealth[length=1.8mm]}, semithick, dashed},
   note/.style={font=\tiny\itshape, text=black!60, align=center}
 ]
-  % Fileira principal (y=0)
+  % Main row (y=0)
   \node[obj] (fit)       at (0.85,0)   {FIT};
   \node[subj] (think)    at (2.75,0)   {THINK};
   \node[subj] (simplify) at (4.65,0)   {SIMPLIFY};
@@ -472,26 +475,26 @@ repository.
   \draw[arrow] (twin) -- (artifact);
   \draw[arrow] (artifact) -- (report);
 
-  % Loop de VERIFY (arco por cima, com label deslocado à esquerda do arco)
+  % VERIFY loop (arc on top, label offset to the left of the arc)
   \draw[arrowd] (verify.north west) to[out=110,in=70]
     (verify.north east);
   \node[note, anchor=south west, align=left] at (9.4,0.85)
-    {falhou: corrigir e reverificar\\ ($\leq$3 tentativas)};
+    {failed: fix and re-verify\\ ($\leq$3 attempts)};
 
-  % Triviality gate: arco por baixo de THINK..SURGICAL
+  % Triviality gate: arc below THINK..SURGICAL
   \draw[arrowd] (fit.south) to[out=-90,in=-90]
     (verify.south);
-  \node[note] at (5.4,-1.45) {triviality gate: pula THINK..SURGICAL};
+  \node[note] at (5.4,-1.45) {triviality gate: skips THINK..SURGICAL};
 
-  % Rotas do FIT (nota, sem seta)
+  % FIT routes (note, no arrow)
   \node[note, anchor=west] at (0.1,-2.1)
-    {plan-first: para após THINK\\ question: para após FIT};
+    {plan-first: stops after THINK\\ question: stops after FIT};
 
-  % Hand back e TWIN CHECK (notas, sem seta)
+  % Hand back and TWIN CHECK (notes, no arrow)
   \node[note, anchor=west] at (9.4,-2.1)
-    {VERIFY: hand back após 3 falhas};
+    {VERIFY: hands back after 3 failures};
   \node[note, anchor=west] at (11.7,-1.45)
-    {TWIN CHECK: só para tarefa aprovada};
+    {TWIN CHECK: approved tasks only};
 
   % JUDGE opcional
   \node[judge] (judge) at (16.15,-1.95) {JUDGE (optional)};
@@ -674,23 +677,30 @@ as non-trivial and routes it to the full cycle.
 The FIT phase measures the real diff and classifies the task:
 
 \begin{lstlisting}
-  diff: 2 arquivo(s), 11 linha(s) alteradas
-  ↳ tarefa não-trivial
+  diff: 2 file(s), 11 changed line(s)
+  ↳ non-trivial task
 
-  Rotas disponíveis:
-    [1] code-loop   — ciclo completo
-    [2] plan-first  — só planejamento
-    [3] question    — só diagnóstico
-    [4] research    — precisa pesquisar antes de agir
-    [5] inference   — baseado só em inferência
+  Available routes:
+    [1] code-loop   — full cycle
+    [2] plan-first  — planning only
+    [3] question    — diagnosis only
+    [4] research    — needs research before acting
+    [5] inference   — based on inference only
 
-  Rota escolhida [1]: 1
-  Justificativa breve (opcional): corrigir divisão por zero sem tratamento
+  Chosen route [1]: 1
+  Brief justification (optional): fix division by zero without a guard
 \end{lstlisting}
 
 A trivial task (at most one file, fewer than ten lines) would skip the
 planning phases and go directly to VERIFY --- the triviality gate of the
-Fable Method.
+Fable Method.\footnote{The \texttt{kata} CLI reports in Portuguese; the
+outputs shown in this section are translated into English for
+presentation. Recurring terms: \emph{não-trivial} = non-trivial;
+\emph{rota escolhida} = chosen route; \emph{arquivo(s)} = file(s);
+\emph{linha(s)} = line(s); \emph{limpo} = clean; \emph{passou} = passed;
+\emph{critério de sucesso} = success criterion; \emph{veredito} = verdict;
+\emph{fraude(s)} = fraud(s); \emph{re-execução} = re-execution;
+\emph{ocorrência(s)} = occurrence(s).}
 
 \subsection{THINK --- declaring before the evidence}
 
@@ -698,15 +708,15 @@ THINK records the problem, assumptions, alternatives, unknowns, and the done
 criterion \emph{before} the evidence exists:
 
 \begin{lstlisting}
-  Qual o problema exato que estou resolvendo?
-    a função dividir levanta ZeroDivisionError sem tratamento
-  Quais assumptions estou fazendo? (separadas por ;)
-    nenhuma; API estável
-  Quais alternativas considerei? (separadas por ;)
-    tratar com ValueError; retornar None
-  O que NÃO sei? (preciso perguntar antes?) nenhuma
-  O que é 'pronto'? (critério de sucesso + como vou verificar)
-    teste test_dividir_por_zero passa e coverage >= 70%
+  What is the exact problem I am solving?
+    the dividir (divide) function raises ZeroDivisionError with no guard
+  What assumptions am I making? (semicolon-separated)
+    none; API is stable
+  What alternatives did I consider? (semicolon-separated)
+    guard with ValueError; return None
+  What do I NOT know? (do I need to ask first?) nothing
+  What is 'done'? (success criterion + how I will verify it)
+    test test_dividir_por_zero passes and coverage >= 70%
 \end{lstlisting}
 
 The done criterion is declared before the evidence exists (Fable Step 1).
@@ -723,15 +733,15 @@ code. SURGICAL reviews every changed file and records whether it is
 necessary:
 
 \begin{lstlisting}
-  O que o código FAZ hoje? dividir levanta ZeroDivisionError
-  O que o teste/check ESPERA? teste espera ValueError
-  O que a especificação/README DIZ? README não menciona o caso
-  Código, teste e especificação concordam? [S/n]: s
+  What does the code DO today? dividir raises ZeroDivisionError
+  What does the test/check EXPECT? test expects ValueError
+  What does the specification/README SAY? README does not mention the case
+  Do code, test, and specification agree? [Y/n]: y
 
-Arquivos alterados:
-  src/calculadora.py — necessário para esta tarefa? [S/n]: s
-  tests/test_calculadora.py — necessário para esta tarefa? [S/n]: s
-  Imports removidos são só os que sua mudança tornou inúteis? [S/n]: s
+Changed files:
+  src/calculadora.py — necessary for this task? [Y/n]: y
+  tests/test_calculadora.py — necessary for this task? [Y/n]: y
+  Are the removed imports only those your change made unused? [Y/n]: y
 \end{lstlisting}
 
 \subsection{VERIFY --- objective verification}
@@ -742,19 +752,19 @@ in THINK:
 
 \begin{lstlisting}
 ▶ ruff check src/ tests/
-  ✅ limpo
+  ✅ clean
 
 ▶ pytest tests/ --tb=short -q
-  ✅ passou
+  ✅ passed
 
 ▶ coverage (gate ≥ 70%)
-  ✅ passou (100.0%)
+  ✅ passed (100.0%)
 
-▶ Critério de sucesso da tarefa
-  (declarado no THINK: teste test_dividir_por_zero passa e coverage >= 70%)
-  O critério de sucesso da tarefa está satisfeito? [S/n]: s
+▶ Success criterion of the task
+  (declared in THINK: test test_dividir_por_zero passes and coverage >= 70%)
+  Is the success criterion of the task satisfied? [Y/n]: y
 
-  ✅  KATA CYCLE — APROVADO
+  ✅  KATA CYCLE — APPROVED
 \end{lstlisting}
 
 Each of the first three steps runs the command declared in
@@ -771,13 +781,13 @@ whether one was, searches the project for the pattern, and records the
 answer:
 
 \begin{lstlisting}
-  Um defeito foi corrigido? Deseja buscar padrão similar? [s/N]: s
+  Was a defect fixed? Search for a similar pattern? [y/N]: y
 
-  Padrão a buscar (regex): a / b
-  Buscando 'a / b' no projeto...
-  ✅ Encontrado em 1 arquivo(s):
+  Pattern to search (regex): a / b
+  Searching for 'a / b' in the project...
+  ✅ Found in 1 file(s):
      ./src/calculadora.py:7  return a / b
-  Corrigir as demais ocorrências agora? [s/N]: n
+  Fix the remaining occurrences now? [y/N]: n
 \end{lstlisting}
 
 Recording a negative answer is part of the point: it is what distinguishes
@@ -793,21 +803,21 @@ outcome first, followed by the problem, the done criterion, changed files,
 verification results, caveats, and any due artifact lines:
 
 \begin{lstlisting}
-✅  KATA CYCLE — APROVADO: critério de sucesso satisfeito
+✅  KATA CYCLE — APPROVED: success criterion satisfied
 
-  Problema: a função dividir levanta ZeroDivisionError sem tratamento
-  Critério declarado: teste test_dividir_por_zero passa e coverage >= 70%
-  Arquivos alterados: src/calculadora.py, tests/test_calculadora.py
-  INTENT: code does dividir levanta ZeroDivisionError; check expects
-          teste espera ValueError; spec says README não menciona o caso
+  Problem: the dividir (divide) function raises ZeroDivisionError with no guard
+  Declared criterion: test test_dividir_por_zero passes and coverage >= 70%
+  Changed files: src/calculadora.py, tests/test_calculadora.py
+  INTENT: code does dividir raises ZeroDivisionError; check expects
+          test expects ValueError; spec says README does not mention the case
 
-  Verificações:
-  ✅ ruff check limpo
-  ✅ pytest passou
+  Checks:
+  ✅ ruff check clean
+  ✅ pytest passed
   ✅ coverage 100.0% ≥ gate
-  ✅ critério de sucesso satisfeito
+  ✅ success criterion satisfied
 
-  TWINS: searched a / b - found 1 arquivo(s), 1 ocorrência(s)
+  TWINS: searched a / b - found 1 file(s), 1 occurrence(s)
 \end{lstlisting}
 
 \subsection{The task file}
@@ -836,19 +846,19 @@ pattern search was performed --- recording a negative answer is what
 distinguishes ``no defect'' from ``not checked''.
 
 \begin{lstlisting}[caption=Task file produced by the demonstration cycle.,label=lst:taskfile]
-task: corrigir-divisao-zero
+task: fix-division-by-zero
 status: approved
-done: teste test_dividir_por_zero passa e coverage >= 70%
+done: test test_dividir_por_zero passes and coverage >= 70%
 fit:
   trivial: false
   route: code-loop
-  reason: corrigir divisão por zero sem tratamento
+  reason: fix division by zero without a guard
   answered: true
 think:
-  problem: a função dividir levanta ZeroDivisionError sem tratamento
-  assumptions: [nenhuma, API estável]
-  alternatives: [tratar com ValueError, retornar None]
-  unknowns: nenhuma
+  problem: the dividir (divide) function raises ZeroDivisionError with no guard
+  assumptions: [none, API is stable]
+  alternatives: [guard with ValueError, return None]
+  unknowns: none
   answered: true
 simplify:
   minimum_code: true
@@ -856,9 +866,9 @@ simplify:
   no_speculative_config: true
   answered: true
 intent:
-  code_does: dividir levanta ZeroDivisionError
-  check_expects: teste espera ValueError
-  spec_says: README não menciona o caso
+  code_does: dividir raises ZeroDivisionError
+  check_expects: test expects ValueError
+  spec_says: README does not mention the case
   all_agree: true
   answered: true
 surgical:
@@ -879,7 +889,7 @@ verify:
   hand_back: false
 twins:
   pattern: a / b
-  result: 1 arquivo(s), 1 ocorrência(s)
+  result: 1 file(s), 1 occurrence(s)
   searched: true
   defect_fixed: true
   matches_count: 1
@@ -936,25 +946,25 @@ the YAML diverges from the Git anchor recorded when the task started.
 \subsection{Honest work: VERIFIED}
 
 After committing the task of Section~\ref{sec:cycle}, we ran
-\texttt{kata --task corrigir-divisao-zero --judge}. The judge re-executed
+\texttt{kata --task fix-division-by-zero --judge}. The judge re-executed
 the claimed checks and returned:
 
 \begin{lstlisting}
-✅  VEREDITO: VERIFIED
+✅  VERDICT: VERIFIED
 
-  Claims verificadas:
-    • ruff check limpo (sem erros de lint)
-    • todos os testes passam
+  Verified claims:
+    • ruff check clean (no lint errors)
+    • all tests pass
     • coverage ≥ gate (100.0%)
-    • 2 arquivo(s) alterado(s) cirurgicamente (necessários)
-    • intenção alinhada: código, teste e spec concordam
+    • 2 file(s) changed surgically (necessary)
+    • intent aligned: code, test, and spec agree
 
-  Claims aceitas sem verificação (não re-executáveis):
-    • critério de sucesso satisfeito
+  Claims accepted without verification (not re-executable):
+    • success criterion satisfied
 
-  Re-execução:
+  Re-execution:
     ✅ lint
-    ✅ teste
+    ✅ test
     ✅ coverage
 \end{lstlisting}
 
@@ -972,22 +982,22 @@ import in the source, a failing test, and coverage skipped because pytest
 failed):
 
 \begin{lstlisting}
-❌  VEREDITO: REFUTED
+❌  VERDICT: REFUTED
 
-  Fraudes encontradas:
+  Frauds found:
     🔴 [high] false_completion
-       ruff check re-executado falhou, mas relatório afirma que passou
-       → relatório: ruff_clean=True → reality: ruff check falhou
+       ruff check re-execution failed, but the report claims it passed
+       → report: ruff_clean=True → reality: ruff check failed
     🔴 [high] false_completion
-       pytest re-executado falhou, mas relatório afirma que passou
-       → relatório: tests_pass=True → reality: pytest falhou
+       pytest re-execution failed, but the report claims it passed
+       → report: tests_pass=True → reality: pytest failed
     🔴 [high] false_completion
-       coverage re-executado falhou, mas relatório afirma que passou
-       → relatório: coverage_pass=True → reality: coverage falhou
+       coverage re-execution failed, but the report claims it passed
+       → report: coverage_pass=True → reality: coverage failed
 
-  Re-execução:
+  Re-execution:
     ❌ lint
-    ❌ teste
+    ❌ test
     ❌ coverage
 \end{lstlisting}
 
@@ -1037,19 +1047,19 @@ the audit reads the YAML and detects \texttt{answered: true} with empty
 content. A skill has no way to know whether a phase was ``faked''; Kata
 does.\begin{lstlisting}
 ❌ FIT: faked
-   ⚠ rota e trivialidade não classificadas por humano — esforço pode ser
-     desperdiçado em tarefa trivial ou mal roteada
+   ⚠ route and triviality not classified by a human — effort may be
+     wasted on a trivial or misrouted task
 ❌ THINK: faked
-   ⚠ assumptions nunca declaradas — qualquer solução pode atacar o
-     problema errado
+   ⚠ assumptions never declared — any solution may attack the
+     wrong problem
 ❌ INTENT: faked
-   ⚠ código, teste e spec podem discordar sem registro — comportamento
-     muda sem intenção verificada
+   ⚠ code, test, and spec may disagree without a record — behavior
+     changes without verified intent
 ✅ SIMPLIFY: followed
 ✅ SURGICAL: followed
 ✅ VERIFY: followed
 
-⚠  Audit encontrou 3 fake(s) e 0 skip(s).
+⚠  Audit found 3 fake(s) and 0 skip(s).
 \end{lstlisting}
 
 The audit is the kata's equivalent of the fable-method's audit, and it
@@ -1091,7 +1101,13 @@ in the skill text.
 
 This section documents how to install Kata and use its command-line
 interface, so that the demonstrations of
-Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced.
+Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced. The
+canonical user documentation --- README, \texttt{DOCUMENTATION.md}, and
+the installers --- is versioned with the source at
+\href{https://github.com/walternagai/kata/tree/v0.6.0}{\texttt{github.com/walternagai/kata/tree/v0.6.0}};
+the instructions below mirror that tagged release, and the evaluation
+artifacts referenced throughout the paper are listed in the Declarations
+section.
 
 \subsection{Installation}
 
@@ -1324,15 +1340,16 @@ UNVERIFIABLE & s12, s13, s19 & 3 \\
 \end{table*}
 
 The result confirms the two-sided contract of the JUDGE. On the detection
-side, eleven scenarios returned REFUTED with high-severity frauds,
-covering all seven fraud categories; the s03 false-completion scenario
-shown in Section~\ref{sec:judge} is representative. On the restraint side,
-four honest scenarios returned VERIFIED, and the s06 scenario
-\emph{also} returned VERIFIED WITH CAVEATS: the JUDGE found the real
-debris (\texttt{scratch/saida.tmp}, a debug print, a TODO) while sparing
-the look-alike names (\texttt{templates/}, \texttt{temperature.py},
-\texttt{attempt\_parser.py}) and the s16 trivial task that a naive
-scope-creep rule would falsely accuse. Three scenarios returned
+side, twelve scenarios plant a fraud: eleven returned REFUTED with
+high-severity frauds, and the twelfth, s06 (debris), returned VERIFIED
+WITH CAVEATS with the fraud found --- the real debris
+(\texttt{scratch/saida.tmp}, a debug print, a TODO) --- while sparing the
+look-alike names (\texttt{templates/}, \texttt{temperature.py},
+\texttt{attempt\_parser.py}), so that the twelve together cover all seven
+fraud categories; the s03 false-completion scenario shown in
+Section~\ref{sec:judge} is representative. On the restraint side, four
+honest scenarios returned VERIFIED, and in s16 the trivial task was not
+falsely accused by a naive scope-creep rule. Three scenarios returned
 UNVERIFIABLE, confessing blind spots instead of clearing work the judge
 could not observe. The suite runs in continuous integration on every push,
 so any regression in detection or restraint breaks the build.
@@ -1343,7 +1360,8 @@ cannot be reproduced with mocks. The schema of the task file is compatible
 with the \texttt{.karpathy/} schema of the mushin agent (a private local
 project where the cycle was first implemented), so legacy tasks migrate
 through a symbolic link. The repository is public, MIT-licensed, and
-installable in both agent hosts through symlink installers.
+installable in both agent hosts through symlink installers (see the
+Declarations section).
 
 \subsection{External evaluation: real bugs in public repositories}
 \label{sec:external-evaluation}
@@ -1640,10 +1658,46 @@ compares, and refuses. The rest is conversation.
 
 \begin{acknowledgements}
 We thank the open-source communities of the Fable Method \cite{fable} and of
-the Karpathy Development Cycle for the methodologies that inspired this
-work, and the maintainers of the related tools surveyed in
+the Karpathy Development Cycle \cite{karpathy} for the methodologies that
+inspired this work, and the maintainers of the related tools surveyed in
 Section~\ref{sec:field} for the comparison that sharpened Kata's design.
 \end{acknowledgements}
+
+\section*{Declarations}
+
+\noindent\textbf{Availability of data and materials.}
+Kata is open-source software distributed under the MIT
+License~\href{https://github.com/walternagai/kata/blob/main/LICENSE}{[MIT licensed]}.
+The source code, the installers, the adversarial trap suite, the
+external-study harness, and the raw results of the evaluations reported in
+Section~\ref{sec:impact} are publicly available at
+\href{https://github.com/walternagai/kata}{\texttt{github.com/walternagai/kata}}
+(commit \texttt{6f56b35}; latest tagged release \texttt{v0.6.0}). The trap
+and comparison verdicts used for Tables~\ref{tab:results} and
+\ref{tab:gate-comparison} are reproducible with
+\texttt{python3 eval/run\_traps.py} and \texttt{python3 eval/compare\_gates.py},
+and the external study with \texttt{python3 eval/external\_study.py}.
+
+\noindent\textbf{Author contributions.}
+W.A.N. conceptualized Kata, implemented the software, designed the
+evaluation, and wrote the first draft. C.A.I. reviewed the methodology and
+the evaluation design and revised the manuscript. Both authors discussed
+the results, contributed to the final text, and approved the submitted
+version.
+
+\noindent\textbf{Funding.}
+This research received no specific funding from public, commercial, or
+not-for-profit agencies.
+
+\noindent\textbf{Competing interests.}
+The authors declare that they have no competing interests.
+
+\noindent\textbf{Use of AI in writing.}
+The authors used generative AI tools for language editing, \LaTeX{}
+formatting, and internal review of the manuscript. All technical claims,
+citations, and evaluation results were verified by the authors and by the
+tooling described in this paper; the authors take full responsibility for
+the content.
 
 \bibliographystyle{apalike}
 \bibliography{paper}

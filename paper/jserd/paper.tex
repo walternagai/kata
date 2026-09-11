@@ -208,7 +208,12 @@ an eval that keeps the method honest. Kata adapts the fit gate, the
 triviality gate, the intent gate, and the hard bounds directly from it, but
 differs in one structural way: the objective logic lives in a Python package
 (\texttt{kata.fit}, \texttt{kata.verify}, \texttt{kata.judge}) that is
-unit-tested and measured for coverage, rather than in prompt text.
+unit-tested and measured for coverage, rather than in prompt text. The
+Fable Method's own \texttt{fable-judge} also treats a report as a set of
+claims and hunts weakened tests; the structural difference is that it is
+prompt text, while Kata's judge is a Python program whose verdict is
+computed from exit codes, the Git diff, and a Git-anchored baseline, and
+whose detection is measured by the public trap suite.
 
 claude-wizard \cite{claudewizard} is an 8-phase development skill with TDD
 and adversarial review, but it is a skill only: there is no backend that
@@ -221,6 +226,18 @@ side, SpecBench \cite{specbench} measures reward hacking in coding agents, and
 SWE-bench \cite{swebench} benchmarks agent capability on real GitHub issues;
 both measure agents, neither provides a gate that a team can run on its own
 changes.
+
+The problem itself predates coding agents. Specification gaming ---
+optimizing the measured proxy instead of the intended goal --- is
+documented across machine learning \cite{krakovna, amodei-concrete} and
+formalized as variants of Goodhart's law \cite{goodhart}. Software
+engineering has studied its counterpart for decades as the oracle problem:
+a passing suite is only as meaningful as the oracle behind it
+\cite{barr-oracle}, which is why independent oracle techniques such as
+metamorphic testing exist \cite{chen-metamorphic}. Reward hacking in
+coding agents is this same failure with a compiler attached, and Kata's
+answer is to treat each claim in the task file as a property and the
+repository as the oracle, re-executing the claim instead of reading it.
 
 Kata was built rather than contributed to existing projects for three
 reasons. First, no existing tool executes the verification: the closest
@@ -1515,7 +1532,9 @@ kata & deepseek & 12 & 0 & 0 & 12 V & 405\,s & 1.9\,s \\
 \label{tab:external-results}
 \end{table*}
 
-The cost dimension is the other finding. Without the cycle, the median
+The cost dimension is the other finding; agent research has argued that
+evaluation must account for cost, not only accuracy \cite{kapoor}, and the
+same holds for gates. Without the cycle, the median
 session took 49\,s; with Kata, 442\,s --- the cycle adds a task file, the
 phase gates, and the JUDGE to every change, and the wall-clock cost is
 roughly nine times higher (Table~\ref{tab:external-results}). The JUDGE
@@ -1637,7 +1656,12 @@ answered. It requires Git for diff and branch detection. The success
 criterion is subjective, and the JUDGE accepts it without verification and
 says so in voice. The JUDGE has blind spots --- test languages without
 probes, files outside the diff --- and confesses them as UNVERIFIABLE
-rather than silencing them. Finally, the self-evaluation is smoke-test
+rather than silencing them. And it re-executes the project's own checks:
+where the oracle itself is wrong --- the classic oracle problem
+\cite{barr-oracle} --- re-execution confirms a false oracle, which is why
+independent oracle generation (property-based and metamorphic testing,
+\cite{chen-metamorphic}) is complementary future work. Finally, the
+self-evaluation is smoke-test
 grade: the trap scenarios are deterministic fixtures, not a statistical
 study of agent behavior, and the honest scenarios are few. The executed
 comparison of Section~\ref{sec:exec-comparison} mitigates this: it is the

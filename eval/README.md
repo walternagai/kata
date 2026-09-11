@@ -171,3 +171,42 @@ TeamSPWK/nova instalado e `wizard` a skill vlad-ko/claude-wizard. Braço
 indisponível vira `SKIP`; bloqueio de gasto da conta vira `LIMIT` e a
 rodada para (retome com `--resume`). Os vereditos brutos ficam em
 `eval/results/` (ver o README de lá para a proveniência de cada arquivo).
+
+## Estudo externo (`external_study.py`)
+
+O `external_study.py` roda agentes reais corrigindo bugs reais de
+repositórios públicos, com e sem Kata, e mede o que sobra no artefato
+final. É o harness do estudo externo do artigo JSERD (§9.2).
+
+O manifest `eval/external_tasks.yaml` fixa 12 tasks: cada uma é um commit
+de fix real (licença permissiva) cujo estado inicial é o commit pai mais os
+arquivos de teste alterados pelo fix, num repositório com histórico
+re-inicializado em um único commit — o fix não é visível para o agente.
+`--check-tasks` confere que os testes falham no estado inicial e passam no
+commit do fix.
+
+Braços: `bare` (OpenCode sem gate, com `HOME`/`XDG_CONFIG_HOME` isolados —
+as skills do kata não são visíveis) e `kata` (`opencode run --agent kata`).
+Modelos: `opencode/deepseek-v4-pro` e `opencode/claude-sonnet-5`.
+
+```bash
+python3 eval/external_study.py --check-tasks      # valida base/fix das 12 tasks
+python3 eval/external_study.py --prepare          # constrói os sandboxes-base
+python3 eval/external_study.py --run --models deepseek,claude --arms bare,kata [--resume]
+python3 eval/external_study.py --merge a.json b.json --out eval/results/external_study.json
+python3 eval/external_study.py --remeasure        # recomputa a medição de runs concluídos
+python3 eval/external_study.py --summary          # agrega o JSON de resultados
+```
+
+`--remeasure` reaplica só a passada de medição (artefato, testes, JUDGE) nos
+sandboxes preservados, sem re-executar as sessões — útil quando o
+instrumento de medição muda. O dado da sessão (status, tempo, stdout)
+permanece o da execução original.
+
+Métricas por execução: testes passam; testes enfraquecidos presentes no
+diff final (o detector do próprio JUDGE); escopo não declarado (arquivos
+alterados menos os declarados pela sessão); veredito do JUDGE como revisor
+independente do artefato final (task YAML sintetizado com os arquivos
+declarados + âncora Git do estado da task — o mesmo instrumento nos dois
+braços); tempo de sessão e de revisão do JUDGE. Resultados em
+`eval/results/external_study.json`.

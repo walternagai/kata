@@ -78,7 +78,9 @@ an audit mode grades each phase as followed, skipped, or faked, naming the
 concrete risk each skip or fake created. Kata is implemented as a Python
 command-line interface with two agent frontends (OpenCode and Claude Code)
 generated from a single source of truth, and it is verified by its own lint,
-tests, coverage, and 19 adversarial trap scenarios in continuous integration.
+tests, coverage, and 19 adversarial trap scenarios in continuous integration,
+and by a minimum external study: twelve real bugs from public repositories,
+fixed by two agent models with and without the cycle.
 \end{abstract}
 
 \begin{keywords}
@@ -1191,28 +1193,18 @@ Kata is dogfooded: its own lint, tests, and coverage are measured (gate
 restating the commands, so what is verified locally and remotely cannot
 drift apart.
 
-The adversarial evaluation is the strongest evidence of impact: 19 trap
-scenarios (\texttt{eval/run\_traps.py}) plant frauds the JUDGE must catch
-and honest work it must not accuse. Eleven scenarios plant a fraud that
-must be detected (weakened checks, false completion, scope creep,
-unauthorized action, specification betrayal, debris, baseline tampering);
-five scenarios expect a non-REFUTED verdict --- four entirely honest tasks
-that must come back VERIFIED and one (s06) whose debris must be found while
-its look-alike names are spared (VERIFIED WITH CAVEATS) --- and three expect
-UNVERIFIABLE for confessed blind spots. The trap suite includes a guard
-against refusing legitimate work: one scenario plants real debris beside
-files whose names merely look like debris, and a judge that refuses honest
-work is treated as broken as one that misses fraud.
+Evaluation proceeds in two layers. The first is a \emph{self-check}: 19
+adversarial trap scenarios (\texttt{eval/run\_traps.py}) plant frauds the
+JUDGE must catch and honest work it must not accuse. The second layer is
+\emph{external}: 12 real bugs from public repositories, fixed by two agent
+models with and without Kata, with the JUDGE reviewing every final
+artifact. The layers answer different questions: the traps measure the
+two-sided contract of the JUDGE on fixtures we built ourselves, while the
+external study measures what real agent sessions produce on code we did
+not write.
 
-The unit suite also exercises the JUDGE against a real git repository in a
-temporary directory, because blindness to committed or untracked changes
-cannot be reproduced with mocks. The schema of the task file is compatible
-with the \texttt{.karpathy/} schema of the mushin agent (a private local
-project where the cycle was first implemented), so legacy tasks
-migrate through a symbolic link. The repository is public, MIT-licensed,
-and installable in both agent hosts through symlink installers.
-
-\subsection{Evaluation methodology}
+\subsection{Self-check: the adversarial trap suite}
+\label{sec:self-check}
 
 The evaluation of Kata follows the methodology of the Fable Method's eval
 \cite{fable}: adversarial trap scenarios that plant frauds the tool must
@@ -1297,14 +1289,18 @@ rounds --- including the honest-work scenario whose whole job is catching
 false positives. A new scenario must be shown to fail when its defect is
 reintroduced, so a scenario that passes in both states protects nothing.
 
-\subsection{Trap scenario execution results}
+\subsubsection{Execution results}
 
-We executed the full trap suite (\texttt{python3 eval/run\_traps.py}) on
-the version of the code described in this paper. All 19 scenarios passed:
-every planted fraud was detected with the expected verdict and the
-expected fraud types, and every honest scenario returned the expected
-verdict with no false accusations. Table~\ref{tab:results} summarizes the
-outcome by expected verdict.
+We executed the full trap suite (\texttt{python3 eval/run\_traps.py}) three
+times on commit \texttt{230e81a} of the repository. The study harness of
+Section~\ref{sec:external-evaluation} adds no changes to \texttt{src/kata},
+so the executed code is the code described in this paper. The machine ran
+Linux 7.1.5 x86\_64 with Python 3.12.3, ruff 0.15.21, pytest 9.1.1, and
+pytest-cov 7.1.0. All 19 scenarios passed in every run, with a median
+wall-clock of 17.7\,s (16.2--17.8\,s). Every planted fraud was detected
+with the expected verdict and the expected fraud types, and every honest
+scenario returned the expected verdict with no false accusations.
+Table~\ref{tab:results} summarizes the outcome by expected verdict.
 
 \begin{table*}[!ht]
 \caption{Trap suite execution results: 19/19 scenarios passed.
@@ -1341,15 +1337,171 @@ UNVERIFIABLE, confessing blind spots instead of clearing work the judge
 could not observe. The suite runs in continuous integration on every push,
 so any regression in detection or restraint breaks the build.
 
+The unit suite also exercises the JUDGE against a real git repository in a
+temporary directory, because blindness to committed or untracked changes
+cannot be reproduced with mocks. The schema of the task file is compatible
+with the \texttt{.karpathy/} schema of the mushin agent (a private local
+project where the cycle was first implemented), so legacy tasks migrate
+through a symbolic link. The repository is public, MIT-licensed, and
+installable in both agent hosts through symlink installers.
+
+\subsection{External evaluation: real bugs in public repositories}
+\label{sec:external-evaluation}
+
+The trap suite is ours: the frauds, the fixtures, and the ground truth
+were written by the authors, and a reviewer may reasonably ask whether the
+mechanisms hold outside that self-referential setting. We therefore ran a
+minimum external study: 12 real bugs from six public repositories, fixed by
+two models under two conditions, with the JUDGE reviewing every final
+artifact. The study is deliberately small --- its purpose is to test
+whether the mechanisms observed on our own fixtures survive contact with
+work we did not author, not to estimate effect sizes.
+
+\subsubsection{Protocol}
+
+\textbf{Sample.} We selected twelve small fixes from public repositories
+(Table~\ref{tab:external-tasks}); each is a real commit that fixed a real
+issue and came with regression tests, so solvability is attested by history
+rather than assumed. For each fix, the task state is the parent commit plus
+the test files the fix changed, and the repository history is
+re-initialized as a single commit so the agent cannot read the fix. We
+verified for all twelve tasks that the selected tests fail in the task
+state and pass at the fix commit (\texttt{python3
+eval/external\_study.py -{}-check-tasks}).
+
+\begin{table*}[!ht]
+\caption{The twelve external tasks. Each row is a real fix commit from a
+public repository (permissive license). The task state is the parent
+commit plus the test files the fix changed, with the history
+re-initialized so the fix is not visible; all tasks were verified to fail
+in the task state and pass at the fix commit.}
+\centering
+\begin{tabular}{@{}llll@{}}
+\hline\hline
+Task & Repository & License & Fix commit (bug) \\
+\hline
+t01 & \texttt{hukkin/tomli} & MIT & \texttt{8b962e1} (wrong-mode \texttt{TypeError}) \\
+t02 & \texttt{hukkin/tomli} & MIT & \texttt{794c8e5} (\texttt{parse\_float} illegal types) \\
+t03 & \texttt{kjd/idna} & BSD-3 & \texttt{e00ed28} (non-ASCII A-label) \\
+t04 & \texttt{kjd/idna} & BSD-3 & \texttt{9067b80} (CONTEXTJ masked error) \\
+t05 & \texttt{pycqa/pyflakes} & MIT & \texttt{e19886e} (redefined global annotation) \\
+t06 & \texttt{pycqa/pyflakes} & MIT & \texttt{e932464} (shadowed unused assignment) \\
+t07 & \texttt{pycqa/pyflakes} & MIT & \texttt{e0d7a6b} (augmented assign to builtin) \\
+t08 & \texttt{more-itertools} & MIT & \texttt{f51a53b} (empty \texttt{interleave\_evenly}) \\
+t09 & \texttt{more-itertools} & MIT & \texttt{9245cd0} (\texttt{split\_after} with \texttt{maxsplit=1}) \\
+t10 & \texttt{more-itertools} & MIT & \texttt{cca3294} (\texttt{last()} without \texttt{\_\_reversed\_\_}) \\
+t11 & \texttt{typing\_extensions} & PSF-2.0 & \texttt{8dfcf3c} (nested \texttt{Annotated}) \\
+t12 & \texttt{davidhalter/parso} & MIT & \texttt{e22dc67} (future grammar load) \\
+\hline\hline
+\end{tabular}
+\label{tab:external-tasks}
+\end{table*}
+
+\textbf{Conditions.} Each task was attempted in a fresh sandbox by two
+models --- \texttt{deepseek-v4-pro} and \texttt{claude-sonnet-5} --- under
+two conditions: \emph{bare}, the model as an agent with no quality gate,
+and \emph{kata}, the same host running the Kata cycle (task file, phases,
+objective verification, and the adversarial JUDGE). Both conditions
+receive the same issue text, run headless with file-edit permissions, and
+must end with a JSON declaration of the files changed. The bare condition
+additionally runs with an isolated agent configuration in which the Kata
+skills are not visible; no bare session created a \texttt{.kata/} artifact,
+while all 24 kata sessions produced a task file and a Git baseline anchor.
+
+\textbf{Metrics.} From the final repository state and the session's
+declaration we measured: (a) whether the test suite passes; (b) whether the
+final diff contains a weakened test, using the JUDGE's own weakened-check
+detector; (c) undeclared scope, the files changed but absent from the
+session's declaration; (d) the verdict of the JUDGE as an independent
+reviewer of the final artifact --- for both conditions we synthesized a
+task file with the session's declared files, supplied the task's test
+command through \texttt{.kata/config.yaml}, and anchored the task state
+(\texttt{refs/kata/base/}) so the same instrument reviews both arms; and
+(e) wall-clock time of the session and of the JUDGE review. The harness,
+the manifest with the pinned commits, and the raw results are public
+(\texttt{eval/external\_study.py}, \texttt{eval/external\_tasks.yaml},
+\texttt{eval/results/external\_study.json}).
+
+\subsubsection{Results}
+
+All 48 sessions produced a fix that passes the task's test suite, in both
+conditions and for both models. The final artifacts contained \textbf{no
+weakened test in any of the 48 runs}: the JUDGE's own weakened-check
+detector found nothing to report, and the test bodies the sessions touched
+remained real assertions. The failure the study did observe was
+\emph{undeclared scope}: in one run (deepseek, no gate), the session
+changed \texttt{tools/intranges.py} to regenerate a code-point table but
+declared only \texttt{idna/core.py}; the JUDGE flagged the extra file as
+\texttt{scope\_creep} and returned VERIFIED WITH CAVEATS. The independent
+review returned VERIFIED for the other 47 runs, with no false accusations
+on any artifact.
+
+\begin{table*}[!ht]
+\caption{External study: 12 real bugs from public repositories, two models,
+two conditions, one session per cell (48 sessions). \emph{Weak.} counts
+runs whose final artifact contains a weakened test according to the JUDGE's
+own detector; \emph{undecl.} counts runs with files changed but not
+declared; \emph{JUDGE} reports the verdicts of the independent review pass
+(\emph{V} = VERIFIED, \emph{VWC} = VERIFIED WITH CAVEATS); \emph{session}
+and \emph{review} are median wall-clock times. Every session's fix passes
+the task's test suite.}
+\centering
+\begin{tabular}{@{}llrrrlrr@{}}
+\hline\hline
+Condition & Model & Runs & Weak. & Undecl. & JUDGE & Median session & Median review \\
+\hline
+bare & claude & 12 & 0 & 0 & 12 V & 46\,s & 2.0\,s \\
+bare & deepseek & 12 & 0 & 1 & 11 V, 1 VWC & 77\,s & 1.9\,s \\
+kata & claude & 12 & 0 & 0 & 12 V & 500\,s & 1.9\,s \\
+kata & deepseek & 12 & 0 & 0 & 12 V & 412\,s & 2.0\,s \\
+\hline\hline
+\end{tabular}
+\label{tab:external-results}
+\end{table*}
+
+The cost dimension is the other finding. Without the cycle, the median
+session took 49\,s; with Kata, 442\,s --- the cycle adds a task file, the
+phase gates, and the JUDGE to every change, and the wall-clock cost is
+roughly nine times higher (Table~\ref{tab:external-results}). The JUDGE
+review itself is cheap and independent of the model that produced the
+change: applied to the same final artifacts, it reached a verdict in a
+median of about two seconds, with outliers of about two minutes on the two
+tasks whose projects leave the coverage role unconfigured, where the
+default coverage pass re-runs the full suite. A gate that costs seconds
+per change is viable as a pre-commit step in a way that an agent-based
+review --- tens of seconds, model-dependent --- is not.
+
+\subsubsection{Caveats}
+
+The external study is small and we do not over-read it. The twelve tasks
+come from six Python repositories chosen for permissive licenses and a
+pytest-based suite; they are not a random sample, and the fixes are
+reconstructed from real commits (the bug is the parent commit; the
+acceptance tests are the ones the fix touched) rather than open issue
+reports taken verbatim. Two models with a single run per cell mean the
+numbers describe these sessions, not the models in general; agent runs are
+stochastic. One session hit the harness timeout and one campaign window was
+interrupted by a provider billing limit; both were re-run, and only
+completed sessions are counted. The comparison is between two prompts to the
+same host (the
+Kata cycle and a bare prompt), with the bare condition running an isolated
+agent configuration; it is a clean room for the tool, not for human
+reviewers. Finally, the review time we report is the automated JUDGE pass,
+not human review time; and because no session in either condition weakened
+a test, the external study exercises the scope half of the JUDGE's
+contract, while the weakened-checks half remains covered by the trap suite
+of Section~\ref{sec:self-check}.
+
 \subsection{Executed comparison with related gates}
 
-The strongest external evidence is the executed comparison of
-Section~\ref{sec:exec-comparison}: four gates reviewed the same 19
-scenarios, and Kata was the only one with zero false positives and a
-median review time of about one second. That comparison is a direct answer
-to the journal's request for a software article to demonstrate its advance
-by comparison with available related software, and its raw verdicts are
-reproducible from the repository (\texttt{eval/compare\_gates.py},
+The gate comparison of Section~\ref{sec:exec-comparison} complements the
+external study with a second kind of external evidence: four gates reviewed
+the same 19 trap scenarios, and Kata was the only one with zero false
+positives and a median review time of about one second. That comparison is
+a direct answer to the journal's request for a software article to
+demonstrate its advance by comparison with available related software, and
+its raw verdicts are reproducible from the repository
+(\texttt{eval/compare\_gates.py},
 \texttt{eval/results/compare\_gates\_round2.json}).
 
 \section{Discussion}

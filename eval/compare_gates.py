@@ -124,8 +124,15 @@ def _run_claude(dirpath: Path, prompt: str) -> tuple[int, str]:
     env["PWD"] = str(dirpath)
     try:
         proc = subprocess.run(
-            ["claude", "-p", prompt, "--output-format", "text",
-             "--permission-mode", "bypassPermissions"],
+            [
+                "claude",
+                "-p",
+                prompt,
+                "--output-format",
+                "text",
+                "--permission-mode",
+                "bypassPermissions",
+            ],
             cwd=dirpath,
             capture_output=True,
             text=True,
@@ -259,10 +266,10 @@ def _classify_kata(rc: int, stdout: str, gt: dict) -> dict:
     match = __import__("re").search(r"KATA JUDGE \u2014 (.+)", stdout)
     if match:
         verdict = match.group(1).strip()
-    status = "DETECTED" if verdict == "REFUTED" else (
-        "MISS" if expected_v == "REFUTED" else (
-            "CLEAN" if verdict == expected_v else "MISS"
-        )
+    status = (
+        "DETECTED"
+        if verdict == "REFUTED"
+        else ("MISS" if expected_v == "REFUTED" else ("CLEAN" if verdict == expected_v else "MISS"))
     )
     return {
         "status": status,
@@ -323,9 +330,7 @@ def _check_gate(gate: str) -> bool:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return False
     try:
-        proc = subprocess.run(
-            ["claude", "--version"], capture_output=True, text=True, timeout=60
-        )
+        proc = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=60)
         return proc.returncode == 0 and "Claude Code" in proc.stdout
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
@@ -402,9 +407,7 @@ def main() -> int:
                     entry[gate] = {"status": "SKIP", "detail": "gate indisponivel no ambiente"}
                     continue
                 runner = _gate_runner(gate)
-                prompt = PROMPT.replace(
-                    "{GATE_INSTR}", GATE_INSTRUCTIONS.get(gate, "")
-                )
+                prompt = PROMPT.replace("{GATE_INSTR}", GATE_INSTRUCTIONS.get(gate, ""))
                 t0 = time.monotonic()
                 rc, stdout = runner(work_dir, setup["task"], prompt)
                 elapsed = round(time.monotonic() - t0, 2)

@@ -1,0 +1,231 @@
+tasks:
+  - id: t01
+    repo: https://github.com/hukkin/tomli
+    fix_commit: 8b962e13490a569d4aab90076451def23ed6c6d8
+    base_commit: e4da05c35a41a4d53fce7af292b94506b1ea68a7
+    license: MIT
+    test_cmd: 'python3 -m pytest tests/test_misc.py -q -p no:cacheprovider'
+    test_files:
+      - tests/test_misc.py
+    issue: |
+      PR #175: Raise a friendly `TypeError` for wrong file mode
+
+  - id: t02
+    repo: https://github.com/hukkin/tomli
+    fix_commit: 794c8e50d676f1e8e081914eb77e4a48a4f6a20b
+    base_commit: 0eaf93dd85934636f727c43f413a13e06509d2d6
+    license: MIT
+    test_cmd: 'python3 -m pytest tests/test_error.py -q -p no:cacheprovider'
+    test_files:
+      - tests/test_error.py
+    issue: |
+      PR #180: Eagerly raise an error if parse_float produces illegal types
+
+  - id: t03
+    repo: https://github.com/kjd/idna
+    fix_commit: e00ed2854c5203be201940f4029a747684594409
+    base_commit: 522c0ebe02d8bd09039dd593e7c152ab5a1d26dd
+    license: BSD-3-Clause
+    test_cmd: 'python3 -m pytest tests/test_idna.py -q -p no:cacheprovider'
+    test_files:
+      - tests/test_idna.py
+    issue: |
+      PR #120: Fix Issue #119 by Raising IDNAError on non-ASCII A-label
+
+  - id: t04
+    repo: https://github.com/kjd/idna
+    fix_commit: 9067b803a55441805934410b11c0899209b66785
+    base_commit: 62f30346a210028aa37b9002c3e4814a2c06416a
+    license: BSD-3-Clause
+    test_cmd: 'python3 -m pytest tests/test_idna.py -q -p no:cacheprovider'
+    test_files:
+      - tests/test_idna.py
+    issue: |
+      PR #261: Issue 260 fix
+
+      ### Summary
+
+      In `idna/core.py`, `check_label` raises `InvalidCodepointContext` for a CONTEXTJ violation **inside a `try` block whose `except ValueError` clause catches it**, because `InvalidCodepointContext` → `IDNAError` → `UnicodeError` → `ValueError`. The exception is swallowed on the line below the one that raises it and re-raised as a different error with a different diagnosis. As a result, `InvalidCodepointContext` can never reach a caller for a CONTEXTJ violation.
+
+      ```python
+      if intranges_contain(cp_value, idnadata.codepoint_classes["CONTEXTJ"]):
+          try:
+              if not valid_contextj(label, pos):
+                  raise InvalidCodepointContext(f"Joiner {_unot(cp_value)} not allowed at position {pos + 1} in {label!r}")
+          except ValueError as err:
+              raise IDNAError(
+                  f"Unknown codepoint adjacent to joiner {_unot(cp_value)} at position {pos + 1} in {label!r}"
+              ) from err
+      ```
+
+      The `except` clause is there for a good reason — `valid_contextj` calls `_combining_class`, which can raise `ValueError("Unknown character in unicodedata")`, and converting that into an `IDNAError` is reasonable. The defect is that the clause *also* catches the `InvalidCodepointContext` raised on the line above it, which it was presumably never meant to see.
+
+      ### Observed behaviour
+
+      ```python
+      >>> import idna
+      >>> idna.encode('a‌b')   # ZERO WIDTH NON-JOINER, CONTEXTJ violation
+      idna.IDNAError: Unknown codepoint adjacent to joiner U+200C at position 2 in 'a‌b'
+      >>> idna.encode('a·l')   # MIDDLE DOT, CONTEXTO violation
+      idna.InvalidCodepointContext: Codepoint U+00B7 not allowed at position 2 in 'a·l'
+      ```
+
+      The first reports the diagnosis meant for an *unknown character adjacent to a joiner*, which is not what happened. The second — the sibling CONTEXTO branch, whose `raise` sits outside any `try` — reports correctly. The asymmetry between the two sibling branches is what makes this look like a defect rather than a design choice.
+
+      The package's own UTS46 test suite cannot catch this: the generated cases assert the base type `IDNAError`, which the wrong path also satisfies.
+
+      ### Suggested fix
+
+      Move the CONTEXTJ `raise` out of the `try`, so the handler sees only exceptions from `valid_contextj`:
+
+      ```python
+      try:
+          ok = valid_contextj(label, pos)
+      except ValueError as err:
+          raise IDNAError(
+              f"Unknown codepoint adjacent to joiner {_unot(cp_value)} at position {pos + 1} in {label!r}"
+          ) from err
+      if not ok:
+          raise InvalidCodepointContext(f"Joiner {_unot(cp_value)} not allowed at position {pos + 1} in {label!r}")
+      ```
+
+      ### Verification
+
+      I ran the patch against the 12,666 UTS46 conformance cases generated in `tests/test_idna_uts46.py` (idna 3.18, and the block is unchanged on current `master`):
+
+      - accept/reject verdict changed: **0** of 12,666
+      - exception type corrected: **1,258** cases now raise `InvalidCodepointContext` instead of `IDNAError` with the joiner-adjacency message; none changed to anything else
+
+      So the fix is behaviour-preserving for anyone catching `IDNAError` or checking only success/failure (both `InvalidCodepointContext` and the current behaviour are `IDNAError` subclasses), and it corrects the reported type and message for CONTEXTJ violations. Callers matching on the *message* of the current (mis-)diagnosis would see the new message.
+
+      The verification script is part of a test-suite-coverage study where this surfaced as a masking anomaly; happy to open a PR with the patch above if that's welcome.
+  - id: t05
+    repo: https://github.com/pycqa/pyflakes
+    fix_commit: e19886e583637a7e2eec428cc036094b9630f2d0
+    base_commit: e9324649874a7124a08c3826d4cf78a4dc3aa32c
+    license: MIT
+    test_cmd: 'python3 -m pytest pyflakes/test/test_type_annotations.py -q -p no:cacheprovider'
+    test_files:
+      - pyflakes/test/test_type_annotations.py
+    issue: |
+      PR #765: fix accessed global annotation being redefined in a local scope
+
+      resolves #764
+
+  - id: t06
+    repo: https://github.com/pycqa/pyflakes
+    fix_commit: e9324649874a7124a08c3826d4cf78a4dc3aa32c
+    base_commit: 33bbb8266420e34a93ea74299177c19fd463acc0
+    license: MIT
+    test_cmd: 'python3 -m pytest pyflakes/test/test_other.py -q -p no:cacheprovider'
+    test_files:
+      - pyflakes/test/test_other.py
+    issue: |
+      PR #761: produce an error when a definition shadows an unused assignment
+
+      resolves #760
+
+  - id: t07
+    repo: https://github.com/pycqa/pyflakes
+    fix_commit: e0d7a6be89591f913beb740af348df8b7723e7a4
+    base_commit: 2c64ae48e2b1984a16cf25d215c9f9d21146426d
+    license: MIT
+    test_cmd: 'python3 -m pytest pyflakes/test/test_other.py -q -p no:cacheprovider'
+    test_files:
+      - pyflakes/test/test_other.py
+    issue: |
+      PR #745: fix crash on augmented-assign to print builtin
+
+      resolves #744
+
+  - id: t08
+    repo: https://github.com/more-itertools/more-itertools
+    fix_commit: f51a53bfd2fe9504063a33ef5f4a73e30d82d0e2
+    base_commit: 5d946b3590bfe92f1465c1b9b9830dd434745c84
+    license: MIT
+    test_cmd: 'python3 -m pytest tests/test_more.py -q -p no:cacheprovider'
+    test_files:
+      - tests/test_more.py
+    issue: |
+      PR #1193: Handle empty interleave_evenly input
+
+      ### Issue reference
+      Closes more-itertools/more-itertools#1192
+
+      ### Changes
+      - Return immediately when `interleave_evenly` receives no iterables.
+      - Add regression coverage for both inferred lengths and explicit `lengths=[]`.
+
+      The failure happened because the empty-input path left `dims == 0` and then indexed `lengths_desc[0]` while selecting the primary iterable.
+
+      ### Checks and tests
+      `make all-checks` was not available in this Windows shell because `make` is not installed, so I ran the equivalent targets manually:
+
+      - Red test on clean `origin/master`: `python -m unittest tests.test_more.InterleaveEvenlyTests.test_no_iterables` failed with `IndexError: list index out of range`
+      - Green test: `python -m unittest tests.test_more.InterleaveEvenlyTests.test_no_iterables`
+      - `python -m unittest`
+      - `.venv\Scripts\python.exe -m coverage run --include=more_itertools/*.py -m unittest`
+      - `.venv\Scripts\python.exe -m coverage report --show-missing --fail-under=99`
+      - `.venv\Scripts\python.exe -m ruff format --check .`
+      - `.venv\Scripts\python.exe -m ruff check more_itertools tests`
+      - `.venv\Scripts\python.exe -m mypy.stubtest more_itertools.more more_itertools.recipes`
+      - `.venv\Scripts\sphinx-build.exe -W -b html docs docs\_build\html`
+      - `.venv\Scripts\python.exe -m flit build --setup-py`
+      - `.venv\Scripts\python.exe -m twine check dist\*`
+
+  - id: t09
+    repo: https://github.com/more-itertools/more-itertools
+    fix_commit: 9245cd04c043d0d646497934df72549943d5f868
+    base_commit: 6793bd3e4ed15318746ed2511733f12a9932eb64
+    license: MIT
+    test_cmd: 'python3 -m pytest tests/test_more.py -q -p no:cacheprovider'
+    test_files:
+      - tests/test_more.py
+    issue: |
+      PR #659: Fix issue 658 for split_after
+
+      Re: https://github.com/more-itertools/more-itertools/issues/658, this PR fixes `split_after` for `maxsplit==1`.
+
+  - id: t10
+    repo: https://github.com/more-itertools/more-itertools
+    fix_commit: cca32949f12d473fd823e37a5530c30d2faa1332
+    base_commit: c834d6e4a0c4280b7b7750cb0de8dd8acb3d4c2c
+    license: MIT
+    test_cmd: 'python3 -m pytest tests/test_more.py -q -p no:cacheprovider'
+    test_files:
+      - tests/test_more.py
+    issue: |
+      PR #1028: Issue 1001: fix last() when __reversed__ is None
+
+      Fixes #1001 by swapping `hasattr` with `getattr`.
+
+      We might consider a stronger check that `iterable.__reversed__` is callable, but that seems unnecessary given expected usage.
+
+  - id: t11
+    repo: https://github.com/python/typing_extensions
+    fix_commit: 8dfcf3c74a4f5d736a6d2ce8d82c3e85cd0c5b18
+    base_commit: d76f5911b7d44aa1ff26de22e76047ca6c53f840
+    license: PSF-2.0
+    test_cmd: 'python3 -m pytest src/test_typing_extensions.py -q -p no:cacheprovider'
+    test_files:
+      - src/test_typing_extensions.py
+    issue: |
+      PR #417: Fix `TypeError` on nested `Annotated` types where the inner type has unhashable metadata
+
+      Fixes #416 (and https://github.com/pydantic/pydantic/issues/9503)
+
+  - id: t12
+    repo: https://github.com/davidhalter/parso
+    fix_commit: e22dc67aa10b53bbf069f825a0d40eefc727f0cb
+    base_commit: baa3c90d85a10f6abb8307246a89fc683981cee7
+    license: MIT
+    test_cmd: 'python3 -m pytest test/test_load_grammar.py -q -p no:cacheprovider'
+    test_files:
+      - test/test_load_grammar.py
+    issue: |
+      PR #234: Load newest grammar in face of a future grammar
+
+      This fixes https://github.com/davidhalter/parso/issues/232.
+
+      ~~This probably needs https://github.com/davidhalter/parso/pull/233 and I'll rebase once that's merged. Hopefully CI is fine with my changes!~~ Fixed.
+

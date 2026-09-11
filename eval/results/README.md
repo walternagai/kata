@@ -37,3 +37,24 @@ python3 eval/compare_gates.py --scenarios s01,s07 --gates kata,bare
 Os braços de agente exigem `claude` no PATH; nova exige o plugin
 `TeamSPWK/nova` instalado e claude-wizard a skill `vlad-ko/claude-wizard`.
 Bracos indisponíveis viram `SKIP`, nunca falha.
+
+## Estudo externo
+
+| Arquivo | O que é |
+|---|---|
+| `external_study.json` | **Campanha do estudo externo citada no artigo JSERD (§9.2)**: 12 bugs reais de repositórios públicos × 2 modelos (deepseek-v4-pro, claude-sonnet-5) × 2 braços (bare, kata), uma execução por par. Cada run registra arquivos alterados/declarados, testes enfraquecidos (detector do próprio JUDGE), o veredito do JUDGE como revisor independente do artefato final, e os tempos de sessão e de revisão. |
+
+O manifest com os commits fixados e os alvos de teste está em
+`eval/external_tasks.yaml`; o harness, em `eval/external_study.py`. O
+significado de cada campo de um run está documentado no docstring do
+harness; a campanha é reproduzível com `--run` e `--summary`.
+
+Proveniência da campanha de 2026-09-11: ela foi interrompida pelo limite
+mensal de gasto do workspace OpenCode e retomada com `--resume` após o
+limite ser aumentado; sessões com status `error`/`timeout` não entram nos
+resultados (o `--resume` as re-executa). A passada de medição foi refeita
+com `--remeasure` depois de duas correções no instrumento: o comando de
+teste do alvo passou a ser declarado ao JUDGE via `.kata/config.yaml` (sem
+ele, o default `pytest tests/` gerava `false_completion` em projetos com
+outra árvore de testes) e artefatos de ferramenta (`.coverage`, caches)
+passaram a ser limpos antes da medição.

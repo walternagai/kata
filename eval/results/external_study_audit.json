@@ -1,0 +1,396 @@
+{
+  "source": "/tmp/opencode/kata-external/runs",
+  "totals": {
+    "faked": 1,
+    "followed": 151,
+    "skipped": 13
+  },
+  "by_phase": {
+    "fit": {
+      "followed": 20,
+      "skipped": 4
+    },
+    "intent": {
+      "followed": 22,
+      "skipped": 1
+    },
+    "simplify": {
+      "followed": 21,
+      "skipped": 2
+    },
+    "surgical": {
+      "followed": 22,
+      "skipped": 2
+    },
+    "think": {
+      "followed": 20,
+      "skipped": 4
+    },
+    "twins": {
+      "followed": 23
+    },
+    "verify": {
+      "faked": 1,
+      "followed": 23
+    }
+  },
+  "sessions": [
+    {
+      "run": "t01-kata-claude",
+      "task_file": "fix-load-wrong-mode.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t01-kata-deepseek",
+      "task_file": "wrong-file-mode.yaml",
+      "status": "approved",
+      "done_empty": true,
+      "grades": {
+        "fit": "skipped",
+        "think": "skipped",
+        "surgical": "followed",
+        "verify": "followed"
+      }
+    },
+    {
+      "run": "t02-kata-claude",
+      "task_file": "parse-float-illegal-types.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t02-kata-deepseek",
+      "task_file": "eagerly-validate-parse-float.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "skipped",
+        "think": "skipped",
+        "intent": "followed",
+        "simplify": "skipped",
+        "surgical": "skipped",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t03-kata-claude",
+      "task_file": "fix-119-idnaerror.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t03-kata-deepseek",
+      "task_file": "fix-idnaerror-nonascii-alabel.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t04-kata-claude",
+      "task_file": "issue-260-contextj-fix.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t04-kata-deepseek",
+      "task_file": "fix-contestj-exception-swallowing.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t05-kata-claude",
+      "task_file": "fix-annotation-global-redefined-local.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "faked",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t05-kata-deepseek",
+      "task_file": "fix-accessed-global-annotation-local-scope.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t06-kata-claude",
+      "task_file": "redefined-shadows-unused-assignment.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t06-kata-deepseek",
+      "task_file": "shadow-unused-assignment.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t07-kata-claude",
+      "task_file": "fix-augassign-print-crash.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t07-kata-deepseek",
+      "task_file": "fix-print-augassign.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "skipped",
+        "think": "skipped",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t08-kata-claude",
+      "task_file": "interleave-evenly-empty-input.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t08-kata-deepseek",
+      "task_file": "interleave-evenly-empty.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t09-kata-claude",
+      "task_file": "fix-split-after-maxsplit-1.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t09-kata-deepseek",
+      "task_file": "split-after-maxsplit.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t10-kata-claude",
+      "task_file": "fix-last-reversed-none.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t10-kata-deepseek",
+      "task_file": "fix-last-reversed-none.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t11-kata-claude",
+      "task_file": "fix-unhashable-annotated-metadata.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t11-kata-deepseek",
+      "task_file": "fix-nested-annotated-unhashable-metadata.yaml",
+      "status": "rejected",
+      "done_empty": false,
+      "grades": {
+        "fit": "skipped",
+        "think": "skipped",
+        "intent": "skipped",
+        "simplify": "skipped",
+        "surgical": "skipped",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t12-kata-claude",
+      "task_file": "fix-future-grammar-warning.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    },
+    {
+      "run": "t12-kata-deepseek",
+      "task_file": "load-newest-grammar.yaml",
+      "status": "approved",
+      "done_empty": false,
+      "grades": {
+        "fit": "followed",
+        "think": "followed",
+        "intent": "followed",
+        "simplify": "followed",
+        "surgical": "followed",
+        "verify": "followed",
+        "twins": "followed"
+      }
+    }
+  ]
+}

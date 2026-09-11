@@ -40,6 +40,7 @@ import statistics
 import subprocess
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -50,9 +51,11 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from kata.judge import baseline_ref, hunt_weakened_checks  # noqa: E402
+from kata.report import _audit_task  # noqa: E402
 
 MANIFEST = Path(__file__).resolve().parent / "external_tasks.yaml"
 RESULTS = Path(__file__).resolve().parent / "results" / "external_study.json"
+AUDIT_RESULTS = RESULTS.parent / "external_study_audit.json"
 WORK = Path("/tmp/opencode/kata-external")
 CACHE = WORK / "cache"
 RUNS = WORK / "runs"
@@ -728,6 +731,60 @@ def cmd_summary(out: Path) -> int:
     return 0
 
 
+def cmd_audit_sessions(runs_dir: Path, out: Path) -> int:
+    """Audita as task files que as sessões do braço kata deixaram nos run dirs.
+
+    Cada run do braço kata guarda a task file escrita pela própria sessão
+    (o harness sintetiza depois um arquivo neutro `ext-*` para a revisão
+    independente). O gradador do `kata --audit` é aplicado a cada uma e o
+    resumo vira artefato citável no artigo. Modo pós-campanha: roda sobre
+    `--runs-dir` e grava `eval/results/external_study_audit.json`.
+    """
+    session_files: list[tuple[str, Path]] = []
+    for run_dir in sorted(runs_dir.glob("*-kata-*")):
+        if not run_dir.is_dir():
+            continue
+        for path in sorted((run_dir / ".kata").glob("*.yaml")):
+            if path.name == "config.yaml" or path.name.startswith("ext-"):
+                continue
+            session_files.append((run_dir.name, path))
+
+    if not session_files:
+        print(f"nenhuma task file de sessão em {runs_dir}", file=sys.stderr)
+        return 1
+
+    sessions: list[dict[str, Any]] = []
+    totais: Counter[str] = Counter()
+    por_fase: dict[str, Counter[str]] = {}
+    for run_name, path in session_files:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        achados = _audit_task(data)
+        for achado in achados:
+            totais[achado["status"]] += 1
+            por_fase.setdefault(achado["fase"], Counter())[achado["status"]] += 1
+        sessions.append(
+            {
+                "run": run_name,
+                "task_file": path.name,
+                "status": data.get("status"),
+                "done_empty": not str(data.get("done") or "").strip(),
+                "grades": {a["fase"]: a["status"] for a in achados},
+            }
+        )
+
+    payload = {
+        "source": str(runs_dir),
+        "totals": dict(sorted(totais.items())),
+        "by_phase": {fase: dict(sorted(c.items())) for fase, c in sorted(por_fase.items())},
+        "sessions": sessions,
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"{len(sessions)} sessões · {dict(sorted(totais.items()))}")
+    print(f"gravado: {out}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check-tasks", action="store_true")
@@ -745,6 +802,17 @@ def main() -> int:
     parser.add_argument(
         "--merge", nargs="+", default=[], help="funde arquivos de resultado em --out"
     )
+    parser.add_argument(
+        "--audit-sessions",
+        action="store_true",
+        help="Audita as task files das sessões kata de uma campanha já executada",
+    )
+    parser.add_argument(
+        "--runs-dir",
+        default=str(RUNS),
+        help="Run dirs para --audit-sessions (default: %(default)s)",
+    )
+    parser.add_argument("--audit-out", default="", help="Saída do --audit-sessions")
     args = parser.parse_args()
 
     tasks = load_manifest()
@@ -781,6 +849,9 @@ def main() -> int:
     if args.remeasure:
         out = Path(args.out) if args.out else RESULTS
         return cmd_remeasure(out)
+    if args.audit_sessions:
+        out = Path(args.audit_out) if args.audit_out else AUDIT_RESULTS
+        return cmd_audit_sessions(Path(args.runs_dir), out)
     parser.print_help()
     return 2
 

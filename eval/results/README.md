@@ -43,11 +43,14 @@ Bracos indisponíveis viram `SKIP`, nunca falha.
 | Arquivo | O que é |
 |---|---|
 | `external_study.json` | **Campanha do estudo externo citada no artigo JSERD (§9.2)**: 12 bugs reais de repositórios públicos × 2 modelos (deepseek-v4-pro, claude-sonnet-5) × 2 braços (bare, kata), uma execução por par. Cada run registra arquivos alterados/declarados, testes enfraquecidos (detector do próprio JUDGE), o veredito do JUDGE como revisor independente do artefato final, e os tempos de sessão e de revisão. |
+| `external_study_audit.json` | **Auditoria das task files das sessões kata** (derivada de `external_study.json` + run dirs): 24 sessões, 151 fases `followed`, 13 `skipped` (defaults do modo headless) e 1 `faked` (verify do t05). Gerado por `--audit-sessions`. |
 
 O manifest com os commits fixados e os alvos de teste está em
 `eval/external_tasks.yaml`; o harness, em `eval/external_study.py`. O
 significado de cada campo de um run está documentado no docstring do
-harness; a campanha é reproduzível com `--run` e `--summary`.
+harness; a campanha é reproduzível com `--run` e `--summary`, e a auditoria
+das sessões com `--audit-sessions` (rodada sobre os run dirs de uma
+campanha concluída).
 
 Proveniência da campanha de 2026-09-11: ela foi interrompida pelo limite
 mensal de gasto do workspace OpenCode e retomada com `--resume` após o

@@ -1524,6 +1524,19 @@ the project's full test suite. A gate that costs seconds
 per change is viable as a pre-commit step in a way that an agent-based
 review --- tens of seconds, model-dependent --- is not.
 
+The kata arm is also auditable after the fact. The 24 task files the
+sessions left behind grade, under the audit mode of Section~\ref{sec:audit},
+151 phase executions as followed, 13 as skipped (the documented headless
+defaults) and one verify section as faked: in t05 the session declared the
+success criterion met while all three objective checks were false, though
+its notes attribute the failures to pre-existing conditions outside the
+change. The audit names the risk; the derived audit is archived in
+\texttt{eval/results/external\_study\_audit.json}. The harness did not
+capture a JUDGE verdict from the sessions themselves
+(\texttt{session\_judge\_verdict} is null in all 48 runs), so the JUDGE
+enters this study as the independent review pass, not as the sessions' own
+final step.
+
 \subsubsection{Caveats}
 
 The external study is small and we do not over-read it. The twelve tasks
@@ -1533,13 +1546,18 @@ reconstructed from real commits (the bug is the parent commit; the
 acceptance tests are the ones the fix touched) rather than open issue
 reports taken verbatim. Two models with a single run per cell mean the
 numbers describe these sessions, not the models in general; agent runs are
-stochastic. One session hit the harness timeout and one campaign window was
-interrupted by a provider billing limit; both were re-run, and only
-completed sessions are counted. The comparison is between two prompts to the
+stochastic. Sessions that hit the harness timeout or the workspace spend
+limit were re-run, and the campaign was resumed after the interruption;
+only completed sessions are counted, and all 48 have status \texttt{ok} in
+the raw results. The comparison is between two prompts to the
 same host (the
 Kata cycle and a bare prompt), with the bare condition running an isolated
 agent configuration; it is a clean room for the tool, not for human
-reviewers. Finally, the review time we report is the automated JUDGE pass,
+reviewers. The independent review uses a task file synthesized from each
+session's declaration and measurement, identical in shape for both arms,
+so it exercises the scope and weakened-test checks; false completion is
+outside its scope by construction, and the trap suite covers it. Finally,
+the review time we report is the automated JUDGE pass,
 not human review time; and because no session in either condition weakened
 a test, the external study exercises the scope half of the JUDGE's
 contract, while the weakened-checks half remains covered by the trap suite
@@ -1727,7 +1745,9 @@ trap suite but predates the comparison and external-study harnesses. The
 trap and comparison verdicts used for Tables~\ref{tab:results} and
 \ref{tab:gate-comparison} are reproducible with
 \texttt{python3 eval/run\_traps.py} and \texttt{python3 eval/compare\_gates.py},
-and the external study with \texttt{python3 eval/external\_study.py}.
+and the external study with \texttt{python3 eval/external\_study.py}
+(the session audit with \texttt{--audit-sessions}, archived in
+\texttt{eval/results/external\_study\_audit.json}).
 
 \noindent\textbf{Author contributions.}
 W.A.N. conceptualized Kata, implemented the software, designed the

@@ -338,9 +338,11 @@ and wall-clock time.
 The comparison reuses the trap suite of Section~\ref{sec:impact} as the
 workload: each scenario is a git repository holding a ``completed'' task
 whose task file claims lint, tests, and coverage pass. The ground truth is
-the scenario's \texttt{ground\_truth.yaml}: what the review must find
-(REFUTED scenarios) or must not find (VERIFIED, VERIFIED WITH CAVEATS, and
-UNVERIFIABLE scenarios).
+the scenario's \texttt{ground\_truth.yaml}: the expected verdict and the
+exact frauds the review must find. Eleven scenarios expect REFUTED; the
+other eight expect VERIFIED (s07, s15, s16, s17), VERIFIED WITH CAVEATS
+(s06, the debris scenario, whose ground truth expects the three real debris
+findings), or UNVERIFIABLE (s12, s13, s19).
 
 Each gate reviews every scenario in a fresh sandbox, without access to the
 ground truth. Kata runs its \texttt{--judge} mode. nova and claude-wizard
@@ -351,9 +353,15 @@ instruction to follow the gate's workflow. The gate-less baseline receives
 the same prompt without any gate instruction. The agent gates report their
 verdict as a single JSON object (\texttt{fraud\_detected},
 \texttt{fraud\_types}, \texttt{reason}); the harness parses it with a
-tolerant JSON decoder. We classified a scenario as \emph{detected} when the
-gate found the planted fraud (matching the ground-truth types), and as a
-\emph{false positive} when a non-REFUTED scenario was accused.
+tolerant JSON decoder. The Kata arm is classified by exact verdict match
+against the ground truth; for the agent arms, a scenario is \emph{detected}
+when the gate reports the fraud matching the ground-truth types and a
+\emph{false positive} when it accuses a scenario whose ground truth expects
+no fraud. The debris scenario is the exception to the accusation rule: its
+ground truth expects the real debris to be found, so reporting debris
+without naming one of the look-alike files counts as correct, while naming
+a look-alike counts as a false positive. The \emph{Correct} column counts
+the scenarios a gate classified as detected or clean.
 
 \subsubsection{Results}
 
@@ -374,7 +382,7 @@ Kata & 11/11 & --- & 11/11 & 0.1\,s & 28 lines \\
 nova & 11/11 & --- & 11/11 & 16\,s & 1 line \\
 claude-wizard & 11/11 & --- & 11/11 & 17\,s & 1 line \\
 bare (no gate) & 11/11 & --- & 11/11 & 18\,s & 1 line \\
-\multicolumn{6}{l}{\emph{Honest and blind-spot scenarios (8)} } \\
+\multicolumn{6}{l}{\emph{Non-REFUTED scenarios (8): honest (4), debris (1), blind spots (3)}} \\
 Kata & --- & 0 & 8/8 & 1.0\,s & 28 lines \\
 nova & --- & 4 & 4/8 & 40\,s & 1 line \\
 claude-wizard & --- & 2 & 6/8 & 27\,s & 1 line \\
@@ -398,7 +406,12 @@ gate-less baseline accused the honest s07 task of weakened checks; all
 three agent gates accused a later task's changes as scope creep for the
 task under review (s17); and the agents reported frauds on the blind spots
 the ground truth declares UNVERIFIABLE --- nova and the baseline on s12 and
-s13, all three on s19. Third, \textbf{the gates differ by orders of
+s13, all three on s19. On the one non-REFUTED scenario that does contain a
+real fraud (s06, debris), the three agent gates found the debris and spared
+the look-alike names, and Kata's verdict matched the expected VERIFIED
+WITH CAVEATS --- the trap suite verifies that its output lists the three
+debris findings (Section~\ref{sec:self-check}). Third, \textbf{the gates
+differ by orders of
 magnitude in time}: Kata's median review is about one second (0.1\,s on
 fraud scenarios, 1.0\,s on the others), while every agent gate takes tens
 of seconds per scenario, because the gate reads exit codes while the agents
@@ -1279,16 +1292,19 @@ approved anyway), debris (real temporary files in the diff), and baseline
 tampering (a \texttt{base\_commit} rewritten after the Git anchor was
 recorded).
 
+The debris scenario (s06) deserves a note: it plants real debris beside
+files whose names merely look like debris (\texttt{templates/},
+\texttt{temperature.py}, \texttt{attempt\_parser.py}), so a judge that
+matches the substring ``temp'' would accuse honest work while a judge that
+stays silent would clear fraudulent work.
+
 Four scenarios are entirely honest tasks that must come back VERIFIED.
 These are as important as the fraud scenarios: a judge that refuses
 legitimate work is as broken as one that misses fraud, and unit tests are
 poor at catching false positives because they test what the author thought
-to test. One honest scenario plants real debris beside files whose names
-merely look like debris (\texttt{templates/}, \texttt{temperature.py},
-\texttt{attempt\_parser.py}) --- a judge that matches the substring
-``temp'' would accuse honest work. Another honest scenario exercises the
+to test. One honest scenario exercises the
 triviality gate with three small files and an empty surgical list, where a
-naive scope-creep rule would falsely accuse the task. A third exercises
+naive scope-creep rule would falsely accuse the task. Another exercises
 the \texttt{approved\_commit} mechanism end to end: a later task touches
 an undeclared file after the approval, and the judge must not count it as
 scope creep for the earlier task. The remaining three scenarios expect

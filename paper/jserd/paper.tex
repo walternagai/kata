@@ -61,26 +61,27 @@
 
 AI coding agents produce code faster than any developer can review, and the
 oversight surface collapses onto the automated test suite. When an agent says
-``done'', nothing executes the checks it claims to have passed, and the
-literature shows that agents optimize for passing visible tests while deviating
-from the user's true goal (reward hacking), and that large language models
-cannot reliably self-correct without external feedback. This paper presents
-Kata (型), an executable quality gate for AI-assisted software changes. Kata
-guides a change through a nine-phase cycle --- FIT, THINK, SIMPLIFY, INTENT,
-SURGICAL, VERIFY, TWIN CHECK, ARTIFACT, REPORT --- plus an optional adversarial
-JUDGE phase that re-runs every claimed check and hunts seven categories of
-fraud, such as weakened tests, false completion claims, and undeclared scope.
-Unlike skills and methodologies that instruct the agent to be careful, Kata
-moves the objective parts of the discipline out of the prompt and into
-executable, testable Python code: lint, test, and coverage steps read real exit
-codes, the JUDGE confronts the task file with the actual repository state, and
-an audit mode grades each phase as followed, skipped, or faked, naming the
-concrete risk each skip or fake created. Kata is implemented as a Python
-command-line interface with two agent frontends (OpenCode and Claude Code)
-generated from a single source of truth, and it is verified by its own lint,
-tests, coverage, and 19 adversarial trap scenarios in continuous integration,
-and by a minimum external study: twelve real bugs from public repositories,
-fixed by two agent models with and without the cycle.
+``done'', nothing executes the checks it claims to have passed; agents
+optimize for passing visible tests while deviating from the user's true goal
+(reward hacking), and large language models cannot reliably self-correct
+without external feedback. This paper presents Kata (型), an executable
+quality gate for AI-assisted software changes. Kata guides a change through a
+nine-phase cycle --- FIT, THINK, SIMPLIFY, INTENT, SURGICAL, VERIFY, TWIN
+CHECK, ARTIFACT, REPORT --- plus an optional adversarial JUDGE phase that
+re-runs every claimed check and hunts seven categories of fraud, such as
+weakened tests, false completion claims, and undeclared scope. Unlike skills
+that instruct the agent to be careful, Kata moves the objective parts of the
+discipline out of the prompt and into executable, testable Python code: lint,
+test, and coverage read real exit codes, the JUDGE confronts the task file
+with the repository state, and an audit mode grades each phase as followed,
+skipped, or faked, naming the risk each skip or fake created. Kata is
+implemented as a Python command-line interface with two agent frontends
+generated from a single source of truth. An executed comparison over 19
+adversarial scenarios shows detection parity with related gates, but zero
+false positives for Kata at about one second per review; a minimum external
+study of twelve real bugs fixed by two models with and without the cycle
+found no weakened tests in either condition, and the JUDGE flagged the one
+case of undeclared scope.
 \end{abstract}
 
 \begin{keywords}
@@ -127,8 +128,10 @@ previously published software, and demonstrates the advance by \emph{direct
 comparison with available related software}: Section~\ref{sec:exec-comparison}
 reports an executed comparison in which Kata and three alternative gates
 (nova \cite{nova}, claude-wizard \cite{claudewizard}, and a prompt-only
-baseline) review the same 19 adversarial scenarios, and measures fraud
-detection, false positives, and verification time.
+baseline) review the same 19 adversarial scenarios. All four detected the
+planted frauds; the comparison locates Kata's measured advantage in
+restraint, determinism, and cost --- zero false positives and about one
+second per review.
 
 The remainder of this paper is organized as follows. Section~\ref{sec:need}
 states the problem and the research purpose of the software.
@@ -417,8 +420,10 @@ differ by orders of
 magnitude in time}: Kata's median review is about one second (0.1\,s on
 fraud scenarios, 1.0\,s on the others), while every agent gate takes tens
 of seconds per scenario, because the gate reads exit codes while the agents
-run a model. Over the 19 scenarios, Kata is the only gate whose correctness
-is not a function of model performance.
+run a model. Kata's verdicts here are model-independent: its measured
+advantage over the agent gates is determinism (the same verdict every run),
+restraint (zero false positives), and cost (about one second per review)
+--- not detection, which every gate achieved on these fixtures.
 
 The comparison is not without caveats, which we state explicitly. The
 scenarios and the fraud taxonomy are Kata's own, so the fixtures are
@@ -1580,7 +1585,12 @@ instantiation for software engineering.
 The executed comparison of Section~\ref{sec:exec-comparison} sharpens
 this positioning. All four gates detected every planted fraud, so the
 comparison separates \emph{detection} from \emph{restraint}: the
-difference showed up entirely on honest and blind-spot scenarios. The
+difference showed up entirely on honest and blind-spot scenarios. Detection,
+in other words, did not require the executable core on these fixtures: a
+prompted reviewer carrying the fraud taxonomy matched the gates that run
+code. What the executable core buys is a verdict that does not depend on
+the model --- the same outcome every run, about one second per review, and
+a confession instead of a guess when the mechanism is out of reach. The
 agent gates accused honest work (the baseline on s07), accused a later
 task's changes as scope creep (all agents on s17) and reported false
 completion on blind spots the ground truth declares UNVERIFIABLE (s12,
@@ -1670,15 +1680,17 @@ compares it with the gate, and refuses to approve if it fails. The skill
 says ``be honest''; the JUDGE re-runs the claimed checks and hunts seven
 categories of fraud.
 
-The evaluation shows that the approach works. The trap suite closes on the
-JUDGE's two-sided contract: every planted fraud is detected with the
-expected verdict and no honest scenario is accused. The executed
-comparison of Section~\ref{sec:exec-comparison} extends this beyond
-self-verification: over the same 19 scenarios, all four gates detected
-every fraud, but Kata was the only gate with zero false positives on
-honest work and a median review of about one second, while every agent
-gate accused at least two honest or blind-spot scenarios in tens of
-seconds per scenario. The limitations are honest: Kata is a gate, not a
+The evaluation shows where the approach works, and where it does not. The
+trap suite closes on the JUDGE's two-sided contract: every planted fraud is
+detected with the expected verdict and no honest scenario is accused. The
+executed comparison of Section~\ref{sec:exec-comparison} extends this
+beyond self-verification: over the same 19 scenarios, all four gates
+detected every fraud --- detection parity --- while Kata was the only gate
+with zero false positives on honest work and a median review of about one
+second, against tens of seconds per scenario for every agent gate. What
+the evaluation does not show is that Kata improves the quality of
+AI-assisted changes; a controlled comparison of changes made with and
+without the cycle remains future work. The limitations are honest: Kata is a gate, not a
 silver bullet --- it guarantees that what was claimed was verified, not
 that the solution is the best possible; it is interactive (in headless
 mode the judgment phases use defaults and the report says explicitly that

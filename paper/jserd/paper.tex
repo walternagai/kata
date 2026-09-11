@@ -126,7 +126,7 @@ guidelines, it describes a tool, positions it as a significant advance over
 previously published software, and demonstrates the advance by \emph{direct
 comparison with available related software}: Section~\ref{sec:exec-comparison}
 reports an executed comparison in which Kata and three alternative gates
-(nova \cite{nova}, claude-wizard \cite{claudewizard}, and a gate-less
+(nova \cite{nova}, claude-wizard \cite{claudewizard}, and a prompt-only
 baseline) review the same 19 adversarial scenarios, and measures fraud
 detection, false positives, and verification time.
 
@@ -317,7 +317,7 @@ verification, but its enforcement scope is a framework for test-driven
 development on live \emph{database} branches; as a gate for general software
 changes it is not directly comparable by execution, so Section~\ref{sec:exec-comparison}
 compares Kata against the gates that are installable on the same host
-(nova, claude-wizard) and against a gate-less baseline. Second,
+(nova, claude-wizard) and against a prompt-only baseline. Second,
 \emph{executing verification} is what the \texttt{kata} CLI does, and it is
 precisely what none of the prompt-based tools can be observed to do: their
 ``Partial'' fraud column reports that the adversarial step exists only as
@@ -329,7 +329,7 @@ instruction text.
 The journal's guidelines request that a software article demonstrate its
 advance \emph{by direct comparison with available related software}. This
 section reports such a comparison: four gates --- Kata, nova, claude-wizard,
-and a gate-less baseline --- reviewed the same 19 adversarial scenarios of
+and a prompt-only baseline --- reviewed the same 19 adversarial scenarios of
 Section~\ref{sec:impact}, and we measured fraud detection, false positives,
 and wall-clock time.
 
@@ -349,8 +349,10 @@ ground truth. Kata runs its \texttt{--judge} mode. nova and claude-wizard
 run headless through the Claude Code CLI (\texttt{claude -p} with
 permission bypass), each receiving an identical canonical prompt that
 states the review task and the seven fraud categories, prefixed with an
-instruction to follow the gate's workflow. The gate-less baseline receives
-the same prompt without any gate instruction. The agent gates report their
+instruction to follow the gate's workflow. The prompt-only baseline receives
+the same prompt without any gate-framework instruction; it is a reviewer
+with the same information and tool access, not a no-verification condition.
+The agent gates report their
 verdict as a single JSON object (\texttt{fraud\_detected},
 \texttt{fraud\_types}, \texttt{reason}); the harness parses it with a
 tolerant JSON decoder. The Kata arm is classified by exact verdict match
@@ -381,18 +383,18 @@ Gate & Detection & FP & Correct & Median time & Median output \\
 Kata & 11/11 & --- & 11/11 & 0.1\,s & 28 lines \\
 nova & 11/11 & --- & 11/11 & 16\,s & 1 line \\
 claude-wizard & 11/11 & --- & 11/11 & 17\,s & 1 line \\
-bare (no gate) & 11/11 & --- & 11/11 & 18\,s & 1 line \\
+bare (prompt-only) & 11/11 & --- & 11/11 & 18\,s & 1 line \\
 \multicolumn{6}{l}{\emph{Non-REFUTED scenarios (8): honest (4), debris (1), blind spots (3)}} \\
 Kata & --- & 0 & 8/8 & 1.0\,s & 28 lines \\
 nova & --- & 4 & 4/8 & 40\,s & 1 line \\
 claude-wizard & --- & 2 & 6/8 & 27\,s & 1 line \\
-bare (no gate) & --- & 5 & 3/8 & 32\,s & 1 line \\
+bare (prompt-only) & --- & 5 & 3/8 & 32\,s & 1 line \\
 \hline
 \multicolumn{6}{l}{All scenarios --- correctness} \\
 Kata & & & \textbf{19/19} & & \\
 nova & & & 15/19 & & \\
 claude-wizard & & & 17/19 & & \\
-bare (no gate) & & & 14/19 & & \\
+bare (prompt-only) & & & 14/19 & & \\
 \hline\hline
 \end{tabular}
 \label{tab:gate-comparison}
@@ -402,7 +404,7 @@ First, \textbf{all four gates detected every planted fraud in all eleven
 REFUTED scenarios}. Fraud detection is not where the gates differ: the
 difference is in what happens on honest work and confessed blind spots.
 Second, \textbf{Kata was the only gate with zero false positives}: the
-gate-less baseline accused the honest s07 task of weakened checks; all
+prompt-only baseline accused the honest s07 task of weakened checks; all
 three agent gates accused a later task's changes as scope creep for the
 task under review (s17); and the agents reported frauds on the blind spots
 the ground truth declares UNVERIFIABLE --- nova and the baseline on s12 and
@@ -419,21 +421,32 @@ run a model. Over the 19 scenarios, Kata is the only gate whose correctness
 is not a function of model performance.
 
 The comparison is not without caveats, which we state explicitly. The
+scenarios and the fraud taxonomy are Kata's own, so the fixtures are
+in-distribution for Kata and out-of-distribution for the other gates; the
+false positives the agent gates incurred are concentrated on scenarios
+that exercise Kata-specific mechanisms, which means the FP column measures
+knowledge of these conventions as much as generic reviewer restraint. The
 agent gates run through a single model (Claude Code's default), so their
 false positives are a property of \emph{this} model under these prompts,
 not of the tools in general. Agent verdicts are also stochastic: across
 exploratory runs the same gate-scenario pair occasionally changed verdict,
 so the table reports one complete campaign and the raw verdicts of every
-run are kept in the repository. nova also offers an MCP server and
-specialized subagents that a full harness integration could use; we did not
+run are kept in the repository; it is an illustrative single run per cell,
+not an estimate of each gate's accuracy. The agent JSON schema has no
+UNVERIFIABLE verdict --- an agent can accuse or stay silent, but cannot
+confess a blind spot --- so the comparison measures whether a gate
+accused, not whether it confessed. nova and claude-wizard were invoked as
+review prompts inside one host (Claude Code), not in their native
+configurations; nova additionally offers an MCP server and specialized
+subagents that a full harness integration could use, and we did not
 integrate it, because the goal is to measure the gate as a \emph{change
-review} step in the same shape a team would run it. The harness
-(Section~\ref{sec:usage}) and the per-scenario verdicts are public in the
-repository (see \ref{sec:usage}); \texttt{eval/compare\_gates.py}
+review} step in the same shape a team would run it. The harness and the
+per-scenario verdicts are public in the repository
+(Section~\ref{sec:usage}); \texttt{eval/compare\_gates.py}
 reproduces the comparison and
 \texttt{eval/results/compare\_gates\_round2.json} holds the raw verdicts
-used for Table~\ref{tab:gate-comparison}. Finally, the honest scenarios
-that the agent gates misjudged are exactly the ones where the Kata JUDGE
+used for Table~\ref{tab:gate-comparison}. Finally, the scenarios that the
+agent gates misjudged are exactly the ones where the Kata JUDGE
 \emph{confesses} a blind spot or applies a mechanism the agent has no
 knowledge of (\texttt{approved\_commit} on s17, the Git-ignore on s19, the
 language probes on s12): an agent that cannot know the mechanism can only
@@ -1463,7 +1476,7 @@ conditions and for both models. The final artifacts contained \textbf{no
 weakened test in any of the 48 runs}: the JUDGE's own weakened-check
 detector found nothing to report, and the test bodies the sessions touched
 remained real assertions. The failure the study did observe was
-\emph{undeclared scope}: in one run (deepseek, no gate), the session
+\emph{undeclared scope}: in one run (deepseek, bare), the session
 changed \texttt{tools/intranges.py} to regenerate a code-point table but
 declared only \texttt{idna/core.py}; the JUDGE flagged the extra file as
 \texttt{scope\_creep} and returned VERIFIED WITH CAVEATS. The independent
@@ -1571,7 +1584,12 @@ difference showed up entirely on honest and blind-spot scenarios. The
 agent gates accused honest work (the baseline on s07), accused a later
 task's changes as scope creep (all agents on s17) and reported false
 completion on blind spots the ground truth declares UNVERIFIABLE (s12,
-s13, s19). A gate that cannot see the mechanism --- \texttt{approved\_commit},
+s13, s19). Two caveats bound this reading: the fixtures, the fraud
+taxonomy and the mechanisms at issue are Kata's own, so the restraint
+measured on the Kata-specific scenarios is partly knowledge of its
+conventions; and the agent schema has no UNVERIFIABLE verdict, so the
+agents could only accuse or stay silent, not confess. A gate that cannot
+see the mechanism --- \texttt{approved\_commit},
 a Git-ignore rule, a language without probes --- can only guess, and the
 guesses are what the comparison measured. Kata instead confesses the blind
 spot as UNVERIFIABLE. This is the same reliability-beyond-the-mean point

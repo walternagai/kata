@@ -118,9 +118,19 @@ committed and untracked files; and the audit mode grades each phase of a
 completed task as followed, skipped, or faked, naming the concrete risk each
 skip or fake created. A skill asks for honesty; Kata detects its absence.
 
+This paper is a \textbf{software article}. Following the journal's
+guidelines, it describes a tool, positions it as a significant advance over
+previously published software, and demonstrates the advance by \emph{direct
+comparison with available related software}: Section~\ref{sec:exec-comparison}
+reports an executed comparison in which Kata and three alternative gates
+(nova \cite{nova}, claude-wizard \cite{claudewizard}, and a gate-less
+baseline) review the same 19 adversarial scenarios, and measures fraud
+detection, false positives, and verification time.
+
 The remainder of this paper is organized as follows. Section~\ref{sec:need}
 states the problem and the research purpose of the software.
-Section~\ref{sec:field} places Kata in the context of related work.
+Section~\ref{sec:field} places Kata in the context of related work and
+reports the executed comparison with related gates.
 Section~\ref{sec:design} describes the software design and the trade-offs
 weighed. Section~\ref{sec:cycle} walks through the development cycle in
 action with real output. Section~\ref{sec:judge} details the adversarial
@@ -296,6 +306,120 @@ hosts, adversarial fraud detection, post-hoc auditing, and self-verification.
 The tools that execute (SpecBench, SWE-bench, Consort) are benchmarks or
 domain-specific frameworks, not gates a team runs on its own changes. The
 tools that audit (Fable Method) do not execute. Kata is the intersection.
+
+Two notes bound the comparison. First, Consort \cite{consort} executes
+verification, but its enforcement scope is a framework for test-driven
+development on live \emph{database} branches; as a gate for general software
+changes it is not directly comparable by execution, so Section~\ref{sec:exec-comparison}
+compares Kata against the gates that are installable on the same host
+(nova, claude-wizard) and against a gate-less baseline. Second,
+\emph{executing verification} is what the \texttt{kata} CLI does, and it is
+precisely what none of the prompt-based tools can be observed to do: their
+``Partial'' fraud column reports that the adversarial step exists only as
+instruction text.
+
+\subsection{Executed gate comparison}
+\label{sec:exec-comparison}
+
+The journal's guidelines request that a software article demonstrate its
+advance \emph{by direct comparison with available related software}. This
+section reports such a comparison: four gates --- Kata, nova, claude-wizard,
+and a gate-less baseline --- reviewed the same 19 adversarial scenarios of
+Section~\ref{sec:impact}, and we measured fraud detection, false positives,
+and wall-clock time.
+
+\subsubsection{Protocol}
+
+The comparison reuses the trap suite of Section~\ref{sec:impact} as the
+workload: each scenario is a git repository holding a ``completed'' task
+whose task file claims lint, tests, and coverage pass. The ground truth is
+the scenario's \texttt{ground\_truth.yaml}: what the review must find
+(REFUTED scenarios) or must not find (VERIFIED, VERIFIED WITH CAVEATS, and
+UNVERIFIABLE scenarios).
+
+Each gate reviews every scenario in a fresh sandbox, without access to the
+ground truth. Kata runs its \texttt{--judge} mode. nova and claude-wizard
+run headless through the Claude Code CLI (\texttt{claude -p} with
+permission bypass), each receiving an identical canonical prompt that
+states the review task and the seven fraud categories, prefixed with an
+instruction to follow the gate's workflow. The gate-less baseline receives
+the same prompt without any gate instruction. The agent gates report their
+verdict as a single JSON object (\texttt{fraud\_detected},
+\texttt{fraud\_types}, \texttt{reason}); the harness parses it with a
+tolerant JSON decoder. We classified a scenario as \emph{detected} when the
+gate found the planted fraud (matching the ground-truth types), and as a
+\emph{false positive} when a non-REFUTED scenario was accused.
+
+\subsubsection{Results}
+
+Table~\ref{tab:gate-comparison} summarizes the outcome. Three findings
+stand out.
+
+\begin{table*}[!ht]
+\caption{Executed comparison of four gates over the 19 trap scenarios.
+One complete campaign (September 2026); raw verdicts in
+\texttt{eval/results/compare\_gates\_round2.json}.}
+\centering
+\begin{tabular}{@{}lccccc@{}}
+\hline\hline
+Gate & Detection & FP & Correct & Median time & Median output \\
+\hline
+\multicolumn{6}{l}{\emph{Fraud scenarios (11 REFUTED)}} \\
+Kata & 11/11 & --- & 11/11 & 0.1\,s & 28 lines \\
+nova & 11/11 & --- & 11/11 & 16\,s & 1 line \\
+claude-wizard & 11/11 & --- & 11/11 & 17\,s & 1 line \\
+bare (no gate) & 11/11 & --- & 11/11 & 18\,s & 1 line \\
+\multicolumn{6}{l}{\emph{Honest and blind-spot scenarios (8)} } \\
+Kata & --- & 0 & 8/8 & 1.0\,s & 28 lines \\
+nova & --- & 4 & 4/8 & 40\,s & 1 line \\
+claude-wizard & --- & 2 & 6/8 & 27\,s & 1 line \\
+bare (no gate) & --- & 5 & 3/8 & 32\,s & 1 line \\
+\hline
+\multicolumn{6}{l}{All scenarios --- correctness} \\
+Kata & & & \textbf{19/19} & & \\
+nova & & & 15/19 & & \\
+claude-wizard & & & 17/19 & & \\
+bare (no gate) & & & 14/19 & & \\
+\hline\hline
+\end{tabular}
+\label{tab:gate-comparison}
+\end{table*}
+
+First, \textbf{all four gates detected every planted fraud in all eleven
+REFUTED scenarios}. Fraud detection is not where the gates differ: the
+difference is in what happens on honest work and confessed blind spots.
+Second, \textbf{Kata was the only gate with zero false positives}: the
+gate-less baseline accused the honest s07 task of weakened checks; all
+three agent gates accused a later task's changes as scope creep for the
+task under review (s17); and the agents reported frauds on the blind spots
+the ground truth declares UNVERIFIABLE --- nova and the baseline on s12 and
+s13, all three on s19. Third, \textbf{the gates differ by orders of
+magnitude in time}: Kata's median review is about one second (0.1\,s on
+fraud scenarios, 1.0\,s on the others), while every agent gate takes tens
+of seconds per scenario, because the gate reads exit codes while the agents
+run a model. Over the 19 scenarios, Kata is the only gate whose correctness
+is not a function of model performance.
+
+The comparison is not without caveats, which we state explicitly. The
+agent gates run through a single model (Claude Code's default), so their
+false positives are a property of \emph{this} model under these prompts,
+not of the tools in general. Agent verdicts are also stochastic: across
+exploratory runs the same gate-scenario pair occasionally changed verdict,
+so the table reports one complete campaign and the raw verdicts of every
+run are kept in the repository. nova also offers an MCP server and
+specialized subagents that a full harness integration could use; we did not
+integrate it, because the goal is to measure the gate as a \emph{change
+review} step in the same shape a team would run it. The harness
+(Section~\ref{sec:usage}) and the per-scenario verdicts are public in the
+repository (see \ref{sec:usage}); \texttt{eval/compare\_gates.py}
+reproduces the comparison and
+\texttt{eval/results/compare\_gates\_round2.json} holds the raw verdicts
+used for Table~\ref{tab:gate-comparison}. Finally, the honest scenarios
+that the agent gates misjudged are exactly the ones where the Kata JUDGE
+\emph{confesses} a blind spot or applies a mechanism the agent has no
+knowledge of (\texttt{approved\_commit} on s17, the Git-ignore on s19, the
+language probes on s12): an agent that cannot know the mechanism can only
+guess, and the guesses are what the comparison measures.
 
 \section{Software design}
 \label{sec:design}
@@ -1069,10 +1193,12 @@ drift apart.
 
 The adversarial evaluation is the strongest evidence of impact: 19 trap
 scenarios (\texttt{eval/run\_traps.py}) plant frauds the JUDGE must catch
-and honest work it must not accuse. Twelve scenarios plant a fraud that
+and honest work it must not accuse. Eleven scenarios plant a fraud that
 must be detected (weakened checks, false completion, scope creep,
 unauthorized action, specification betrayal, debris, baseline tampering);
-four are entirely honest tasks that must come back VERIFIED; two expect
+five scenarios expect a non-REFUTED verdict --- four entirely honest tasks
+that must come back VERIFIED and one (s06) whose debris must be found while
+its look-alike names are spared (VERIFIED WITH CAVEATS) --- and three expect
 UNVERIFIABLE for confessed blind spots. The trap suite includes a guard
 against refusing legitimate work: one scenario plants real debris beside
 files whose names merely look like debris, and a judge that refuses honest
@@ -1205,13 +1331,26 @@ The result confirms the two-sided contract of the JUDGE. On the detection
 side, eleven scenarios returned REFUTED with high-severity frauds,
 covering all seven fraud categories; the s03 false-completion scenario
 shown in Section~\ref{sec:judge} is representative. On the restraint side,
-four honest scenarios returned VERIFIED, including the s06 scenario that
-plants real debris beside look-alike names (\texttt{templates/},
-\texttt{temperature.py}, \texttt{attempt\_parser.py}) and the s16 trivial
-task that a naive scope-creep rule would falsely accuse. Three scenarios
-returned UNVERIFIABLE, confessing blind spots instead of clearing work the
-judge could not observe. The suite runs in continuous integration on every
-push, so any regression in detection or restraint breaks the build.
+four honest scenarios returned VERIFIED, and the s06 scenario
+\emph{also} returned VERIFIED WITH CAVEATS: the JUDGE found the real
+debris (\texttt{scratch/saida.tmp}, a debug print, a TODO) while sparing
+the look-alike names (\texttt{templates/}, \texttt{temperature.py},
+\texttt{attempt\_parser.py}) and the s16 trivial task that a naive
+scope-creep rule would falsely accuse. Three scenarios returned
+UNVERIFIABLE, confessing blind spots instead of clearing work the judge
+could not observe. The suite runs in continuous integration on every push,
+so any regression in detection or restraint breaks the build.
+
+\subsection{Executed comparison with related gates}
+
+The strongest external evidence is the executed comparison of
+Section~\ref{sec:exec-comparison}: four gates reviewed the same 19
+scenarios, and Kata was the only one with zero false positives and a
+median review time of about one second. That comparison is a direct answer
+to the journal's request for a software article to demonstrate its advance
+by comparison with available related software, and its raw verdicts are
+reproducible from the repository (\texttt{eval/compare\_gates.py},
+\texttt{eval/results/compare\_gates\_round2.json}).
 
 \section{Discussion}
 \label{sec:discussion}
@@ -1239,6 +1378,20 @@ This convergence suggests that claim-based verification is becoming a
 general pattern for trustworthy AI-assisted work, and Kata is a concrete
 instantiation for software engineering.
 
+The executed comparison of Section~\ref{sec:exec-comparison} sharpens
+this positioning. All four gates detected every planted fraud, so the
+comparison separates \emph{detection} from \emph{restraint}: the
+difference showed up entirely on honest and blind-spot scenarios. The
+agent gates accused honest work (the baseline on s07), accused a later
+task's changes as scope creep (all agents on s17) and reported false
+completion on blind spots the ground truth declares UNVERIFIABLE (s12,
+s13, s19). A gate that cannot see the mechanism --- \texttt{approved\_commit},
+a Git-ignore rule, a language without probes --- can only guess, and the
+guesses are what the comparison measured. Kata instead confesses the blind
+spot as UNVERIFIABLE. This is the same reliability-beyond-the-mean point
+of the Double Measurement Confound \cite{double-measurement}, applied to
+a change review rather than a benchmark.
+
 Third, the limitations of Kata are honest and worth stating. Kata is a
 gate, not a silver bullet: it guarantees that what was claimed was
 verified, not that the solution is the best possible. It is interactive:
@@ -1248,11 +1401,14 @@ answered. It requires Git for diff and branch detection. The success
 criterion is subjective, and the JUDGE accepts it without verification and
 says so in voice. The JUDGE has blind spots --- test languages without
 probes, files outside the diff --- and confesses them as UNVERIFIABLE
-rather than silencing them. Finally, the evaluation is smoke-test grade:
-the trap scenarios are deterministic fixtures, not a statistical study of
-agent behavior, and the honest scenarios are few. A larger empirical study
-comparing Kata against a bare agent on real tasks, following the Fable
-Method's cross-model methodology \cite{fable}, is future work.
+rather than silencing them. Finally, the self-evaluation is smoke-test
+grade: the trap scenarios are deterministic fixtures, not a statistical
+study of agent behavior, and the honest scenarios are few. The executed
+comparison of Section~\ref{sec:exec-comparison} mitigates this: it is the
+first external evaluation of Kata against related gates on identical
+workloads. A larger empirical study comparing Kata against a bare agent on
+real tasks, following the Fable Method's cross-model methodology
+\cite{fable}, is future work.
 
 \section{Threats to validity}
 \label{sec:threats}
@@ -1310,15 +1466,21 @@ compares it with the gate, and refuses to approve if it fails. The skill
 says ``be honest''; the JUDGE re-runs the claimed checks and hunts seven
 categories of fraud.
 
-The evaluation shows that the approach works: the JUDGE catches planted
-frauds (false completion, weakened checks, scope creep) and does not accuse
-honest work, and the tool verifies itself through its own lint, tests,
-coverage, and trap suite. The limitations are honest: Kata is a gate, not a
+The evaluation shows that the approach works. The trap suite closes on the
+JUDGE's two-sided contract: every planted fraud is detected with the
+expected verdict and no honest scenario is accused. The executed
+comparison of Section~\ref{sec:exec-comparison} extends this beyond
+self-verification: over the same 19 scenarios, all four gates detected
+every fraud, but Kata was the only gate with zero false positives on
+honest work and a median review of about one second, while every agent
+gate accused at least two honest or blind-spot scenarios in tens of
+seconds per scenario. The limitations are honest: Kata is a gate, not a
 silver bullet --- it guarantees that what was claimed was verified, not
-that the solution is the best possible; it is interactive (in headless mode
-the judgment phases use defaults and the report says explicitly that nobody
-answered); it requires Git; and the success criterion is subjective, which
-the JUDGE accepts without verification and says so in voice.
+that the solution is the best possible; it is interactive (in headless
+mode the judgment phases use defaults and the report says explicitly that
+nobody answered); it requires Git; and the success criterion is
+subjective, which the JUDGE accepts without verification and says so in
+voice.
 
 If you use AI agents to change code and want to know \emph{for real}
 whether what was claimed is true, Kata is a concrete answer: it re-executes,

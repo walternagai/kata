@@ -151,3 +151,23 @@ Se o fixture afirmar no YAML algo que não é verdade (por exemplo
 `coverage_pass: true` num projeto que não alcança o gate), o judge vai acusar
 `false_completion` — corretamente. Cenário negativo tem de ser honesto de
 verdade, não só na intenção.
+
+## Comparação executada entre gates (`compare_gates.py`)
+
+O `compare_gates.py` roda os mesmos cenários de trap sob quatro braços —
+`kata` (via `--judge`), `nova` e `wizard` (plugins/skills do Claude Code,
+via `claude -p` headless) e `bare` (um agente sem gate) — e mede detecção,
+falso-positivo, tempo e verbosidade. É o harness da comparação do artigo
+JSERD (§3.3) e reutiliza o setup de fixtures do `run_traps.py`.
+
+```bash
+python3 eval/compare_gates.py --all                  # campanha completa
+python3 eval/compare_gates.py --all --resume         # retoma lacunas
+python3 eval/compare_gates.py --scenarios s01,s07 --gates kata,bare
+```
+
+Os braços de agente exigem `claude` no PATH; `nova` exige o plugin
+TeamSPWK/nova instalado e `wizard` a skill vlad-ko/claude-wizard. Braço
+indisponível vira `SKIP`; bloqueio de gasto da conta vira `LIMIT` e a
+rodada para (retome com `--resume`). Os vereditos brutos ficam em
+`eval/results/` (ver o README de lá para a proveniência de cada arquivo).

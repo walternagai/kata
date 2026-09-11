@@ -1136,9 +1136,10 @@ Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced. The
 canonical user documentation --- README, \texttt{DOCUMENTATION.md}, and
 the installers --- is versioned with the source at
 \href{https://github.com/walternagai/kata/tree/v0.6.0}{\texttt{github.com/walternagai/kata/tree/v0.6.0}};
-the instructions below mirror that tagged release, and the evaluation
-artifacts referenced throughout the paper are listed in the Declarations
-section.
+the instructions below mirror that tagged release. The comparison and
+external-study harnesses referenced in this paper postdate the tag and are
+present in commit \texttt{6f56b35}; the Declarations section gives the
+exact commit and the reproduction commands.
 
 \subsection{Installation}
 
@@ -1715,11 +1716,15 @@ Section~\ref{sec:field} for the comparison that sharpened Kata's design.
 Kata is open-source software distributed under the MIT
 License~\href{https://github.com/walternagai/kata/blob/main/LICENSE}{[MIT licensed]}.
 The source code, the installers, the adversarial trap suite, the
-external-study harness, and the raw results of the evaluations reported in
-Section~\ref{sec:impact} are publicly available at
-\href{https://github.com/walternagai/kata}{\texttt{github.com/walternagai/kata}}
-(commit \texttt{6f56b35}; latest tagged release \texttt{v0.6.0}). The trap
-and comparison verdicts used for Tables~\ref{tab:results} and
+comparison harness, the external-study harness, and the raw results of the
+evaluations reported in Section~\ref{sec:impact} are publicly available at
+\href{https://github.com/walternagai/kata}{\texttt{github.com/walternagai/kata}}.
+The evaluated code under \texttt{src/kata/} is unchanged since commit
+\texttt{230e81a} (verified in this repository's history); the final
+harnesses at commit \texttt{6f56b35} therefore review the code described
+in this paper. The \texttt{v0.6.0} release tag contains the CLI and the
+trap suite but predates the comparison and external-study harnesses. The
+trap and comparison verdicts used for Tables~\ref{tab:results} and
 \ref{tab:gate-comparison} are reproducible with
 \texttt{python3 eval/run\_traps.py} and \texttt{python3 eval/compare\_gates.py},
 and the external study with \texttt{python3 eval/external\_study.py}.
@@ -1736,7 +1741,9 @@ This research received no specific funding from public, commercial, or
 not-for-profit agencies.
 
 \noindent\textbf{Competing interests.}
-The authors declare that they have no competing interests.
+The authors are the developers of Kata, the software evaluated in this
+paper. The evaluation is self-reported and the manuscript states its
+limitations; the authors declare no other competing interests.
 
 \noindent\textbf{Use of AI in writing.}
 The authors used generative AI tools for language editing, \LaTeX{}

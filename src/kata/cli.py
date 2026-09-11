@@ -9,7 +9,8 @@ Modos:
   --judge           Modo adversarial verification (caça fraudes em tarefa concluída)
   --task <name> --judge     Verifica tarefa específica adversarialmente
   --report          Gera relatório outcome-first de tarefa concluída (usa --task ou branch)
-  --audit           Gradua as fases da tarefa: followed / skipped / faked (usa --task ou branch)
+  --audit           Gradua as fases da tarefa: followed/skipped/faked/degraded
+                    (usa --task ou branch)
   --doctor          Confere se as skills de fase estão instaladas em cada frontend
 
 Port do `scripts/karpathy_cycle.py` do mushin, usando `.kata/` e
@@ -1534,7 +1535,9 @@ def main() -> None:
     parser.add_argument(
         "--audit",
         action="store_true",
-        help="Gradua as fases da tarefa: followed / skipped / faked (com risco concreto)",
+        help=(
+            "Gradua as fases da tarefa: followed / skipped / faked / degraded (com risco concreto)"
+        ),
     )
     args = parser.parse_args()
 

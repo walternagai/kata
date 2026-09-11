@@ -296,7 +296,7 @@ invocada sem argumentos, trate como o modo padrão. Mapeamento:
 | `{{INVOC}}--task <name>` | `--task` | Carregue `.kata/<name>.yaml` com {{READ}} e continue o ciclo a partir do status atual |
 | `{{INVOC}}--judge` | `--judge` | Carregue a task (por branch ou --task), execute verificação adversarial (re-executa checks, caça fraudes) |
 | `{{INVOC}}--report` | `--report` | Carregue a task (por branch ou --task), gere relatório outcome-first |
-| `{{INVOC}}--audit [--task <name>]` | `--audit` | Carregue a task e gradue as fases como followed / skipped / faked, com o risco concreto de cada skip/fake (fable-method audit) |
+| `{{INVOC}}--audit [--task <name>]` | `--audit` | Carregue a task e gradue as fases como followed / skipped / faked / degraded, com o risco concreto de cada skip/fake (fable-method audit) |
 | {{INVOC_SEM_ARGS}} | padrão | Detecte task via branch git ({{RUN}}) ou pergunte ao usuário, FIT + ciclo completo |
 
 Para `--init`, você pode também usar {{RUN}} para rodar

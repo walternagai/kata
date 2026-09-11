@@ -260,7 +260,7 @@ invocada sem argumentos, trate como o modo padrão. Mapeamento:
 | `--task <name>` | `--task` | Carregue `.kata/<name>.yaml` com `Read` e continue o ciclo a partir do status atual |
 | `--judge` | `--judge` | Carregue a task (por branch ou --task), execute verificação adversarial (re-executa checks, caça fraudes) |
 | `--report` | `--report` | Carregue a task (por branch ou --task), gere relatório outcome-first |
-| `--audit [--task <name>]` | `--audit` | Carregue a task e gradue as fases como followed / skipped / faked, com o risco concreto de cada skip/fake (fable-method audit) |
+| `--audit [--task <name>]` | `--audit` | Carregue a task e gradue as fases como followed / skipped / faked / degraded, com o risco concreto de cada skip/fake (fable-method audit) |
 | (sem args) | padrão | Detecte task via branch git (`Bash`) ou pergunte ao usuário, FIT + ciclo completo |
 
 Para `--init`, você pode também usar `Bash` para rodar

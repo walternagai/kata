@@ -586,8 +586,8 @@ and judge modes.
 
 \subsubsection{Language-agnostic verification}
 
-Kata does not assume the project it verifies is a Python project. Whoever
-knows how to check a repository is the repository, so the commands live in
+Kata does not assume the project it verifies is a Python project. The
+project itself knows how to check its repository, so the commands live in
 \texttt{.kata/config.yaml}, next to the task files:
 
 \begin{lstlisting}[caption=Declaring the verification commands of a non-Python project.]
@@ -754,7 +754,7 @@ The FIT phase measures the real diff and classifies the task:
 A trivial task (at most one file, fewer than ten lines) would skip the
 planning phases and go directly to VERIFY --- the triviality gate of the
 Fable Method.\footnote{The \texttt{kata} CLI reports in Portuguese; the
-outputs shown in this section are translated into English for
+CLI outputs quoted in this paper are translated into English for
 presentation. Recurring terms: \emph{não-trivial} = non-trivial;
 \emph{rota escolhida} = chosen route; \emph{arquivo(s)} = file(s);
 \emph{linha(s)} = line(s); \emph{limpo} = clean; \emph{passou} = passed;
@@ -1093,7 +1093,7 @@ Grade & Meaning \\
 \hline
 followed & The phase has \texttt{answered: true} and real content \\
 skipped & The phase has \texttt{skipped: true} (documented, not hidden) \\
-faked & The phase has \texttt{answered: true} but default or empty content \\
+faked & \texttt{answered: true} with default or empty content, or a verify/twins claim without its evidence \\
 degraded & The phase ran without its own skill loaded (\texttt{preflight}) \\
 \hline\hline
 \end{tabular}
@@ -1105,7 +1105,9 @@ marked as answered without real content. This is only possible because
 there is objective logic behind it:
 the audit reads the YAML and detects \texttt{answered: true} with empty
 content. A skill has no way to know whether a phase was ``faked''; Kata
-does.\begin{lstlisting}
+does.
+
+\begin{lstlisting}
 ❌ FIT: faked
    ⚠ route and triviality not classified by a human — effort may be
      wasted on a trivial or misrouted task
@@ -1122,7 +1124,7 @@ does.\begin{lstlisting}
 ⚠  Audit found 3 fake(s) and 0 skip(s).
 \end{lstlisting}
 
-The audit is the kata's equivalent of the fable-method's audit, and it
+The audit is Kata's equivalent of the Fable Method's audit, and it
 catches phases that were filled in without being observed.
 
 \subsection{Preflight and installation checking}
@@ -1223,7 +1225,7 @@ Command & Effect \\
 \texttt{kata --check-only} & Run lint + tests + coverage only (CI entry) \\
 \texttt{kata --task TASK --report} & Regenerate the outcome-first report \\
 \texttt{kata --task TASK --judge} & Adversarial verification (hunts frauds) \\
-\texttt{kata --task TASK --audit} & Grade phases: followed/skipped/faked \\
+\texttt{kata --task TASK --audit} & Grade phases: followed/skipped/faked/degraded \\
 \texttt{kata --doctor} & Check phase-skill installation per frontend \\
 \hline\hline
 \end{tabular}
@@ -1362,12 +1364,13 @@ reproducible check at all, and a test hidden from Git via a local ignore
 rule that the judge cannot see in the diff.
 
 The trap suite also guards the evaluation harness itself. One scenario
-opts into the real environment with \texttt{kata\_visivel: true}, because
-the harness excluded \texttt{.kata/} from Git in every fixture and the
-judge counting the task's own file as scope creep survived ten review
-rounds --- including the honest-work scenario whose whole job is catching
-false positives. A new scenario must be shown to fail when its defect is
-reintroduced, so a scenario that passes in both states protects nothing.
+opts into the real environment with \texttt{kata\_visivel: true}: the
+harness excludes \texttt{.kata/} from Git in every fixture, and the judge
+counting the task's own file as scope creep went unnoticed through ten
+review rounds before that scenario existed --- including in the
+honest-work scenario whose whole job is catching false positives. A new
+scenario must be shown to fail when its defect is reintroduced, so a
+scenario that passes in both states protects nothing.
 
 \subsubsection{Execution results}
 
@@ -1375,7 +1378,7 @@ We executed the full trap suite (\texttt{python3 eval/run\_traps.py}) three
 times on commit \texttt{230e81a} of the repository. The study harness of
 Section~\ref{sec:external-evaluation} adds no changes to \texttt{src/kata},
 so the executed code is the code described in this paper. The machine ran
-Linux 7.1.5 x86\_64 with Python 3.12.3, ruff 0.15.21, pytest 9.1.1, and
+Linux (kernel 7.1.5) on x86\_64 with Python 3.12.3, ruff 0.15.21, pytest 9.1.1, and
 pytest-cov 7.1.0. All 19 scenarios passed in every run, with a median
 wall-clock of 17.7\,s (16.2--17.8\,s). Every planted fraud was detected
 with the expected verdict and the expected fraud types, and every honest

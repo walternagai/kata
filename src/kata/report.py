@@ -167,7 +167,7 @@ _AUDIT_CONTENT_KEY: dict[str, str] = {
 
 
 def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
-    """Gradua as fases da tarefa como followed / skipped / faked.
+    """Gradua as fases da tarefa como followed / skipped / faked / degraded.
 
     Inspirado no `/fable-method audit` do Fable Method: cada passo é
     *followed* (observado), *skipped* (pulado com registro) ou *faked*
@@ -252,7 +252,7 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def _print_audit(achados: list[dict[str, str]]) -> None:
-    """Imprime a graduação followed/skipped/faked com os riscos concretos."""
+    """Imprime a graduação followed/skipped/faked/degraded com os riscos concretos."""
     icones = {"followed": "✅", "skipped": "⏭️", "faked": "❌", "degraded": "⚠️"}
     if not achados:
         print("  (nenhuma fase iniciada — tarefa em andamento)")

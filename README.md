@@ -25,7 +25,7 @@ FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK →
 ```
 
 Modos adicionais do CLI: `--audit` (gradua as fases da tarefa como
-followed / skipped / faked) e `--check-only` (só verificação, para CI).
+followed / skipped / faked / degraded) e `--check-only` (só verificação, para CI).
 
 Como um kata marcial, é uma sequência disciplinada e repetível de movimentos:
 classificar a tarefa, pensar antes de codar, manter o código mínimo, verificar
@@ -171,7 +171,7 @@ kata --task minha-tarefa        # Retoma tarefa específica
 kata --task minha-tarefa --report  # Relatório outcome-first
 kata --doctor                      # As skills de fase estão instaladas?
                                    # (parcial sai 1; domain adapters ausentes só avisam)
-kata --task minha-tarefa --audit   # Gradua fases (followed/skipped/faked)
+kata --task minha-tarefa --audit   # Gradua fases (followed/skipped/faked/degraded)
 kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 ```
 

@@ -293,20 +293,28 @@ claim-based, not self-reported.
 \subsection{Comparative analysis}
 
 Table~\ref{tab:comparison} summarizes the comparison between Kata and the
-related tools and methodologies surveyed in this section. The comparison
-dimensions are: whether the tool executes verification (runs checks and
-reads exit codes) or only instructs the model; whether it has a shared
-executable core across agent hosts; whether it detects fraud
-adversarially; whether it audits completed work; and whether it verifies
-itself. The assessments are the authors', based on each project's public
-documentation and repository as of September 2026: ``Partial'' for fraud
-detection means the tool performs adversarial review in prompt form
-without re-executing checks against the repository, as opposed to
-``Yes'' (executable re-execution with verdicts) and ``No'' (no
-adversarial step at all).
+related tools and methodologies surveyed in this section. The dimensions
+are operationalized as follows. \emph{Executes}: the tool ships code that
+runs checks and reads their exit codes as part of its own verdict, rather
+than instructing the model to run them. \emph{Shared core}: one executable
+engine serves more than one agent host (marked \emph{N/A} for benchmarks,
+which are not gates). \emph{Fraud}: the tool has an adversarial step that
+re-executes claims against the repository and returns a verdict
+(\emph{Yes}); performs adversarial review in prompt form without
+re-execution (\emph{Partial}); or has no adversarial step (\emph{No}).
+\emph{Audit}: it can grade a completed piece of work after the fact
+against its own process. \emph{Self-verify}: the project runs its own
+checks and evaluation against itself. The assessments are the authors',
+based on each project's public documentation and repository at the
+commits cited in the bibliography (accessed 2026-09-11); no other tool's
+authors were consulted, and the executed comparison of
+Section~\ref{sec:exec-comparison} supersedes this table for the gates that
+could be run.
 
 \begin{table*}[!ht]
-\caption{Comparison of Kata with related tools and methodologies.}
+\caption{Comparison of Kata with related tools and methodologies.
+Qualitative assessment of the authors from the cited sources: see the text
+for the operationalization of each dimension.}
 \centering
 \begin{tabular}{@{}lccccc@{}}
 \hline\hline
@@ -322,6 +330,7 @@ SWE-bench \cite{swebench} & Yes & N/A & No & No & No \\
 \textbf{Kata} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} \\
 \hline\hline
 \end{tabular}
+\tabnote{Sources: Fable Method \cite{fable}; claude-wizard \cite{claudewizard}; Ring \cite{ring}; nova \cite{nova}; Consort \cite{consort}; SpecBench \cite{specbench}; SWE-bench \cite{swebench}.}
 \label{tab:comparison}
 \end{table*}
 

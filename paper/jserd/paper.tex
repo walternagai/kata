@@ -1469,9 +1469,9 @@ the task's test suite.}
 Condition & Model & Runs & Weak. & Undecl. & JUDGE & Median session & Median review \\
 \hline
 bare & claude & 12 & 0 & 0 & 12 V & 46\,s & 2.0\,s \\
-bare & deepseek & 12 & 0 & 1 & 11 V, 1 VWC & 77\,s & 1.9\,s \\
-kata & claude & 12 & 0 & 0 & 12 V & 500\,s & 1.9\,s \\
-kata & deepseek & 12 & 0 & 0 & 12 V & 412\,s & 2.0\,s \\
+bare & deepseek & 12 & 0 & 1 & 11 V, 1 VWC & 70\,s & 1.9\,s \\
+kata & claude & 12 & 0 & 0 & 12 V & 492\,s & 1.9\,s \\
+kata & deepseek & 12 & 0 & 0 & 12 V & 405\,s & 1.9\,s \\
 \hline\hline
 \end{tabular}
 \label{tab:external-results}
@@ -1483,9 +1483,9 @@ phase gates, and the JUDGE to every change, and the wall-clock cost is
 roughly nine times higher (Table~\ref{tab:external-results}). The JUDGE
 review itself is cheap and independent of the model that produced the
 change: applied to the same final artifacts, it reached a verdict in a
-median of about two seconds, with outliers of about two minutes on the two
-tasks whose projects leave the coverage role unconfigured, where the
-default coverage pass re-runs the full suite. A gate that costs seconds
+median of about two seconds, with outliers of about two minutes on t08 and
+about fifty seconds on t10, where the judge's default coverage pass re-runs
+the project's full test suite. A gate that costs seconds
 per change is viable as a pre-commit step in a way that an agent-based
 review --- tens of seconds, model-dependent --- is not.
 

@@ -36,6 +36,7 @@ import os
 import re
 import shlex
 import shutil
+import statistics
 import subprocess
 import sys
 import time
@@ -704,11 +705,14 @@ def cmd_summary(out: Path) -> int:
         undecl = sum(1 for r in rows if r.get("undeclared_files"))
         jw = sum(1 for r in rows if (r.get("judge") or {}).get("weakened_found"))
         js = sum(1 for r in rows if (r.get("judge") or {}).get("scope_found"))
-        sess = sorted(r.get("seconds", 0) for r in rows)
-        rev = sorted((r.get("judge") or {}).get("seconds", 0) for r in rows)
+        # Mediana verdadeira (média dos dois valores centrais em n par), e não
+        # o valor de índice n // 2: com n=12 o índice devolvia a "mediana
+        # superior" e os números não batiam com a estatística citada no artigo.
+        sess = statistics.median(r.get("seconds", 0) for r in rows)
+        rev = statistics.median((r.get("judge") or {}).get("seconds", 0) for r in rows)
         print(
             f"{arm:6} {model:9} {n:3} {tests:3}/{n:<3} {weak:5} {undecl:7} {jw:4} {js:4} "
-            f"{sess[n // 2]:8.1f} {rev[n // 2]:7.2f}"
+            f"{sess:8.1f} {rev:7.2f}"
         )
     verdicts: dict[tuple[str, str], dict[str, int]] = {}
     for r in runs.values():

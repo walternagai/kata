@@ -1,4 +1,4 @@
-.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills test lint format format-check clean
+.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills skills-stats test lint format format-check clean
 
 # === Instalação do agente + skills no OpenCode ===
 
@@ -27,6 +27,9 @@ build-skills:
 
 check-skills:
 	python3 scripts/build_skills.py --check
+
+skills-stats:
+	python3 scripts/build_skills.py --stats
 
 # === Desenvolvimento ===
 

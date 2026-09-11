@@ -919,7 +919,9 @@ the copies accumulated 395 divergent lines, and part of that was an improvement
 applied to one frontend and forgotten in the other — the ARTIFACT phase had a
 "Ferramentas" section only in Claude Code, and the OpenCode orchestrator never
 received the corrected step numbering or the `base_commit` instruction. Today
-93% of the source is shared and the remaining 7% is declared difference.
+92.6% of the rendered lines are shared (93% at whole-number precision;
+measure it with `python3 scripts/build_skills.py --stats`) and the remainder
+is declared difference.
 
 ### The frontend contract
 

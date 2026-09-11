@@ -27,6 +27,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import difflib
 import re
 import sys
 from pathlib import Path
@@ -396,6 +397,37 @@ def build(check: bool = False) -> int:
     return len(divergentes)
 
 
+def shared_stats() -> tuple[int, int]:
+    """Mede a fração compartilhada entre os frontends, linha a linha.
+
+    Para cada fonte (`phases/` e `domains/`), renderiza para cada frontend e
+    conta as linhas que não casam entre os dois renders — o que vem de
+    `only:`, de capacidade (`if:`/`ifnot:`) ou de variável de identidade.
+    Devolve `(linhas_específicas, linhas_totais)`, com o total somando os
+    dois renders; a fração compartilhada é `1 - específicas / total`.
+
+    É a medida que o artigo JSERD cita como "93% compartilhado" (92,6% com
+    uma casa). A métrica pressupõe dois frontends; com um terceiro, revisar.
+    """
+    if len(FRONTENDS) != 2:
+        raise SystemExit("shared_stats pressupõe exatamente 2 frontends")
+    nomes = list(FRONTENDS)
+    especificas = total = 0
+    for caminho in _fontes():
+        fonte = caminho.read_text(encoding="utf-8")
+        origem = str(caminho.relative_to(REPO))
+        renders = {nome: render(fonte, nome, origem) for nome in nomes}
+        a = renders[nomes[0]].splitlines()
+        b = renders[nomes[1]].splitlines()
+        casadas = sum(
+            bloco.size
+            for bloco in difflib.SequenceMatcher(a=a, b=b, autojunk=False).get_matching_blocks()
+        )
+        total += len(a) + len(b)
+        especificas += len(a) + len(b) - 2 * casadas
+    return especificas, total
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -403,7 +435,20 @@ def main() -> None:
         action="store_true",
         help="Não escreve; falha se algum arquivo gerado estiver desatualizado",
     )
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Mede a fração compartilhada entre os frontends e sai (não gera)",
+    )
     args = parser.parse_args()
+
+    if args.stats:
+        especificas, total = shared_stats()
+        print(
+            f"conteúdo compartilhado: {1 - especificas / total:.1%} "
+            f"({especificas} de {total} linhas renderizadas são específicas de frontend)"
+        )
+        return
 
     if not args.check:
         print("Gerando skills a partir de phases/...")

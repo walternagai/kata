@@ -595,13 +595,16 @@ not silence.
 
 The frontends are generated, not hand-maintained. The phase prompts live
 once in \texttt{phases/*.md} and are rendered into the OpenCode agent and
-the Claude Code skills by a build script; 93\% of the content is shared, and
-the remaining 7\% is declared difference (tool names of the host). Both
-figures were measured in the kata repository itself: the shared fraction
-comes from the build script's own accounting of shared versus
-frontend-specific blocks, and the 395 divergent lines are the diff the
-authors observed between the two hand-maintained copies before the
-single-source migration. This
+the Claude Code skills by a build script. The script measures the shared
+fraction by rendering every source for both frontends and diffing the
+outputs line by line: 92.6\% of the rendered lines are shared (93\% at
+whole-number precision), and the remainder is declared difference --- host
+tool names, identity wording, and capability blocks such as the
+closed-choice ask --- reported by
+\texttt{python3 scripts/build\_skills.py -{}-stats}. The 395 divergent
+lines are the count the authors observed between the two hand-maintained
+copies before the single-source migration; that figure is historical and
+the script does not re-derive it. This
 single-source design exists because the previous arrangement --- two
 hand-maintained copies --- failed: the copies accumulated those 395
 divergent lines, including an improvement applied to one frontend and

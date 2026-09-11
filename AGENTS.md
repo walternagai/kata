@@ -65,8 +65,9 @@ não os edite à mão; `make build-skills` os regrava e
 
 Antes disto a fase vivia em duplicata mantida por disciplina manual, e a
 disciplina falhou: 395 linhas divergentes, parte delas melhoria aplicada num
-frontend e esquecida no outro. Hoje 93% da fonte é compartilhada; os 7%
-restantes são diferença declarada, não acidental.
+frontend e esquecida no outro. Hoje 92,6% das linhas renderizadas são
+compartilhadas (93% arredondado; `python3 scripts/build_skills.py --stats`);
+o restante é diferença declarada, não acidental.
 
 Na fonte, o que muda por frontend se escreve de três formas:
 

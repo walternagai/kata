@@ -18,7 +18,13 @@
   xleftmargin=4pt,
   xrightmargin=4pt,
   aboveskip=6pt,
-  belowskip=6pt
+  belowskip=6pt,
+  % As saídas do CLI usam ícones (✅ ❌ ⚠ ▶ 🔴 ↳ ≥) sem cobertura nas fontes
+  % do template. A fonte guarda marcadores ASCII e o listings os compõe com
+  % símbolos das fontes matemáticas, para o PDF não depender de fonte de emoji.
+  literate={[ok]}{{$\checkmark$}}1 {[x]}{{$\times$}}1 {[!]}{{\textbf{!}}}1
+           {>}{{$\blacktriangleright$}}1 {>=}{{$\geq$}}1 {*}{{$\bullet$}}1
+           {->}{{$\hookrightarrow$}}1
 }
 
 \usepackage{xcolor}
@@ -29,6 +35,7 @@
 \definecolor{darkblue}{rgb}{0.0,0.0,0.0}
 % hyperref por último; as cores usadas no hypersetup já estão definidas.
 \usepackage{hyperref}
+\usepackage{xurl}
 \hypersetup{colorlinks,breaklinks,
             linkcolor=darkblue,urlcolor=darkblue,
             anchorcolor=darkblue,citecolor=darkblue}
@@ -39,6 +46,13 @@
 \setlength{\emergencystretch}{2em}
 \setlength{\headheight}{37pt}
 
+% O ambiente `keywords` do template fecha com \rule{\linewidth} ainda dentro
+% do parágrafo do keywordfont (rightskip=5.5pc), e a régua estoura a mancha
+% em 66pt. Em modo vertical ela não entra em parágrafo e o visual é o mesmo.
+\renewenvironment{keywords}{%
+  \noindent\keywordfont\textit{\textbf{Keywords: }}%
+}{\vskip6pt\hrule height .27pt\vskip12pt}
+
 \jid{JSERD}
 \jtitle{Journal of Software Engineering Research and Development, 2026, 14:1}
 % DOI: assigned by JSERD on publication; the submission omits the placeholder.
@@ -48,9 +62,9 @@
 \title[Kata: an executable quality gate for AI-assisted software changes]{Kata: an executable quality gate for AI-assisted software changes}
 
 \author[Nagai and Izeki 2026]{
-\affil{\textbf{Walter Aoiama Nagai}~\href{https://orcid.org/0000-0001-9078-8396}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil}~|\href{mailto:walternagai@unifei.edu.br}{~\textbf{\textit{walternagai@unifei.edu.br}}} ]}
+\affil{\textbf{Walter Aoiama Nagai}~\href{https://orcid.org/0000-0001-9078-8396}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil} |\href{mailto:walternagai@unifei.edu.br}{~\textbf{\textit{walternagai@unifei.edu.br}}} ]}
 
-\affil{\textbf{Claudia Akemi Izeki}~\href{https://orcid.org/0000-0002-2941-5299}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil}~|\href{mailto:claudiaizeki@unifei.edu.br}{~\textbf{\textit{claudiaizeki@unifei.edu.br}}} ]}
+\affil{\textbf{Claudia Akemi Izeki}~\href{https://orcid.org/0000-0002-2941-5299}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil} |\href{mailto:claudiaizeki@unifei.edu.br}{~\textbf{\textit{claudiaizeki@unifei.edu.br}}} ]}
 }
 
 \begin{document}
@@ -66,7 +80,7 @@ oversight surface collapses onto the automated test suite. When an agent says
 ``done'', nothing executes the checks it claims to have passed; agents
 optimize for passing visible tests while deviating from the user's true goal
 (reward hacking), and large language models cannot reliably self-correct
-without external feedback. This paper presents Kata (型), an executable
+without external feedback. This paper presents Kata, an executable
 quality gate for AI-assisted software changes. Kata guides a change through a
 nine-phase cycle --- FIT, THINK, SIMPLIFY, INTENT, SURGICAL, VERIFY, TWIN
 CHECK, ARTIFACT, REPORT --- plus an optional adversarial JUDGE phase that
@@ -114,7 +128,7 @@ gate), require evidence before action, verify adversarially, and report
 outcome-first. Both are methodologies --- text that instructs. The problem:
 text instructs, but it does not execute.
 
-This paper presents Kata (型, ``form'' or ``pattern'', as in a martial arts
+This paper presents Kata (``form'' or ``pattern'', as in a martial arts
 kata: a disciplined, repeatable sequence of movements), a quality gate for
 software changes assisted by AI agents. Kata's contribution is to move the
 objective parts of the discipline out of the prompt and into executable,
@@ -747,7 +761,7 @@ The FIT phase measures the real diff and classifies the task:
 
 \begin{lstlisting}
   diff: 2 file(s), 11 changed line(s)
-  ↳ non-trivial task
+  -> non-trivial task
 
   Available routes:
     [1] code-loop   — full cycle
@@ -820,20 +834,20 @@ gate, and the success criterion confronted with the done criterion declared
 in THINK:
 
 \begin{lstlisting}
-▶ ruff check src/ tests/
-  ✅ clean
+> ruff check src/ tests/
+  [ok] clean
 
-▶ pytest tests/ --tb=short -q
-  ✅ passed
+> pytest tests/ --tb=short -q
+  [ok] passed
 
-▶ coverage (gate ≥ 70%)
-  ✅ passed (100.0%)
+> coverage (gate >= 70%)
+  [ok] passed (100.0%)
 
-▶ Success criterion of the task
+> Success criterion of the task
   (declared in THINK: test test_dividir_por_zero passes and coverage >= 70%)
   Is the success criterion of the task satisfied? [Y/n]: y
 
-  ✅  KATA CYCLE — APPROVED
+  [ok]  KATA CYCLE — APPROVED
 \end{lstlisting}
 
 Each of the first three steps runs the command declared in
@@ -854,7 +868,7 @@ answer:
 
   Pattern to search (regex): a / b
   Searching for 'a / b' in the project...
-  ✅ Found in 1 file(s):
+  [ok] Found in 1 file(s):
      ./src/calculadora.py:7  return a / b
   Fix the remaining occurrences now? [y/N]: n
 \end{lstlisting}
@@ -872,7 +886,7 @@ outcome first, followed by the problem, the done criterion, changed files,
 verification results, caveats, and any due artifact lines:
 
 \begin{lstlisting}
-✅  KATA CYCLE — APPROVED: success criterion satisfied
+[ok]  KATA CYCLE — APPROVED: success criterion satisfied
 
   Problem: the dividir (divide) function raises ZeroDivisionError with no guard
   Declared criterion: test test_dividir_por_zero passes and coverage >= 70%
@@ -881,10 +895,10 @@ verification results, caveats, and any due artifact lines:
           test expects ValueError; spec says README does not mention the case
 
   Checks:
-  ✅ ruff check clean
-  ✅ pytest passed
-  ✅ coverage 100.0% ≥ gate
-  ✅ success criterion satisfied
+  [ok] ruff check clean
+  [ok] pytest passed
+  [ok] coverage 100.0% >= gate
+  [ok] success criterion satisfied
 
   TWINS: searched a / b - found 1 file(s), 1 occurrence(s)
 \end{lstlisting}
@@ -1019,12 +1033,12 @@ After committing the task of Section~\ref{sec:cycle}, we ran
 the claimed checks and returned:
 
 \begin{lstlisting}
-✅  VERDICT: VERIFIED
+[ok]  VERDICT: VERIFIED
 
   Verified claims:
     • ruff check clean (no lint errors)
     • all tests pass
-    • coverage ≥ gate (100.0%)
+    • coverage >= gate (100.0%)
     • 2 file(s) changed surgically (necessary)
     • intent aligned: code, test, and spec agree
 
@@ -1032,9 +1046,9 @@ the claimed checks and returned:
     • success criterion satisfied
 
   Re-execution:
-    ✅ lint
-    ✅ test
-    ✅ coverage
+    [ok] lint
+    [ok] test
+    [ok] coverage
 \end{lstlisting}
 
 Note that the success criterion is listed as \emph{accepted without
@@ -1051,23 +1065,23 @@ import in the source, a failing test, and coverage skipped because pytest
 failed):
 
 \begin{lstlisting}
-❌  VERDICT: REFUTED
+[x]  VERDICT: REFUTED
 
   Frauds found:
-    🔴 [high] false_completion
+    * [high] false_completion
        ruff check re-execution failed, but the report claims it passed
        → report: ruff_clean=True → reality: ruff check failed
-    🔴 [high] false_completion
+    * [high] false_completion
        pytest re-execution failed, but the report claims it passed
        → report: tests_pass=True → reality: pytest failed
-    🔴 [high] false_completion
+    * [high] false_completion
        coverage re-execution failed, but the report claims it passed
        → report: coverage_pass=True → reality: coverage failed
 
   Re-execution:
-    ❌ lint
-    ❌ test
-    ❌ coverage
+    [x] lint
+    [x] test
+    [x] coverage
 \end{lstlisting}
 
 The verdict is REFUTED, and the exit code is 1. A skill would say ``be
@@ -1117,20 +1131,20 @@ content. A skill has no way to know whether a phase was ``faked''; Kata
 does.
 
 \begin{lstlisting}
-❌ FIT: faked
-   ⚠ route and triviality not classified by a human — effort may be
+[x] FIT: faked
+   [!] route and triviality not classified by a human — effort may be
      wasted on a trivial or misrouted task
-❌ THINK: faked
-   ⚠ assumptions never declared — any solution may attack the
+[x] THINK: faked
+   [!] assumptions never declared — any solution may attack the
      wrong problem
-❌ INTENT: faked
-   ⚠ code, test, and spec may disagree without a record — behavior
+[x] INTENT: faked
+   [!] code, test, and spec may disagree without a record — behavior
      changes without verified intent
-✅ SIMPLIFY: followed
-✅ SURGICAL: followed
-✅ VERIFY: followed
+[ok] SIMPLIFY: followed
+[ok] SURGICAL: followed
+[ok] VERIFY: followed
 
-⚠  Audit found 3 fake(s) and 0 skip(s).
+[!]  Audit found 3 fake(s) and 0 skip(s).
 \end{lstlisting}
 
 The audit is Kata's equivalent of the Fable Method's audit, and it

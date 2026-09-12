@@ -1262,8 +1262,9 @@ fix-login --judge}). For continuous integration, \texttt{kata
 Exit codes make the CLI composable in scripts and CI pipelines. Exit code
 0 means the requested operation passed (an approved cycle, a VERIFIED or
 caveated judge verdict, a clean audit, a complete install). Exit code 1
-means failure: a rejected cycle, a REFUTED verdict, an audit with fakes or
-skips, or a partial skill installation. Exit code 2 means invalid CLI
+means failure: a rejected cycle, a REFUTED verdict, an audit with any phase
+not graded followed (a fake, a skip, or a degraded phase), or a partial
+skill installation. Exit code 2 means invalid CLI
 arguments. In particular, \texttt{VERIFIED WITH CAVEATS} and
 \texttt{UNVERIFIABLE} both exit 0: the judge verified what it could and
 approved with notes, or found no fraud but could observe nothing ---

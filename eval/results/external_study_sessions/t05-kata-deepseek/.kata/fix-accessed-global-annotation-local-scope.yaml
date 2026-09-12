@@ -1,0 +1,80 @@
+schema_version: 1
+task: fix-accessed-global-annotation-local-scope
+status: approved
+domain: coding
+done: "test_unused_annotation_in_outer_scope_reassigned_in_local_scope passa sem crash (m.UndefinedName + m.UnusedVariable); sem regressão nos demais 716 testes"
+fit:
+  trivial: false
+  route: code-loop
+  reason: "bug de 1 linha em checker.py; root cause localizada lendo o traceback (used[0] sobre bool)"
+  answered: true
+  skipped: false
+think:
+  problem: "Crash (TypeError: 'bool' object is not subscriptable) em handleNodeStore quando um Annotation que foi acessado no escopo externo é reatribuído em função local (issue #764)."
+  assumptions:
+    - "handleNodeLoad marca annotation acessado com used = True (bool), mas handleNodeStore espera tupla (scope, node)"
+    - "a correção do upstream (PR #765) troca used = True por used = (self.scope, node)"
+  alternatives:
+    - "checar isinstance(used, tuple) dentro de handleNodeStore"
+    - "não marcar used ao carregar annotation"
+  unknowns: "sem acesso à rede para confirmar o diff exato do PR #765; decisão baseada no contrato do atributo used (docstring Binding)"
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "mudança é somente uma linha: used = True -> used = (self.scope, node)"
+  answered: true
+  skipped: false
+intent:
+  code_does: "handleNodeLoad marcava annotation acessado como used = True (bool); handleNodeStore indexava used[0] assumindo tupla"
+  check_expects: "o teste test_unused_annotation_in_outer_scope_reassigned_in_local_scope espera UndefinedName + UnusedVariable, sem crash"
+  spec_says: "Binding.used é par de (Scope, node) — docstring da classe; Annotation não deve quebrar essa invariante"
+  all_agree: true
+  conflict_resolution: ""
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: pyflakes/checker.py
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: false
+  coverage_pct: 0.0
+  coverage_pass: false
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: "5 falhas de teste pré-existentes no Python 3.12 (ast.Str deprecation, null-byte SyntaxError, mensagens de erro alteradas) — fora do escopo do bug #764"
+  documented: true
+twins:
+  searched: true
+  pattern: "used = True"
+  result: "1 ocorrência relevante em handleNodeLoad (a linha corrigida); demais usos de .used não misturam bool/tupla"
+  defect_fixed: true
+  matches_count: 0
+  files_count: 1
+  fix_applied: true
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: true
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: 97a23aa5655c1b3ed73bb747cbf9697c1aff5858

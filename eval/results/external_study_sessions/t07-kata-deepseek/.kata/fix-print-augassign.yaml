@@ -1,0 +1,83 @@
+schema_version: 1
+task: fix-print-augassign
+status: approved
+domain: coding
+done: "pyflakes nao crasha em `print += 1` — teste test_print_augmented_assign (TestIncompatiblePrintOperator) passa e nao ha regressao no resto da suite"
+fit:
+  trivial: false
+  route: code-loop
+  reason: "correcao cirurgica de 1 arquivo (checker.py): assinatura de handleNodeLoad ganha parametro parent explicito"
+  answered: true
+  skipped: true
+think:
+  problem: "PR #745: fix crash on augmented-assign to print builtin (resolve #744). Ao checar 'print += 1', o handler AUGASSIGN chama handleNodeLoad(node.target) diretamente, sem antes registrar _pyflakes_parent no alvo; handleNodeLoad chama getParent(node) para o caso especial print-builtin, e o AttributeError 'Name' object has no attribute '_pyflakes_parent' derruba o check."
+  assumptions:
+    - "o bug e exatamente o AttributeError em getParent dentro do branch print-builtin de handleNodeLoad"
+    - "o repo ja contem o teste test_print_augmented_assign (o fix de teste veio antes do fix de fonte)"
+    - "a correcao upstream (PR #745) e passar o parent como parametro em vez de chamar getParent dentro de handleNodeLoad"
+  alternatives:
+    - "guarda getParent contra _pyflakes_parent ausente (mais intrusivo, afeta outros callers)"
+    - "definir _pyflakes_parent no alvo antes de handleNodeLoad (muda mais o fluxo)"
+  unknowns: ""
+  answered: true
+  skipped: true
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "mudanca identica ao upstream: 3 call sites ajustados, nenhuma abstracao nova"
+  answered: true
+  skipped: false
+intent:
+  code_does: "handleNodeLoad chama self.getParent(node) para detectar o operador chevron obsoleto (print >> stderr) quando o nome e um builtin print; em contextos como AUGASSIGN o target nao tem _pyflakes_parent ainda, causando crash"
+  check_expects: "test_print_augmented_assign: self.flakes('print += 1') nao pode lancar excecao"
+  spec_says: "pyflakes deve checar passivamente sem crashar em codigo valido (ainda que nonsense)"
+  all_agree: true
+  conflict_resolution: ""
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: pyflakes/checker.py
+      necessary: true
+      reason: "unico arquivo alterado; muda assinatura de handleNodeLoad e 2 call sites"
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 97.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: "3 testes pre-existentes de pyflakes/test/test_api.py (test_invalidEscape, test_misencodedFileUTF16, test_nonDefaultFollowsDefaultSyntaxError) falham por expectativas de coluna/mensagem incompativeis com Python 3.12 (pyflakes 3.0.0 predata 3.12). NAO relacionados a esta mudanca: confirmado via `git stash` que falham identicamente no HEAD original a5cf59c. Excluidos do escopo de verificacao via `-k` e documentados aqui; nao foram tocados."
+  documented: true
+twins:
+  searched: true
+  pattern: "handleNodeLoad\\("
+  result: "3 ocorrencias em checkout regular: definicao + 2 call sites (NAME, AUGASSIGN); todos atualizados. getParent(node) removido do branch print-builtin."
+  defect_fixed: true
+  matches_count: 2
+  files_count: 1
+  fix_applied: true
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: false
+  intent_present: true
+  auth_owed: false
+  auth_present: false
+  pending_owed: true
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: a5cf59c26b9e959fe7af9f63ec5a56d540614a10
+approved_commit: 83575b4fb736f730b9cd3fb2f97e787c2e6bf162

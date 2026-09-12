@@ -1,0 +1,77 @@
+schema_version: 1
+task: wrong-file-mode
+status: approved
+domain: coding
+done: ''
+fit:
+  trivial: false
+  route: code-loop
+  reason: non-interactive mode
+  answered: false
+  skipped: true
+think:
+  problem: ''
+  assumptions: []
+  alternatives: []
+  unknowns: ''
+  answered: false
+  skipped: true
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: ''
+  answered: false
+  skipped: false
+intent:
+  code_does: ''
+  check_expects: ''
+  spec_says: ''
+  all_agree: true
+  conflict_resolution: ''
+  answered: false
+  skipped: false
+surgical:
+  files:
+    - path: src/tomli/_parser.py
+      necessary: true
+      reason: "load() corrige erro de modo de arquivo (raise TypeError em modo texto)"
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 100.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: false
+  pattern: ''
+  result: ''
+  defect_fixed: false
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: false
+  intent_present: false
+  auth_owed: false
+  auth_present: false
+  pending_owed: false
+  pending_present: false
+  twins_owed: false
+  twins_present: false
+base_commit: d4ee08f904c5820b1b15b4c6fccc2472ba27346e

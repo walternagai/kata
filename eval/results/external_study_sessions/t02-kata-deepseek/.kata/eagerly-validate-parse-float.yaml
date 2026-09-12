@@ -1,0 +1,82 @@
+schema_version: 1
+task: eagerly-validate-parse-float
+status: approved
+domain: coding
+done: "tomllib.loads (and load) raise ValueError('parse_float must not return dicts or lists') when the parse_float callable returns a dict or list, instead of silently emitting an illegal value; the full test suite passes."
+base_commit: bbdf3478ee889e22f06c3523f779d0898c3d58e0
+approved_commit: bbdf3478ee889e22f06c3523f779d0898c3d58e0
+fit:
+  trivial: true
+  route: code-loop
+  reason: "One-file, ~22-line surgical fix (a validation wrapper added to the parse_float entry point). Classified autonomously (non-interactive)."
+  answered: true
+  skipped: true
+think:
+  problem: "PR #180: parse_float that returns a dict or list must be rejected eagerly. Currently match_to_number returns parse_float(...) result unchecked, so an illegal dict/list silently corrupts the parsed output. Fix: wrap parse_float to raise ValueError on dict/list return."
+  assumptions:
+    - "Only dict and list are illegal (upstream PR #180 contract, matching the test's expected error message)."
+    - "The default float callable never returns illegal types, so it can be short-circuited for performance."
+  alternatives:
+    - "Validate inside match_to_number at call site (rejected: would duplicate the check at many call sites; wrapping once at the loads/load entry point is minimal)."
+    - "Reject at output assembly (rejected: not eager; the error must fire at parse_float call time)."
+  unknowns: "None significant; the expected message is pinned by tests/test_error.py."
+  answered: true
+  skipped: true
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Single narrow wrapper function, no speculation or configurability."
+  answered: true
+  skipped: true
+intent:
+  code_does: "match_to_number returns parse_float(match.group()) for floats with no type validation."
+  check_expects: "loads('f=0.1', parse_float=dict/list_returner) raises ValueError('parse_float must not return dicts or lists')."
+  spec_says: "parse_float must not return dicts or lists (these would be confused with real TOML tables/arrays)."
+  all_agree: true
+  conflict_resolution: ""
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: src/tomli/_parser.py
+      necessary: true
+      reason: "Adds make_safe_parse_float and applies it in loads(). load() delegates to loads(), so one change covers both entry points."
+  removed_imports_clean: true
+  answered: true
+  skipped: true
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 100.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: "parse_float"
+  result: "Only one parse_float entry point (loads/load); no duplicate call sites needing the same guard."
+  defect_fixed: true
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: false
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: false
+  twins_present: true

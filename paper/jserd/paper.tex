@@ -1569,9 +1569,12 @@ sessions left behind grade, under the audit mode of Section~\ref{sec:audit},
 defaults) and one verify section as faked: in t05 the session declared the
 success criterion met while all three objective checks were false, though
 its notes attribute the failures to pre-existing conditions outside the
-change. The audit names the risk; the derived audit is archived in
-\texttt{eval/\allowbreak results/\allowbreak external\_study\_audit.json}.
-The harness did not
+change. The audit names the risk; the 24 session task files are archived
+under
+\texttt{eval/\allowbreak results/\allowbreak external\_study\_sessions/},
+and the derived audit is archived in
+\texttt{eval/\allowbreak results/\allowbreak external\_study\_audit.json},
+so the audit is reproducible from the repository. The harness did not
 capture a JUDGE verdict from the sessions themselves
 (\texttt{session\_judge\_verdict} is null in all 48 runs), so the JUDGE
 enters this study as the independent review pass, not as the sessions' own
@@ -1798,7 +1801,8 @@ trap and comparison verdicts used for Tables~\ref{tab:results} and
 \ref{tab:gate-comparison} are reproducible with
 \texttt{python3 eval/run\_traps.py} and \texttt{python3 eval/compare\_gates.py},
 and the external study with \texttt{python3 eval/external\_study.py}
-(the session audit with \texttt{--audit-sessions}, archived in
+(the session audit with \texttt{-{}-audit-sessions -{}-runs-dir
+eval/results/external\_study\_sessions}, archived in
 \texttt{eval/\allowbreak results/\allowbreak external\_study\_audit.json}).
 
 \noindent\textbf{Author contributions.}

@@ -1,0 +1,149 @@
+schema_version: 1
+task: parse-float-illegal-types
+status: approved
+domain: coding
+done: 'tests/test_error.py::TestError::test_invalid_parse_float passes: tomllib.loads
+  raises ValueError("parse_float must not return dicts or lists") eagerly when a
+  custom parse_float callback returns a dict or list, and the full test suite (ruff
+  + pytest + coverage >= 70%) is green.'
+fit:
+  trivial: false
+  route: code-loop
+  reason: 'PR 180 bug fix with clear, well-scoped source (failing test pinpoints
+    exact expected exception type/message; upstream tomllib/tomli history documents
+    the canonical fix pattern). No ambiguity in scope, no irreversible action, so
+    code-loop applies directly.'
+  answered: true
+  skipped: false
+think:
+  problem: 'tomllib.loads(toml, parse_float=custom_fn) currently trusts custom_fn''s
+    return value blindly. If custom_fn returns a dict or list (mutable/container
+    types), the parser silently accepts it as if it were a scalar float, which can
+    corrupt the resulting document structure (e.g. a "float" key silently becomes
+    a dict/list) instead of failing loudly. test_invalid_parse_float expects a
+    ValueError with message "parse_float must not return dicts or lists" to be
+    raised as soon as such an illegal value is produced.'
+  assumptions:
+  - 'The fix must live in src/tomli/_parser.py (or a helper it uses), since that
+    is where parse_float is invoked (via match_to_number in _re.py and directly
+    for inf/nan literals).'
+  - 'The validation must happen once per loads() call setup (wrapping parse_float),
+    not by special-casing every call site, to keep the change surgical and avoid
+    missing a call site.'
+  - 'The default parse_float=float never returns dict/list, so the wrapper should
+    special-case float to avoid adding overhead to the common path.'
+  - 'The exact error message must match the test: "parse_float must not return
+    dicts or lists".'
+  alternatives:
+  - 'Add an isinstance check after every call site of parse_float in _parser.py
+    and _re.py (rejected: duplicates logic across 3 call sites, easy to miss one,
+    violates SIMPLIFY).'
+  - 'Wrap parse_float once at the top of loads() with a small validating closure
+    and use the wrapped version everywhere downstream (chosen: single point of
+    validation, matches upstream tomli/CPython tomllib fix for this exact PR).'
+  unknowns: ''
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: 'git diff --stat: 1 file changed (src/tomli/_parser.py), 24 insertions,
+    0 deletions. Single helper function (make_safe_parse_float) plus one call-site
+    line in loads(). This mirrors the canonical upstream tomli/CPython tomllib fix
+    for this exact PR, applied at a single choke point (loads()) so every downstream
+    call to parse_float (match_to_number, and the direct inf/nan calls) is covered
+    without duplicating the isinstance check at 3 call sites. The float-fast-path
+    check (if parse_float is float: return float) avoids adding overhead to the
+    default/common case, matching an existing pattern already used elsewhere in
+    this codebase. No new parameters, no configurability, no unused abstraction —
+    the wrapper is created and used exactly once, is not exported, and has exactly
+    the responsibility the bug requires.'
+  answered: true
+  skipped: false
+intent:
+  code_does: 'src/tomli/_parser.py invokes the user-supplied parse_float callback
+    (via _re.match_to_number, and directly for inf/nan literal parsing) and uses
+    whatever it returns without any type validation. A parse_float that returns a
+    dict or list is silently accepted as a scalar value.'
+  check_expects: 'tests/test_error.py::test_invalid_parse_float expects
+    tomllib.loads("f=0.1", parse_float=dict_returner_or_list_returner) to raise
+    ValueError with message exactly "parse_float must not return dicts or lists".'
+  spec_says: 'No README/CHANGELOG entry exists yet for this behavior (unreleased
+    fix). The issue title itself ("PR #180: Eagerly raise an error if parse_float
+    produces illegal types") is the spec, and it agrees with the test: validation
+    must happen eagerly (at parse time), not lazily when the value is later used.'
+  all_agree: true
+  conflict_resolution: 'No conflict: code is simply missing the behavior that both
+    the test and the issue/spec require. Code will be updated to match test +
+    spec; test is not being altered.'
+  answered: true
+  skipped: false
+surgical:
+  files:
+  - path: src/tomli/_parser.py
+    necessary: true
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+  notes: 'Only file touched. `git diff --name-only` confirms it is the sole changed
+    file. The single new call site (parse_float = make_safe_parse_float(parse_float)
+    in loads()) is the only place ParseFloat enters the parser, so every downstream
+    consumer (match_to_number in _re.py, and the direct inf/nan parse_float calls
+    in parse_value) is covered automatically without touching those call sites or
+    _re.py/_types.py. `ruff check --select F401` on the file reports no orphan
+    imports (no imports were added or removed).'
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 100.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+  notes: 'python3 -m kata --check-only: ruff check src/ tests/ -> limpo; pytest
+    tests/ -> 13 passed, 557 subtests passed; coverage (--cov-fail-under=70) ->
+    100.0%. Confronted with `done`: tests/test_error.py::test_invalid_parse_float
+    (dict_returner and list_returner cases) now raises ValueError("parse_float
+    must not return dicts or lists") as required; full suite green.'
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: 'Callable\[|ParseFloat'
+  result: 'grep across src/ for every use of `Callable`/`ParseFloat` shows the
+    library exposes exactly one user-supplied callback (`parse_float`), used at
+    3 call sites (match_to_number in _re.py; the two inf/nan calls in
+    parse_value in _parser.py), all of which now flow through the single
+    make_safe_parse_float wrapper installed at the top of loads(). No other
+    user-supplied callback exists in this codebase, so there is no twin
+    instance of this defect to fix elsewhere.'
+  defect_fixed: true
+  matches_count: 8
+  files_count: 3
+  fix_applied: true
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: bbdf3478ee889e22f06c3523f779d0898c3d58e0
+judge:
+  verdict: VERIFIED
+  frauds: []
+  caveats:
+  - '1 claim(s) aceita(s) sem verificacao (nao re-executaveis): criterio de sucesso
+    satisfeito'
+  judged_at: '2026-09-11'

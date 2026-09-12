@@ -1,0 +1,81 @@
+task: load-newest-grammar
+status: approved
+domain: coding
+done: "test/test_load_grammar.py passa por inteiro (test_load_grammar_uses_older_syntax carrega a gramática mais nova sem warning/erro, test_load_inexisting_grammar ainda levanta NotImplementedError) e a suite completa roda limpa"
+base_commit: "f1e470f3984bc439af27d24937e1894ef55b1216"
+approved_commit: ""
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Bug fix bem definido: load_grammar emite warning espúrio para versão futura, quebrando test_load_grammar_uses_older_syntax sob filterwarnings=error"
+  answered: true
+  skipped: false
+think:
+  problem: "load_grammar(version='4.0') emite UserWarning 'parso does not support 4.0 yet.', que vira erro sob filterwarnings=error do pytest.ini, quebrando test_load_grammar_uses_older_syntax."
+  assumptions:
+    - "O comportamento desejado é carregar silenciosamente a gramática mais nova disponível para versões futuras"
+    - "Versões antigas inexistentes (1.5) devem continuar levantando NotImplementedError"
+    - "A fix é remover o warning espúrio, mantendo a clampagem via min()"
+  alternatives:
+    - "Determinar a versão gramatical mais recente dinamicamente (varredura de arquivos) em vez de hardcoded (3,14)"
+    - "Remover apenas o warnings.warn e manter min() hardcoded (fix mínima do PR #234)"
+  unknowns: ""
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Fix mínima: remover import warnings e o bloco warnings.warn. Nenhuma abstração nova."
+  answered: true
+  skipped: false
+intent:
+  code_does: "clampa versão futura via min(versão, (3,14)) e carrega a gramática mais nova silenciosamente"
+  check_expects: "test_load_grammar_uses_older_syntax carrega sem warning; test_load_grammar_doesnt_warn não emite warning para nenhuma versão suportada"
+  spec_says: "Issue #232: parso deve carregar a gramática mais nova diante de gramática futura, sem avisos espúrios"
+  all_agree: true
+  conflict_resolution: ""
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: "parso/grammar.py"
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 90.43
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+auth:
+  action_taken: false
+  authorized: false
+  action: ""
+  quote: ""
+pending:
+  action: ""
+  documented: false
+twins:
+  pattern: "warnings.warn|does not support|min(passed_version_info"
+  result: "Nenhum outro ponto no projeto repete o padrão do aviso espúrio de versão futura; única clampagem é a de load_grammar"
+  searched: true
+  defect_fixed: true
+  matches_count: 0
+  files_count: 0
+  fix_applied: false

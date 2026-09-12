@@ -1,0 +1,85 @@
+task: split-after-maxsplit
+status: approved
+domain: coding
+done: "split_after(iterable, pred, maxsplit=1) retorna [[1]] (e não [[1], []]) quando o iterável termina exatamente no separador; todos os testes de tests/test_more.py::SplitAfterTest passam, ruff limpo e coverage >= 70%"
+base_commit: f38cef2b9ac4a496e39556270c1e28f4f3143191
+approved_commit: f38cef2b9ac4a496e39556270c1e28f4f3143191
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Bug pontual em split_after com maxsplit==1; um arquivo fonte, uma função, ~3 linhas. Mudança cirúrgica."
+  answered: true
+  skipped: false
+think:
+  problem: "split_after cede uma lista vazia extra quando maxsplit==1 e o iterável termina exatamente no separador."
+  assumptions:
+    - "yield list(it) deve ser suprimido quando list(it) é vazio"
+    - "maxsplit==1 significa no máximo 1 split (2 grupos no máximo)"
+  alternatives:
+    - "guardar o resto em variável e só yield se não-vazio"
+  unknowns: ""
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: ""
+  answered: true
+  skipped: false
+intent:
+  code_does: "split_after com maxsplit==1 não emite grupo vazio residual quando o separador é o último item (após correção)"
+  check_expects: "test_max_split espera [[1]] para ([1], x==1, 1) — sem lista vazia extra"
+  spec_says: "At most maxsplit splits; nenhum split produz grupo vazio"
+  all_agree: true
+  conflict_resolution: "Pré-correção o código divergia da spec e do teste (emitia lista vazia residual). Resolvido alinhando o código à spec (spec > código na ordem de autoridade)."
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: more_itertools/more.py
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 99.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: false
+  twins_present: true
+auth:
+  action_taken: false
+  authorized: false
+  action: ""
+  quote: ""
+pending:
+  action: ""
+  documented: false
+twins:
+  pattern: "yield list(it)"
+  result: "split_at (yield [] é intencional, documentado em doctest) e split_before (usa [item] + list(it), nunca vazio). Nenhum bug gêmeo."
+  searched: true
+  defect_fixed: true
+  matches_count: 2
+  files_count: 1
+  fix_applied: false
+judge:
+  verdict: VERIFIED
+  frauds: []
+  caveats:
+    - "critério de sucesso: 1 claim aceita sem re-execução (subjetiva)"
+  judged_at: "2026-09-11"

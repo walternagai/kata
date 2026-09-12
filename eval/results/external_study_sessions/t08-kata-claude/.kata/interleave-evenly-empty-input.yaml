@@ -1,0 +1,134 @@
+schema_version: 1
+task: interleave-evenly-empty-input
+status: approved
+domain: coding
+done: >-
+  interleave_evenly([]) and interleave_evenly([], lengths=[]) both return an
+  empty iterator instead of raising IndexError; existing behavior for
+  non-empty inputs is unchanged; test_no_iterables passes; full suite,
+  ruff, and coverage gate (>=99%, matching this repo's Makefile) pass.
+fit:
+  trivial: true
+  route: code-loop
+  reason: >-
+    Single file (more_itertools/more.py), single guard clause of ~2 lines,
+    no new behavior beyond returning early on empty input, no research
+    needed - the bug and fix location are already fully diagnosed by the
+    issue report (IndexError on lengths_desc[0] when dims == 0). Following
+    the triviality gate this could go straight to VERIFY, but the task
+    explicitly asked for the full documented cycle including JUDGE, so
+    THINK/SIMPLIFY/SURGICAL/INTENT are filled in briefly for the record
+    instead of skipped.
+  answered: true
+  skipped: false
+think:
+  problem: >-
+    interleave_evenly(iterables) raises IndexError: list index out of range
+    when called with zero iterables (either lengths inferred from an empty
+    iterables list, or lengths=[] passed explicitly). dims = len(lengths)
+    is 0, lengths_desc is [], and lengths_desc[0] then fails.
+  assumptions:
+    - "The correct behavior for zero iterables is to yield nothing (empty generator), matching the semantics of interleave_evenly([a, []]) which already tolerates empty component iterables."
+    - "This is a generator function, so the fix must return before doing any indexing, and since it's a generator, an early `return` (not `return iter([])`) is correct to end iteration immediately."
+    - "The regression test tests/test_more.py::InterleaveEvenlyTests::test_no_iterables already exists in this checkout and encodes the expected behavior for both call forms (no lengths and lengths=[])."
+  alternatives:
+    - "Guard on `if not iterables: return` before computing lengths - rejected because lengths may be supplied explicitly even when iterables is empty, and mismatched-length validation should still run."
+    - "Guard on `if dims == 0: return` right after `dims = len(lengths)` - chosen, since it covers both the inferred-length and explicit lengths=[] paths uniformly and happens after the existing length-mismatch validation."
+    - "Special-case len(lengths) == 0 inside the sorting/permutation logic - rejected as unnecessarily complex for what is fundamentally a no-op case."
+  unknowns: ''
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: >-
+    Fix is a 2-line early-return guard (`if dims == 0: return`) placed right
+    after `dims = len(lengths)`, after the existing length-mismatch
+    validation still runs for lengths=[]-with-nonempty-iterables cases. No
+    new parameters, no new abstractions, no config added. This is the
+    minimum change that closes the IndexError for both call forms
+    (inferred lengths and explicit lengths=[]).
+  answered: true
+  skipped: false
+intent:
+  code_does: >-
+    Before the fix: computes dims = len(lengths), then always indexes
+    lengths_desc[0] to find the primary iterable, which raises IndexError
+    when dims == 0 (no iterables). After the fix: returns immediately
+    (ending the generator with no items yielded) when dims == 0, before
+    any indexing happens.
+  check_expects: >-
+    tests/test_more.py::InterleaveEvenlyTests::test_no_iterables expects
+    list(mi.interleave_evenly([])) == [] and
+    list(mi.interleave_evenly([], lengths=[])) == [] - i.e. an empty
+    generator, not an exception.
+  spec_says: >-
+    The docstring documents interleaving semantics for 2+ iterables and
+    does not state a minimum-length precondition or forbid empty input;
+    it also already tolerates individual empty component iterables
+    (see test_degenerate_empty). Treating zero iterables as "yield
+    nothing" is consistent with that existing degenerate-input tolerance
+    and does not contradict any documented behavior.
+  all_agree: true
+  conflict_resolution: ''
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: more_itertools/more.py
+      necessary: true
+      reason: >-
+        Adds the 2-line early-return guard that is the entire fix; no
+        other code in this file needed to change.
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 99.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: 'sorted\(\s*range\('
+  result: >-
+    0 other matches in more_itertools/more.py or more_itertools/recipes.py -
+    the "sort indices by length descending, then index [0] for the
+    primary" shape used by interleave_evenly is not duplicated elsewhere
+    in the codebase.
+  defect_fixed: true
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+preflight:
+  skills_missing: []
+judge:
+  verdict: VERIFIED
+  frauds: []
+  caveats:
+    - "1 claim(s) aceita(s) sem verificação (não re-executáveis): critério de sucesso satisfeito"
+  judged_at: "2026-09-11"
+  judged_commit: d1e095e2379f113537e7ba457d731b18aba2489f
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: false
+  pending_owed: false
+  pending_present: false
+  twins_owed: true
+  twins_present: true
+base_commit: 18bb470a717d9e8c440fe5119cdd528364b5b78a
+approved_commit: d1e095e2379f113537e7ba457d731b18aba2489f

@@ -1,5 +1,5 @@
 {
-  "source": "/tmp/opencode/kata-external/runs",
+  "source": "eval/results/external_study_sessions",
   "totals": {
     "faked": 1,
     "followed": 151,

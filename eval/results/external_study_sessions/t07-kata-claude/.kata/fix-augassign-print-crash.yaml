@@ -1,0 +1,201 @@
+schema_version: 1
+task: fix-augassign-print-crash
+status: approved
+domain: coding
+done: "pyflakes/test/test_other.py::TestIncompatiblePrintOperator::test_print_augmented_assign
+  passes; full pytest suite passes; ruff clean on pyflakes/checker.py; coverage
+  gate (70%) satisfied"
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Root cause required grepping checker.py for AUGASSIGN/handleNodeLoad
+    and reproducing the AttributeError traceback, so it is not a zero-search
+    trivial fix, but the fix itself is well-scoped to one function in one file.
+    Autonomous session (no interactive user channel), so THINK/SIMPLIFY/SURGICAL
+    proceed with reasoned defaults instead of live user answers."
+  answered: true
+  skipped: false
+think:
+  problem: "pyflakes crashes with AttributeError('Name' object has no attribute
+    '_pyflakes_parent') when checking source that augmented-assigns to the
+    'print' builtin (e.g. 'print += 1'), instead of reporting it normally (PR
+    #745 / issue #744)."
+  assumptions:
+    - "The crash is caused by AUGASSIGN calling handleNodeLoad(node.target)
+      before node.target has been visited via handleNode, so
+      node.target._pyflakes_parent is not yet set when handleNodeLoad's
+      'print'+Builtin special case calls self.getParent(node)"
+    - "The special-case branch in handleNodeLoad (name == 'print' and
+      isinstance(binding, Builtin)) only needs a parent to check for the
+      'print >> file' Py2 syntax (BinOp/RShift); an augmented-assign target
+      can never be that pattern, so it is safe to guard the getParent() call
+      with hasattr(node, '_pyflakes_parent')"
+    - "There is an existing regression test
+      (test_other.py::test_print_augmented_assign) that exercises exactly
+      this case and is currently failing/erroring; fixing the root cause
+      should make it pass without needing a new test"
+  alternatives:
+    - "alt A: reorder AUGASSIGN to call handleNode(node.target, node) (to set
+      _pyflakes_parent) before handleNodeLoad(node.target) -- descartado:
+      handleNode dispatches to the NAME handler which has different semantics
+      for Store context and could double-process the target or change
+      binding side effects in the augmented assignment flow"
+    - "alt B: pass node (the AugAssign) explicitly as an extra parent
+      parameter into handleNodeLoad -- descartado: changes the
+      handleNodeLoad signature used by many callers for a fix needed only in
+      one call site"
+    - "alt C (escolhido): guard the self.getParent(node) call inside
+      handleNodeLoad's print/Builtin branch with a hasattr check on
+      _pyflakes_parent, since a missing parent simply means 'we cannot be
+      inside a print >> stream RShift expression', which is correct here"
+  unknowns: |
+    RESOLVIDO:
+    1. Onde ocorre o crash? -> reproduzido com
+       `python3 -c "from pyflakes.api import check; check('print += 1', ...)"`,
+       traceback aponta para checker.py:2052 AUGASSIGN -> handleNodeLoad ->
+       getParent -> AttributeError.
+    2. Existe teste cobrindo isso? -> sim,
+       pyflakes/test/test_other.py:2055 test_print_augmented_assign, hoje
+       falhando com o mesmo AttributeError.
+    3. getParent() é usado em outro lugar que poderia ter o mesmo problema?
+       -> grep mostra uso em handleNodeLoad (aqui) e em handleNodeStore /
+       DICT / outros pontos que só chamam handleNode com o node já
+       parenteado; o call site problemático é só este.
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Diff is a single guard (hasattr check) around the pre-existing
+    getParent() call in handleNodeLoad, plus a comment explaining why.
+    No new function/class/parameter introduced; no configurability added.
+    Considered reordering AUGASSIGN instead (alt A in THINK) but that
+    touches control flow of a much more central method with wider blast
+    radius for a one-line root cause -- rejected as not minimal relative to
+    the actual defect."
+  answered: true
+  skipped: false
+intent:
+  code_does: "(pre-fix) handleNodeLoad() unconditionally called
+    self.getParent(node) for the 'print' + Builtin special case; AUGASSIGN
+    called handleNodeLoad(node.target) before node.target had ever gone
+    through handleNode(), so node.target._pyflakes_parent did not exist yet
+    -> AttributeError crash instead of a normal pyflakes report.
+    (post-fix, current code) handleNodeLoad() guards that same
+    self.getParent(node) call with hasattr(node, '_pyflakes_parent'),
+    so a target that hasn't been parented yet (e.g. `print += 1`) is
+    simply treated as 'not a print >> stream expression' and the checker
+    proceeds normally with 0 messages, matching test+spec."
+  check_expects: "pyflakes/test/test_other.py::test_print_augmented_assign
+    expects self.flakes('print += 1') to run without crashing (0 messages,
+    since augmented-assign to print is nonsense but not the Py2
+    'print >> file' syntax pyflakes specifically detects)"
+  spec_says: "No formal spec/README section for this; the test's own comment
+    ('nonsense, but shouldn't crash pyflakes') is the closest thing to a
+    spec, and it agrees with the test expectation. NEWS.rst has no entry
+    yet for this fix (to be relevant to add one under an Unreleased/next
+    section, but not required for tests to pass)."
+  all_agree: true
+  conflict_resolution: "Investigation initially found the PRE-FIX code
+    disagreeing with test+spec (code crashed; test+spec expect no crash).
+    Authority order: no explicit user statement overriding this ->
+    spec/test agree with each other and are more authoritative than the
+    pre-fix buggy code -> resolution was to fix the code (checker.py) to
+    match test+spec, i.e. make handleNodeLoad's print/Builtin branch
+    tolerate a target node with no _pyflakes_parent yet instead of
+    crashing. This is a genuine bugfix (code now matches test+spec), not a
+    case of relaxing/betraying the spec to satisfy a wrong test -- so
+    all_agree reflects the current, post-fix, aligned state of
+    code/test/spec, with this field documenting the pre-fix discrepancy
+    and how it was resolved."
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: pyflakes/checker.py
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+  notes: |
+    Only pyflakes/checker.py touched: the single function (handleNodeLoad)
+    that crashes on `print += 1`. No test file was modified because the
+    regression test (test_other.py::test_print_augmented_assign) already
+    existed and asserts the correct fixed behavior -- it just needed the
+    source bug fixed to pass. No imports added or removed; ruff --select
+    F401 on the file is clean.
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 96.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+  notes: |
+    Ran via `python3 -m kata --check-only` reading .kata/config.yaml:
+    - ruff check pyflakes: clean
+    - pytest pyflakes/test (deselecting 3 pre-existing, unrelated
+      Python-3.12-message-format failures in test_api.py -- confirmed via
+      `git stash` that they fail identically on base_commit before this
+      fix): 701 passed, 17 skipped, 0 failed
+    - coverage --cov=pyflakes: 96.0% (gate 70%)
+    - target regression test
+      test_other.py::TestIncompatiblePrintOperator::test_print_augmented_assign
+      passes (previously errored with AttributeError)
+    - done criterion from THINK is met: target test passes, full suite
+      (minus the 3 documented pre-existing unrelated failures) passes,
+      ruff clean, coverage gate satisfied
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: "3 pre-existing test_api.py failures (test_invalidEscape,
+    test_misencodedFileUTF16, test_nonDefaultFollowsDefaultSyntaxError) are
+    caused by Python 3.12 changing SyntaxError message text/column offsets
+    vs what this pyflakes checkout expects. They are unrelated to issue
+    #744 / PR #745 and were left unfixed (out of scope for this task);
+    documented here instead of silently deselected without record."
+  documented: true
+twins:
+  searched: true
+  pattern: "self\\.getParent\\("
+  result: "Grepped every call site of self.getParent( in pyflakes/checker.py
+    (6 occurrences: lines ~924, 938 [definition], 978, 1012, 1102 [the one
+    fixed], 1175). Traced each call's reachability: the ones at 924/1012 run
+    during checkDeadScopes()/deferred assignment handling, after the whole
+    tree has been walked via handleNode, so _pyflakes_parent is always set.
+    The one at 1175 (handleNodeStore) is only ever reached through
+    handleNode -> NAME -> handleNodeStore, i.e. always after
+    node._pyflakes_parent has been assigned by handleNode. The only call
+    site reachable *before* handleNode sets _pyflakes_parent was the fixed
+    one at handleNodeLoad's print/Builtin branch, invoked directly (not via
+    handleNode) from AUGASSIGN(node) with node.target. No other twin
+    instance of the same root cause (getParent() on a node that may not be
+    parented yet) was found."
+  defect_fixed: true
+  matches_count: 6
+  files_count: 1
+  fix_applied: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: false
+  pending_owed: true
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: a5cf59c26b9e959fe7af9f63ec5a56d540614a10
+judge:
+  verdict: VERIFIED
+  frauds: []
+  caveats:
+    - "1 claim(s) aceita(s) sem verificação (não re-executáveis): critério
+      de sucesso satisfeito"
+  judged_at: "2026-09-11"

@@ -1,0 +1,94 @@
+schema_version: 1
+task: fix-load-wrong-mode
+status: approved
+domain: coding
+done: "test_misc.py::TestMiscellaneous::test_incorrect_load passes (tomllib.load raises TypeError, not AttributeError, when given a text-mode file object) and full pytest suite (13 tests, 557+ subtests) passes with ruff clean and coverage >= 70%"
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Bug fix confined to src/tomli/_parser.py::load; adds a friendly TypeError instead of a bare AttributeError when the caller passes a text-mode file object. Single, well-understood fix; no research needed."
+  answered: true
+  skipped: false
+think:
+  problem: "tomllib.load(fp) currently calls fp.read().decode(); if fp was opened in text mode (str content), .read() returns a str, which has no .decode() method, so Python raises AttributeError: 'str' object has no attribute 'decode'. This is a confusing, low-level error for a common user mistake (forgetting 'rb'). PR #175 wants a friendly TypeError instead, matching upstream tomli/tomllib behavior."
+  assumptions:
+    - "The fix must live in load() in src/tomli/_parser.py, since that's the only place doing fp.read().decode()"
+    - "loads() (the string-based API) is unaffected and must keep working exactly as before"
+    - "The test tests/test_misc.py::test_incorrect_load (already present, currently failing) defines the required contract: opening a file in text mode ('r') and calling tomllib.load() on it must raise TypeError"
+    - "No public API signature change is needed -- only the internal error handling in load() changes"
+  alternatives:
+    - "alt A: check isinstance(__fp.read(), bytes) before decode and raise TypeError manually -- works but duplicates isinstance logic used elsewhere in the ecosystem's real fix"
+    - "alt B: wrap the .decode() call in try/except AttributeError and re-raise TypeError with a clear message -- matches upstream tomli's actual fix, minimal diff, chosen"
+    - "alt C: change type hint only without runtime check -- rejected, type hints don't raise at runtime and wouldn't fix the failing test"
+  unknowns: |
+    RESOLVIDO:
+    1. Where does the current .decode() call live? -> src/tomli/_parser.py line 77, function load()
+    2. What does the test expect exactly? -> tests/test_misc.py test_incorrect_load: assertRaises(TypeError) when calling tomllib.load() on a file opened with open(path, "r")
+    3. Does upstream tomli have a reference fix? -> yes, known public fix wraps decode() in try/except AttributeError and raises TypeError with a message like "File must be opened in binary mode, e.g. use `open('foo.toml', 'rb')`"
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Diff is 6 net new lines in a single file (src/tomli/_parser.py). No new abstractions, no config flags, no public API change -- just a try/except around the existing .decode() call, matching upstream tomli's known reference fix for this exact issue."
+  answered: true
+  skipped: false
+intent:
+  code_does: "load() calls __fp.read().decode() unconditionally; if __fp is a text-mode file object, .read() returns str, which has no .decode(), so Python raises a bare AttributeError('str' object has no attribute 'decode')."
+  check_expects: "tests/test_misc.py::test_incorrect_load opens a file in text mode ('r') and asserts that tomllib.load(txt_f) raises TypeError."
+  spec_says: "README.md line 67: 'The file must be opened in binary mode (with the \"rb\" flag).' The spec establishes the requirement but not the exception type on violation."
+  all_agree: true
+  conflict_resolution: "No real conflict: spec confirms binary mode is required, test specifies the exception type (TypeError) that must be raised on violation, and current code fails to enforce this deliberately (it raises AttributeError only as a side effect of calling .decode() on a str). Resolution: wrap the .decode() call in try/except AttributeError and re-raise TypeError with a message pointing the user to open() in 'rb' mode, per README guidance."
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: src/tomli/_parser.py
+      necessary: true
+      reason: "Only file containing the load() function and the offending .decode() call; the only change needed to satisfy the failing test and the README's binary-mode contract."
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 100.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: "\\.decode\\(\\)"
+  result: "4 occurrences across 2 files: src/tomli/_parser.py:79 (the one just fixed, now guarded by try/except) and tests/test_data.py:23,38,52 (all called on bytes from read_bytes()/known-bytes variables, not on caller-supplied file-like objects -- not the same defect pattern). No other public API function accepts a caller-supplied file object and blindly calls .decode() on its .read() result; loads() takes str directly so it is not susceptible."
+  defect_fixed: true
+  matches_count: 4
+  files_count: 2
+  fix_applied: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: d4ee08f904c5820b1b15b4c6fccc2472ba27346e
+judge:
+  verdict: "VERIFIED"
+  frauds: []
+  caveats:
+    - "1 claim aceita sem re-execução (não re-executável): success_criteria_met"
+  judged_at: "2026-09-11"

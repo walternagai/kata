@@ -1,0 +1,88 @@
+schema_version: 1
+task: fix-last-reversed-none
+status: approved
+domain: coding
+done: "tests/test_more.py::LastTests::test_reversed_is_none passes, full test_more.py suite passes, and ruff is clean on more_itertools/more.py"
+fit:
+  trivial: true
+  route: code-loop
+  reason: "1 arquivo (more_itertools/more.py), 1 linha alterada (hasattr -> getattr), sem comportamento novo, fix ja especificado no PR report. Ainda assim registramos THINK/SIMPLIFY/SURGICAL de forma enxuta para manter o rastro do INTENT gate (codigo vs teste vs bug report)."
+  answered: true
+  skipped: false
+think:
+  problem: "more.py:last() usa hasattr(iterable, '__reversed__') para decidir se chama reversed(iterable). Quando um objeto declara __reversed__ = None (atributo presente mas nao chamavel) hasattr retorna True, last() tenta reversed(iterable), que levanta TypeError (nao capturado -> deveria ser, mas o efeito real e que StopIteration/TypeError sao capturados e o fallback deque nunca roda), resultando em ValueError espurio 'empty iterable' mesmo quando o iteravel tem itens via __iter__."
+  assumptions:
+    - "getattr(iterable, '__reversed__', None) e suficiente para distinguir 'nao declarado' de 'declarado como None'; nao precisamos checar callable() pois o PR original considera isso desnecessario para o uso esperado"
+    - "Objetos que definem __reversed__ = None ainda implementam __iter__ corretamente, entao o fallback deque(iterable, maxlen=1) funciona"
+    - "TypeError ja e capturado no except da funcao last(), entao quando getattr(...) is None cairmos no ramo deque, nenhum novo except e necessario"
+  alternatives:
+    - "alt A: manter hasattr mas envolver reversed() em try/except TypeError e continuar para deque - descartado: mais codigo, mesmo resultado, diverge do fix oficial do PR #1028"
+    - "alt B: checar callable(getattr(iterable, '__reversed__', None)) - descartado (por ora): o proprio PR diz que e desnecessario para uso esperado; manter minimo"
+    - "alt C (escolhida): trocar hasattr por getattr(iterable, '__reversed__', None) is not None, replicando exatamente o fix do PR #1028"
+  unknowns: |
+    RESOLVIDO: confirmado via pytest que o teste tests/test_more.py::LastTests::test_reversed_is_none falha hoje com ValueError em vez de retornar 1 (grep + read do arquivo fonte e teste).
+    RESOLVIDO: verificado que Sequence check vem antes (isinstance(iterable, Sequence)) entao objetos tipo lista continuam usando iterable[-1] sem passar por este ramo.
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Diff de 1 linha (hasattr -> getattr(..., None)). Sem nova abstracao, sem flag/config nova. Nao adicionamos callable() check pois o PR explicitamente considera desnecessario para o uso esperado (YAGNI)."
+  answered: true
+  skipped: false
+intent:
+  code_does: "DEPOIS do fix: last() usa getattr(iterable, '__reversed__', None); quando __reversed__ e None (declarado porem nao chamavel) o teste falha e cai no fallback deque(iterable, maxlen=1), que consome __iter__ e retorna o ultimo item corretamente."
+  check_expects: "tests/test_more.py::LastTests::test_reversed_is_none espera que mi.last(ReversedIsNone()) retorne 1, usando o fallback __iter__ quando __reversed__ nao e utilizavel."
+  spec_says: "Issue #1001 / PR #1028: 'fix last() when __reversed__ is None ... swapping hasattr with getattr'. A docstring de last() nao muda (comportamento externo continua: retorna ultimo item ou default)."
+  all_agree: true
+  conflict_resolution: "Antes do fix, o codigo (hasattr) discordava do teste e da spec/issue (registrado em think.problem). Resolvido a favor do teste + issue (autoridade: spec > teste > codigo antigo): trocamos hasattr por getattr(iterable, '__reversed__', None). Apos o fix, codigo, teste e spec concordam (all_agree: true)."
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: more_itertools/more.py
+      necessary: true
+      reason: "Unica linha que precisa mudar: a condicao hasattr -> getattr na funcao last()"
+    - path: .kata/config.yaml
+      necessary: true
+      reason: "Projeto usa layout more_itertools/ + tests/ (nao src/ + tests/), entao declaramos os comandos de lint/test/coverage para o VERIFY e o JUDGE do kata rodarem corretamente neste repo. Nao altera o codigo da biblioteca."
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 99.45
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: "hasattr\\("
+  result: "0 arquivo(s), 0 ocorrencia(s) em more_itertools/ - hasattr('__reversed__') era a unica ocorrencia de hasattr() no codigo fonte, ja corrigida"
+  defect_fixed: true
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: false
+  pending_owed: false
+  pending_present: false
+  twins_owed: true
+  twins_present: true
+base_commit: 92ecbd3ff23385f7b15e2101c0411a11009a55f6

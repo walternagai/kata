@@ -1,0 +1,79 @@
+schema_version: 1
+task: shadow-unused-assignment
+status: approved
+domain: coding
+done: "test_redefined_function_shadows_variable passa em test_other.py e test_doctests.py sem regressões no restante da suíte (704 passed)."
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Bug real reportado via issue — mudança pequena e cirúrgica em checker.py; rota code-loop."
+  answered: true
+  skipped: false
+think:
+  problem: "pyflakes não emite 'redefinition of unused X' quando uma definição de função/classe (def/class) sombreia uma atribuição de variável não usada (ex.: x = 1; def x(): pass). O teste test_redefined_function_shadows_variable espera m.RedefinedWhileUnused mas recebe lista vazia."
+  assumptions:
+    - "A causa é o método redefines: Binding.redefines só retorna True quando o outro binding é um Definition, e Assignment não é um Definition."
+    - "A correção correta é fazer Definition.redefines também casar com Assignment, cobrindo def/class sombreando variável atribuída."
+  alternatives:
+    - "Modificar base Binding.redefines para incluir Assignment (rejeitado: afetaria Assignment/Argument redefinindo Assignment, ampliando demais o escopo)."
+    - "Adicionar checagem específica em addBinding (rejeitado: mais invasivo que um override de redefines)."
+  unknowns: "Se há casos de annotation ou named-expr que devam ser tratados; verificado que Annotation override redefines=False e não é afetado."
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Mudança mínima: apenas um método redefines adicionado à classe Definition (3 linhas). Sem nova abstração nem configuração."
+  answered: true
+  skipped: false
+intent:
+  code_does: "Antes: Binding.redefines(other) retorna isinstance(other, Definition) and name==name — Assignment não casa, então def x após x=1 não reporta nada (a atribuição é descartada silenciosamente)."
+  check_expects: "test_redefined_function_shadows_variable espera m.RedefinedWhileUnused para 'x = 1; def x(): pass'."
+  spec_says: "Issue #760: produzir erro quando uma definição sombreia uma atribuição não usada."
+  all_agree: true
+  conflict_resolution: ''
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - {path: "pyflakes/checker.py", necessary: true}
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 84.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: "def redefines|isinstance\\(other, Definition\\)"
+  result: "1 ocorrência relevante (Base Binding.redefines linha 258) — mantida pois trata do caso Assignment-redefine-Definition; os outros overrides (Importation, SubmoduleImportation, Annotation) são casos distintos já cobertos."
+  defect_fixed: true
+  matches_count: 1
+  files_count: 1
+  fix_applied: true
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: a0d5bea5ea0ae5c8a67b4f826b93c187ff53667e

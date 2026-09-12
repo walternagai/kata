@@ -1,0 +1,82 @@
+schema_version: 1
+task: fix-contestj-exception-swallowing
+status: approved
+domain: coding
+done: "CONTEXTJ violation raises InvalidCodepointContext (not IDNAError) with message containing 'not allowed at position'; verified by tests/test_idna.py::test_check_label_contextj_violation"
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Bug fix with known single-point defect and clear suggested patch; code-loop appropriate"
+  answered: true
+  skipped: false
+think:
+  problem: "In idna/core.py check_label, the CONTEXTJ raise of InvalidCodepointContext sits inside a try whose except ValueError catches it (InvalidCodepointContext -> IDNAError -> UnicodeError -> ValueError), re-raising IDNAError with wrong diagnosis"
+  assumptions:
+    - "InvalidCodepointContext is a subclass of ValueError via IDNAError->UnicodeError->ValueError"
+    - "the except ValueError is only meant to catch ValueError from valid_contextj/_combining_class for unknown unicodedata chars"
+    - "behaviour must stay equivalent for callers catching IDNAError or only success/failure"
+  alternatives:
+    - "Narrow the except to catch only the specific ValueError from _combining_class"
+    - "Move the CONTEXTJ raise out of the try (suggested fix)"
+  unknowns: ''
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "single-block re-order; no new abstraction or config"
+  answered: true
+  skipped: false
+intent:
+  code_does: "raises InvalidCodepointContext for CONTEXTJ violation inside try, but except ValueError swallows it and re-raises IDNAError"
+  check_expects: "test_check_label_contextj_violation expects InvalidCodepointContext with 'not allowed at position'; test_check_label_contextj_unknown_codepoint expects IDNAError for unknown adjacent codepoint"
+  spec_says: "RFC 5892 Appendix A: CONTEXTJ violation is an InvalidCodepointContext; unknown-adjacent-character is a separate IDNAError"
+  all_agree: true
+  conflict_resolution: ''
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: idna/core.py
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 83.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+approved_commit: 48bcfe4b10db4494deec58a81db4d178a0a4f77b
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: "except ValueError"  # swallowed-context exception pattern
+  result: "1 arquivo, 1 ocorrência (idna/core.py:363) — é o próprio local corrigido; nenhum outro caso"
+  defect_fixed: true
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: 48bcfe4b10db4494deec58a81db4d178a0a4f77b

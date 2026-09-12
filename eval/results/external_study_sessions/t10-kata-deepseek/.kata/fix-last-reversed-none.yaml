@@ -1,0 +1,86 @@
+schema_version: 1
+task: fix-last-reversed-none
+status: approved
+domain: coding
+done: "last() returns last item when iterable has __reversed__ = None (falls back to deque path); test test_reversed_is_none passes"
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Bug fix com escopo bem definido (1 arquivo, 1 linha), testado por test_reversed_is_none; nao-trivial pois corrige comportamento"
+  answered: true
+  skipped: false
+think:
+  problem: "last() chama hasattr(iterable, '__reversed__'), que retorna True quando o atributo existe mas e None, entao reversed(iterable) levanta TypeError e last() falha com ValueError em iteraveis cujo __reversed__ e None (Issue #1001)"
+  assumptions:
+    - "__reversed__ = None e o unico caso problematico; um __reversed__ callable funciona normalmente"
+    - "a troca de hasattr por getattr preserva o comportamento para Sequence, dict e iteraveis sem __reversed__"
+  alternatives:
+    - "checar callable(iterable.__reversed__) - o PR descarta como desnecessario"
+    - "capturar TypeError adicional - mais invasivo"
+  unknowns: ''
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Mudanca de uma linha: getattr com default None equivale a 'existe e nao e None'"
+  answered: true
+  skipped: false
+intent:
+  code_does: "hasattr retornava True para __reversed__ = None, entao chamava reversed() e falhava"
+  check_expects: "mi.last(ReversedIsNone()) == 1 (usa __iter__ quando __reversed__ nao e utilizavel)"
+  spec_says: "last() deve retornar o ultimo item, caindo para __reversed__ quando disponivel, senao esgotando o iteravel"
+  all_agree: true
+  conflict_resolution: ''
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: more_itertools/more.py
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 99.45
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: "hasattr(.*__reversed__|__reversed__"
+  result: "nenhuma outra ocorrencia do padrao defeituoso; unicos usos sao a definicao de __reversed__ (metodo) e o type stub"
+  defect_fixed: true
+  matches_count: 0
+  files_count: 0
+  fix_applied: false
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: false
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: 92ecbd3ff23385f7b15e2101c0411a11009a55f6
+judge:
+  verdict: "VERIFIED"
+  frauds: []
+  caveats:
+    - "critério de sucesso aceito sem re-execução (subjetivo)"
+  judged_at: "92ecbd3"

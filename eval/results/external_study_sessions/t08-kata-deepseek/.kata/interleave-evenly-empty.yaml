@@ -1,0 +1,85 @@
+schema_version: 1
+task: interleave-evenly-empty
+status: approved
+domain: coding
+done: "test_no_iterables passa e toda a classe InterleaveEvenlyTests fica verde"
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Bug fix: caminho de input vazio em interleave_evenly deixa dims==0 e indexa lengths_desc[0] (IndexError). Escopo claro e testes de regressão presentes."
+  answered: true
+  skipped: false
+think:
+  problem: "interleave_evenly([]) (e interleave_evenly([], lengths=[])) levanta IndexError: list index out of range porque lengths fica vazio, dims==0, e lengths_desc[0] indexa uma lista vazia."
+  assumptions:
+    - "Input vazio deve produzir output vazio (nada a intercalar)"
+    - "lengths=[] explícito é válido e significa 0 iteráveis com 0 comprimentos"
+    - "Mismatch (ex: interleave_evenly([], lengths=[3])) deve continuar levantando ValueError"
+  alternatives:
+    - "Retornar no topo da função (antes de validar lengths) — descartado: pularia a checagem de mismatch"
+    - "Retornar após a determinação de lengths e a validação de mismatch — escolhido: preserva o ValueError para mismatch e resolve o IndexError"
+    - "Guardar com try/except IndexError — descartado: mascara o problema real em vez de tratar o caso vazio explicitamente"
+  unknowns: |
+    RESOLVIDO:
+    1. Onde exatamente estoura? → more.py:1350, lengths_desc[0] com lengths_desc vazio (confirmado via traceback do teste red)
+  answered: true
+  skipped: false
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  notes: "Fix é um único guard if not lengths: return — mínimo e sem abstração nova."
+  answered: true
+  skipped: false
+intent:
+  code_does: "Com zero iteráveis ([] ou lengths=[]) retorna iterador vazio via early return; mismatch de lengths continua levantando ValueError."
+  check_expects: "test_no_iterables espera list(interleave_evenly([])) == [] e list(interleave_evenly([], lengths=[])) == []."
+  spec_says: "Docstring: intercalar múltiplos iteráveis uniformemente; com zero iteráveis o resultado natural é vazio; o mismatch de lengths deve levantar ValueError."
+  all_agree: true
+  conflict_resolution: "Pré-fix os três discordavam: o código levantava IndexError (lengths_desc[0] em lista vazia) enquanto teste e spec esperavam saída vazia. Resolvido alinhando o código à spec/teste (autoridade: pedido do usuário via issue + spec) com early return no caminho vazio, mantendo a validação de mismatch."
+  answered: true
+  skipped: false
+surgical:
+  files:
+    - path: more_itertools/more.py
+      necessary: true
+      reason: "Contém a função interleave_evenly afetada; único arquivo-fonte alterado."
+  removed_imports_clean: true
+  answered: true
+  skipped: false
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 99.0
+  coverage_pass: true
+  success_criteria_met: true
+  attempts: 1
+  hand_back: false
+auth:
+  action_taken: false
+  authorized: false
+  action: ''
+  quote: ''
+pending:
+  action: ''
+  documented: false
+twins:
+  searched: true
+  pattern: "_desc[0]|_permute[0]|sorted(...)[0] indexando lista possivelmente vazia"
+  result: "0 outras ocorrências — apenas a própria interleave_evenly usa lengths_desc[0]/iters_desc[0]"
+  defect_fixed: true
+  matches_count: 0
+  files_count: 0
+  fix_applied: true
+preflight:
+  skills_missing: []
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: true
+  twins_present: true
+base_commit: 18bb470a717d9e8c440fe5119cdd528364b5b78a

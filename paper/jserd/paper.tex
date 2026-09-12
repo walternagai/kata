@@ -1569,7 +1569,11 @@ sessions left behind grade, under the audit mode of Section~\ref{sec:audit},
 defaults) and one verify section as faked: in t05 the session declared the
 success criterion met while all three objective checks were false, though
 its notes attribute the failures to pre-existing conditions outside the
-change. The audit names the risk; the 24 session task files are archived
+change. The grade is deliberately coarse: a verify section that declares
+success while every objective check is false is flagged without reading the
+context, so the t05 grade names a risk the session had documented rather
+than a fabrication --- the notes are what a human reads to tell the two
+apart. The audit names the risk; the 24 session task files are archived
 under
 \texttt{eval/\allowbreak results/\allowbreak external\_study\_sessions/},
 and the derived audit is archived in

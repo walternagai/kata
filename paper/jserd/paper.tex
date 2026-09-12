@@ -1171,8 +1171,10 @@ the installers --- is versioned with the source at
 \href{https://github.com/walternagai/kata/tree/v0.6.0}{\texttt{github.com/walternagai/kata/tree/v0.6.0}};
 the instructions below mirror that tagged release. The comparison and
 external-study harnesses referenced in this paper postdate the tag and are
-present in commit \texttt{6f56b35}; the Declarations section gives the
-exact commit and the reproduction commands.
+present in commit \texttt{6f56b35}; the measurement and audit tooling cited
+in Sections~\ref{sec:design} and \ref{sec:external-evaluation} is included
+in tag \texttt{v0.7.0}. The Declarations section gives the exact commits
+and the reproduction commands.
 
 \subsection{Installation}
 
@@ -1780,11 +1782,16 @@ The source code, the installers, the adversarial trap suite, the
 comparison harness, the external-study harness, and the raw results of the
 evaluations reported in Section~\ref{sec:impact} are publicly available at
 \href{https://github.com/walternagai/kata}{\texttt{github.com/walternagai/kata}}.
-The evaluated code under \texttt{src/kata/} is unchanged since commit
-\texttt{230e81a} (verified in this repository's history); the final
+The revision tag \texttt{v0.7.0} contains everything cited in this paper:
+the harnesses, the shared-fraction measurement
+(\texttt{scripts/build\_skills.py -{}-stats}), the session audit
+(\texttt{eval/external\_study.py -{}-audit-sessions}), and the archived
+results. The evaluated code under \texttt{src/kata/} is unchanged since
+commit \texttt{230e81a} (verified in this repository's history); the final
 harnesses at commit \texttt{6f56b35} therefore review the code described
 in this paper. The \texttt{v0.6.0} release tag contains the CLI and the
-trap suite but predates the comparison and external-study harnesses. The
+trap suite but predates the comparison and external-study harnesses;
+\texttt{v0.7.0} is the revision state cited here. The
 trap and comparison verdicts used for Tables~\ref{tab:results} and
 \ref{tab:gate-comparison} are reproducible with
 \texttt{python3 eval/run\_traps.py} and \texttt{python3 eval/compare\_gates.py},

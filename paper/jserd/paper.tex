@@ -368,7 +368,9 @@ and wall-clock time.
 
 The comparison reuses the trap suite of Section~\ref{sec:impact} as the
 workload: each scenario is a git repository holding a ``completed'' task
-whose task file claims lint, tests, and coverage pass. The ground truth is
+whose task file records the claims the scenario exercises --- lint, tests,
+and coverage in the false-completion case, a subset elsewhere (the blind
+spots claim no reproducible check at all). The ground truth is
 the scenario's \texttt{ground\_truth.yaml}: the expected verdict and the
 exact frauds the review must find. Eleven scenarios expect REFUTED; the
 other eight expect VERIFIED (s07, s15, s16, s17), VERIFIED WITH CAVEATS

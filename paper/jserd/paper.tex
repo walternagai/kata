@@ -1392,7 +1392,8 @@ Section~\ref{sec:external-evaluation} adds no changes to \texttt{src/kata},
 so the executed code is the code described in this paper. The machine ran
 Linux (kernel 7.1.5) on x86\_64 with Python 3.12.3, ruff 0.15.21, pytest 9.1.1, and
 pytest-cov 7.1.0. All 19 scenarios passed in every run, with a median
-wall-clock of 17.7\,s (16.2--17.8\,s). Every planted fraud was detected
+wall-clock of 17.7\,s (16.2--17.8\,s over those three runs; the CI re-run
+guards the verdicts, not the timing). Every planted fraud was detected
 with the expected verdict and the expected fraud types, and every honest
 scenario returned the expected verdict with no false accusations.
 Table~\ref{tab:results} summarizes the outcome by expected verdict.

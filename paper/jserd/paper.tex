@@ -1496,14 +1496,17 @@ t12 & \texttt{davidhalter/parso} & MIT & \texttt{e22dc67} (future grammar load) 
 
 \textbf{Conditions.} Each task was attempted in a fresh sandbox by two
 models --- \texttt{deepseek-v4-pro} and \texttt{claude-sonnet-5} --- under
-two conditions: \emph{bare}, the model as an agent with no quality gate,
-and \emph{kata}, the same host running the Kata cycle (task file, phases,
+two conditions: \emph{bare}, the model as an agent with no quality gate ---
+a stronger no-gate condition than the prompt-only baseline of
+Section~\ref{sec:exec-comparison}, since here the session receives no
+reviewer prompt or fraud taxonomy at all --- and \emph{kata}, the same host
+running the Kata cycle (task file, phases,
 objective verification, and the adversarial JUDGE). Both conditions
 receive the same issue text, run headless with file-edit permissions, and
 must end with a JSON declaration of the files changed. The bare condition
 additionally runs with an isolated agent configuration in which the Kata
 skills are not visible; no bare session created a \texttt{.kata/} artifact,
-while all 24 kata sessions produced a task file and a Git baseline anchor.
+while all 24 \texttt{kata} sessions produced a task file and a Git baseline anchor.
 
 \textbf{Metrics.} From the final repository state and the session's
 declaration we measured: (a) whether the test suite passes; (b) whether the
@@ -1571,7 +1574,7 @@ the project's full test suite. A gate that costs seconds
 per change is viable as a pre-commit step in a way that an agent-based
 review --- tens of seconds, model-dependent --- is not.
 
-The kata arm is also auditable after the fact. The 24 task files the
+The \texttt{kata} arm is also auditable after the fact. The 24 task files the
 sessions left behind grade, under the audit mode of Section~\ref{sec:audit},
 151 phase executions as followed, 13 as skipped (the documented headless
 defaults) and one verify section as faked: in t05 the session declared the

@@ -242,9 +242,10 @@ answer is to treat each claim in the task file as a property and the
 repository as the oracle, re-executing the claim instead of reading it.
 
 Kata was built rather than contributed to existing projects for three
-reasons. First, no existing tool executes the verification: the closest
-alternatives are prompts that ask the model to verify itself, which the
-self-correction literature shows is unreliable \cite{selfcorrect}. Second,
+reasons. First, no existing tool ships an executable verification engine:
+the closest alternatives are prompts that ask the model to verify itself,
+which the self-correction literature shows is unreliable \cite{selfcorrect}.
+Second,
 Kata needed to serve two agent hosts (OpenCode and Claude Code) with
 identical behavior; a single Python backend with generated frontends
 guarantees that the checks a task claims to have passed are the same checks
@@ -350,9 +351,13 @@ changes it is not directly comparable by execution, so Section~\ref{sec:exec-com
 compares Kata against the gates that are installable on the same host
 (nova, claude-wizard) and against a prompt-only baseline. Second,
 \emph{executing verification} is what the \texttt{kata} CLI does, and it is
-precisely what none of the prompt-based tools can be observed to do: their
-``Partial'' fraud column reports that the adversarial step exists only as
-instruction text.
+precisely what the prompt-based tools do not do by themselves: they ship no
+engine that runs checks and reads exit codes. Their ``Partial'' fraud column
+reports that the adversarial step exists only as instruction text --- and
+the executed comparison shows that a reviewer carrying that instruction can
+run the checks when prompted, which is why the measured difference lies in
+restraint, determinism, and cost rather than in detection
+(Section~\ref{sec:exec-comparison}).
 
 \subsection{Executed gate comparison}
 \label{sec:exec-comparison}

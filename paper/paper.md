@@ -15,9 +15,6 @@ authors:
     orcid: 0000-0001-9078-8396
     corresponding: true
     affiliation: 1
-  - name: Claudia Akemi Izeki
-    orcid: 0000-0002-2941-5299
-    affiliation: 1
 affiliations:
  - name: Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil
    index: 1
@@ -176,7 +173,7 @@ implements: the phase prompts were drafted with AI assistance and validated
 against the adversarial trap suite, and the Python backend was written with AI
 assistance and verified by unit tests, coverage measurement, and the trap
 scenarios. This manuscript was drafted with AI assistance and reviewed,
-edited, and validated by the human authors, who made the core design decisions
+edited, and validated by the human author, who made the core design decisions
 and verified all technical claims against the repository.
 
 # Acknowledgements

@@ -31,14 +31,6 @@ changes</article-title>
 <xref ref-type="aff" rid="aff-1"/>
 <xref ref-type="corresp" rid="cor-1"><sup>*</sup></xref>
 </contrib>
-<contrib contrib-type="author">
-<contrib-id contrib-id-type="orcid">https://orcid.org/0000-0002-2941-5299</contrib-id>
-<name>
-<surname>Izeki</surname>
-<given-names>Claudia Akemi</given-names>
-</name>
-<xref ref-type="aff" rid="aff-1"/>
-</contrib>
 <aff id="aff-1">
 <institution-wrap>
 <institution>Instituto de Ciências Tecnológicas, Universidade Federal de
@@ -272,7 +264,7 @@ a Creative Commons Attribution 4.0 International License (CC BY
   Python backend was written with AI assistance and verified by unit
   tests, coverage measurement, and the trap scenarios. This manuscript
   was drafted with AI assistance and reviewed, edited, and validated by
-  the human authors, who made the core design decisions and verified all
+  the human author, who made the core design decisions and verified all
   technical claims against the repository.</p>
 </sec>
 <sec id="acknowledgements">

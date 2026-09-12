@@ -1786,10 +1786,12 @@ The revision tag \texttt{v0.7.0} contains everything cited in this paper:
 the harnesses, the shared-fraction measurement
 (\texttt{scripts/build\_skills.py -{}-stats}), the session audit
 (\texttt{eval/external\_study.py -{}-audit-sessions}), and the archived
-results. The evaluated code under \texttt{src/kata/} is unchanged since
-commit \texttt{230e81a} (verified in this repository's history); the final
-harnesses at commit \texttt{6f56b35} therefore review the code described
-in this paper. The \texttt{v0.6.0} release tag contains the CLI and the
+results. The evaluated code under \texttt{src/kata/} was unchanged between
+commit \texttt{230e81a} (the trap-suite run) and commit \texttt{6f56b35}
+(the comparison and external-study campaign); later commits add measurement
+tooling and touch help text, version metadata, and documentation, not the
+verification logic. The final harnesses at \texttt{6f56b35} therefore
+review the code described in this paper. The \texttt{v0.6.0} release tag contains the CLI and the
 trap suite but predates the comparison and external-study harnesses;
 \texttt{v0.7.0} is the revision state cited here. The
 trap and comparison verdicts used for Tables~\ref{tab:results} and

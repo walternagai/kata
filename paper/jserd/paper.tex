@@ -61,10 +61,8 @@
 
 \title[Kata: an executable quality gate for AI-assisted software changes]{Kata: an executable quality gate for AI-assisted software changes}
 
-\author[Nagai and Izeki 2026]{
+\author[Nagai 2026]{
 \affil{\textbf{Walter Aoiama Nagai}~\href{https://orcid.org/0000-0001-9078-8396}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil} |\href{mailto:walternagai@unifei.edu.br}{~\textbf{\textit{walternagai@unifei.edu.br}}} ]}
-
-\affil{\textbf{Claudia Akemi Izeki}~\href{https://orcid.org/0000-0002-2941-5299}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil} |\href{mailto:claudiaizeki@unifei.edu.br}{~\textbf{\textit{claudiaizeki@unifei.edu.br}}} ]}
 }
 
 \begin{document}
@@ -321,7 +319,7 @@ re-executes claims against the repository and returns a verdict
 re-execution (\emph{Partial}); or has no adversarial step (\emph{No}).
 \emph{Audit}: it can grade a completed piece of work after the fact
 against its own process. \emph{Self-verify}: the project runs its own
-checks and evaluation against itself. The assessments are the authors',
+checks and evaluation against itself. The assessments are the author's,
 based on each project's public documentation and repository at the
 commits cited in the bibliography (accessed 2026-09-11); no other tool's
 authors were consulted, and the executed comparison of
@@ -330,7 +328,7 @@ could be run.
 
 \begin{table*}[!ht]
 \caption{Comparison of Kata with related tools and methodologies.
-Qualitative assessment of the authors from the cited sources: see the text
+Qualitative assessment of the author from the cited sources: see the text
 for the operationalization of each dimension.}
 \centering
 \begin{tabular}{@{}lccccc@{}}
@@ -651,7 +649,7 @@ whole-number precision), and the remainder is declared difference --- host
 tool names, identity wording, and capability blocks such as the
 closed-choice ask --- reported by
 \texttt{python3 scripts/build\_skills.py -{}-stats}. The 395 divergent
-lines are the count the authors observed between the two hand-maintained
+lines are the count the author observed between the two hand-maintained
 copies before the single-source migration; that figure is historical and
 the script does not re-derive it. This
 single-source design exists because the previous arrangement --- two
@@ -1461,7 +1459,7 @@ Declarations section).
 \label{sec:external-evaluation}
 
 The trap suite is ours: the frauds, the fixtures, and the ground truth
-were written by the authors, and a reviewer may reasonably ask whether the
+were written by the author, and a reviewer may reasonably ask whether the
 mechanisms hold outside that self-referential setting. We therefore ran a
 minimum external study: 12 real bugs from six public repositories, fixed by
 two models under two conditions, with the JUDGE reviewing every final
@@ -1742,7 +1740,7 @@ with a ground truth that specifies the exact verdict and the exact frauds
 the judge must find. The harness fails when the verdict differs, when a
 fraud is missing, or when an unexpected fraud appears. This determinism
 removes experimenter bias from the evaluation, but it also means the
-scenarios test what the authors thought to test. The honest scenarios
+scenarios test what the author thought to test. The honest scenarios
 mitigate this: they encode false positives that were actually observed in
 development (the debris false positive, the triviality-gate false positive,
 the \texttt{.kata/} visibility false positive), so they are regression
@@ -1837,25 +1835,22 @@ eval/results/external\_study\_sessions}, archived in
 
 \noindent\textbf{Author contributions.}
 W.A.N. conceptualized Kata, implemented the software, designed the
-evaluation, and wrote the first draft. C.A.I. reviewed the methodology and
-the evaluation design and revised the manuscript. Both authors discussed
-the results, contributed to the final text, and approved the submitted
-version.
+evaluation, and wrote and approved the submitted manuscript.
 
 \noindent\textbf{Funding.}
 This research received no specific funding from public, commercial, or
 not-for-profit agencies.
 
 \noindent\textbf{Competing interests.}
-The authors are the developers of Kata, the software evaluated in this
+The author is the developer of Kata, the software evaluated in this
 paper. The evaluation is self-reported and the manuscript states its
-limitations; the authors declare no other competing interests.
+limitations; the author declares no other competing interests.
 
 \noindent\textbf{Use of AI in writing.}
-The authors used generative AI tools for language editing, \LaTeX{}
+The author used generative AI tools for language editing, \LaTeX{}
 formatting, and internal review of the manuscript. All technical claims,
-citations, and evaluation results were verified by the authors and by the
-tooling described in this paper; the authors take full responsibility for
+citations, and evaluation results were verified by the author and by the
+tooling described in this paper; the author takes full responsibility for
 the content.
 
 \bibliographystyle{apalike}

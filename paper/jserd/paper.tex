@@ -17,8 +17,8 @@
   framerule=0.3pt,
   xleftmargin=4pt,
   xrightmargin=4pt,
-  aboveskip=6pt,
-  belowskip=6pt,
+  aboveskip=4pt,
+  belowskip=4pt,
   % As saídas do CLI usam ícones (✅ ❌ ⚠ ▶ 🔴 ↳ ≥) sem cobertura nas fontes
   % do template. A fonte guarda marcadores ASCII e o listings os compõe com
   % símbolos das fontes matemáticas, para o PDF não depender de fonte de emoji.
@@ -141,7 +141,7 @@ testable Python code. The lint, test, and coverage steps read real exit codes;
 the JUDGE re-runs claimed checks against the real repository, including
 committed and untracked files; and the audit mode grades each phase of a
 completed task as followed, skipped, or faked, naming the concrete risk each
-skip or fake created. A skill asks for honesty; Kata detects its absence.
+skip or fake created. A skill prescribes honesty; Kata provides an executable mechanism to verify it.
 
 This paper is a \textbf{software article}. Following the journal's
 guidelines, it describes a tool, positions it as a significant advance over
@@ -505,44 +505,14 @@ advantage over the agent gates is determinism (the same verdict every run),
 restraint (zero false positives), and cost (about one second per review)
 --- not detection, which every gate achieved on these fixtures.
 
-The comparison is not without caveats, which we state explicitly. The
-scenarios and the fraud taxonomy are Kata's own, so the fixtures are
-in-distribution for Kata and out-of-distribution for the other gates; the
-false positives the agent gates incurred are concentrated on scenarios
-that exercise Kata-specific mechanisms, which means the FP column measures
-knowledge of these conventions as much as generic reviewer restraint. The
-agent gates run through a single model (Claude Code's default), so their
-false positives are a property of \emph{this} model under these prompts,
-not of the tools in general. Agent verdicts are also stochastic, and the
-instability is visible in the archived campaigns: across the three
-exploratory rounds kept in the repository
-(\texttt{eval/results/compare\_gates.json},
-\texttt{compare\_gates\_merged.json}, and the final
-\texttt{compare\_gates\_round2.json}), the false-positive count of the
-agent gates fluctuated --- nova 4, 3, 4; claude-wizard 4, 4, 2; the bare
-baseline 4, 3, 5 --- while Kata reported zero false positives in all three
-rounds and identical verdicts on every scenario in every run. The table
-reports one complete campaign, and the raw verdicts of every run are kept
-in the repository; it is an illustrative single run per cell, not an
-estimate of each gate's accuracy. The agent JSON schema has no
-UNVERIFIABLE verdict --- an agent can accuse or stay silent, but cannot
-confess a blind spot --- so the comparison measures whether a gate
-accused, not whether it confessed. nova and claude-wizard were invoked as
-review prompts inside one host (Claude Code), not in their native
-configurations; nova additionally offers an MCP server and specialized
-subagents that a full harness integration could use, and we did not
-integrate it, because the goal is to measure the gate as a \emph{change
-review} step in the same shape a team would run it. The harness and the
-per-scenario verdicts are public in the repository
-(Section~\ref{sec:usage}); \texttt{eval/compare\_gates.py}
-reproduces the comparison and
-\texttt{eval/results/compare\_gates\_round2.json} holds the raw verdicts
-used for Table~\ref{tab:gate-comparison}. Finally, the scenarios that the
-agent gates misjudged are exactly the ones where the Kata JUDGE
-\emph{confesses} a blind spot or applies a mechanism the agent has no
-knowledge of (\texttt{approved\_commit} on s17, the Git-ignore on s19, the
-language probes on s12): an agent that cannot know the mechanism can only
-guess, and the guesses are what the comparison measures.
+The comparison is subject to important methodological caveats that we state explicitly.
+First, the 19 scenarios and the underlying fraud taxonomy were developed iteratively alongside Kata to serve as regression fixtures. Consequently, the test workloads are strictly in-distribution for Kata --- which includes dedicated architectural mechanisms for these specific boundary conditions --- and out-of-distribution for the alternative gates. The false positives incurred by the agent gates were concentrated precisely on scenarios exercising these repository-level conventions (e.g., \texttt{approved\_commit} diff ceiling on s17, Git local excludes on s19, and missing language probes on s12). Hence, the false positive metric reflects familiarity with these architectural conventions and the presence of direct repository query tools as much as generic reviewer restraint.
+
+Second, the alternative tools were evaluated in a constrained, emulated configuration: \texttt{nova} and \texttt{claude-wizard} were invoked as structured review prompts within a single headless Claude Code CLI session (\texttt{claude -p}), rather than within their native end-to-end interactive developer workflows. For instance, \texttt{nova} provides a full Model Context Protocol (MCP) server with specialized subagents that was not wired into this isolated review harness, which was scoped to measure a standalone, single-turn change review pass. Furthermore, the agent gates operated through a single underlying LLM (Claude Code's default model), meaning their false positives and heuristic tendencies characterize this specific model under review prompting, rather than the tools in their entirety.
+
+Third, agent reviews are inherently stochastic. Across the three exploratory campaigns archived in the repository (\texttt{eval/results/compare\_gates.json}, \texttt{compare\_gates\_merged.json}, and the final \texttt{compare\_gates\_round2.json}), the false-positive counts for the agent gates fluctuated across runs (nova: 4, 3, 4; claude-wizard: 4, 4, 2; bare baseline: 4, 3, 5), whereas Kata yielded zero false positives and identical verdicts across every run. Table~\ref{tab:gate-comparison} reports one complete illustrative campaign; the raw per-scenario logs of all runs remain permanently archived. Furthermore, the agent reporting schema lacked an explicit \texttt{UNVERIFIABLE} verdict, forcing agents either to accuse or remain silent, precluding explicit confessions of unobservable state.
+
+In summary, the comparison does not demonstrate general superiority of Kata over the reasoning capabilities of alternative tools. Rather, it isolates the core thesis of this paper: evaluating complex software engineering boundary conditions (such as Git commit ceilings, untracked ignores, and process exit codes) through heuristic LLM prompts forces the model to guess, whereas executing deterministic, code-level checks yields instantaneous, reproducible, and restraint-preserving verdicts. The comparison harness and raw records are publicly available (\texttt{eval/compare\_gates.py}, \texttt{eval/results/compare\_gates\_round2.json}).
 
 \section{Software design}
 \label{sec:design}
@@ -559,6 +529,10 @@ logic; the phases that require judgment (THINK, SIMPLIFY, INTENT,
 SURGICAL, TWIN CHECK, ARTIFACT, REPORT) are guided by skills and recorded
 in the task file, which the objective phases read and confront with the
 repository.
+
+Architecturally, Kata operationalizes this discipline along two distinct usage tiers:
+(1) an \emph{interactive authoring scaffold} (\texttt{kata --task}), which guides the developer or agent step-by-step through the nine-phase cycle, generating structured evidence, enforcing minimality, and anchoring baseline commits in the task file; and
+(2) a \emph{decoupled reviewer gate} (\texttt{kata --judge} and \texttt{kata --check-only}), which operates non-interactively in approximately two seconds, re-executing verification commands and auditing repository diffs against baseline anchors. This architectural separation ensures that while the authoring cycle provides deliberate friction and governance for complex, open-ended tasks, automated pipelines and routine pre-commit workflows can deploy the verification gate with negligible overhead.
 
 \begin{figure*}[!ht]
 \centering
@@ -678,7 +652,7 @@ pass --- ``could not measure'' is not ``measured and passed''.
 
 A config file that exists but is invalid aborts with exit code 1. Falling
 back to ruff silently would report the success of a check the project
-never asked for, which is the class of lie the judge exists to hunt. The
+never asked for, which is precisely the class of fabricated claim the judge exists to detect. The
 JUDGE follows the same line: it knows the test syntax of Python, JS/TS,
 Go, Ruby, Rust, Java/Kotlin, C\#, PHP, and Swift (the language probes
 implemented in \texttt{kata/judge.py} as a per-language table of
@@ -865,7 +839,7 @@ and falling back to the Python defaults otherwise. Three properties are
 deliberate. First, a declared role runs verbatim and is judged by its exit
 code, the one contract every lint and test tool honours; second, coverage
 is short-circuited when the test step fails (a coverage number on top of a
-failing suite is a lie); third, ``could not measure'' is never recorded as
+failing suite is deceptive and uninformative); third, ``could not measure'' is never recorded as
 ``measured and passed'': when the coverage pattern matches nothing, the
 check fails with a named error instead of reporting 0.0\% as a pass
 (\texttt{verify.py:201--207}).
@@ -1447,8 +1421,9 @@ failed):
     [x] coverage
 \end{lstlisting}
 
-The verdict is REFUTED, and the exit code is 1. A skill would say ``be
-honest''; Kata catches the lie.
+The verdict is REFUTED, and the exit code is 1. Whereas an instruction-based
+skill merely requests adherence to verification, Kata deterministically
+detects the unexecuted assertion and flags the discrepancy against repository state.
 
 \subsection{Blind spots are confessed}
 
@@ -1854,17 +1829,20 @@ through a symbolic link. The repository is public, MIT-licensed, and
 installable in both agent hosts through symlink installers (see the
 Declarations section).
 
-\subsection{External evaluation: real bugs in public repositories}
+\subsection{External evaluation: feasibility, scope integrity, and execution overhead on real repositories}
 \label{sec:external-evaluation}
 
 The trap suite is ours: the frauds, the fixtures, and the ground truth
 were written by the author, and a reviewer may reasonably ask whether the
-mechanisms hold outside that self-referential setting. We therefore ran a
-minimum external study: 12 real bugs from six public repositories, fixed by
-two models under two conditions, with the JUDGE reviewing every final
-artifact. The study is deliberately small --- its purpose is to test
-whether the mechanisms observed on our own fixtures survive contact with
-work we did not author, not to estimate effect sizes.
+mechanisms hold outside that self-referential setting. We therefore conducted
+an external evaluation: 12 real bugs from six public repositories, attempted
+by two models under two conditions (bare vs. kata, yielding 48 sessions in
+total), with the JUDGE independently reviewing every final artifact. We state
+upfront that this study serves to evaluate operational feasibility, scope
+integrity, and execution overhead when applied to non-author code; with an
+exploratory sample size of $N=1$ run per cell across stochastic agents, it is
+designed as a feasibility and cost assessment rather than a statistically
+powered measurement of model population effects.
 
 \subsubsection{Protocol}
 
@@ -1938,10 +1916,16 @@ the manifest with the pinned commits, and the raw results are public
 \subsubsection{Results}
 
 All 48 sessions produced a fix that passes the task's test suite, in both
-conditions and for both models. The final artifacts contained \textbf{no
-weakened test in any of the 48 runs}: the JUDGE's own weakened-check
-detector found nothing to report, and the test bodies the sessions touched
-remained real assertions. The failure the study did observe was
+conditions and for both models. Importantly, the final artifacts contained \textbf{no
+weakened tests in any of the 48 runs}: the JUDGE's own weakened-check
+detector found nothing to report, and the test bodies touched by the agents
+remained genuine assertions. This indicates that on well-isolated, narrow bugs with
+clear existing regression tests, frontier LLMs do not spontaneously resort to
+test-weakening tactics. Consequently, the external study demonstrates the operational
+feasibility and scope integrity of the gate on third-party codebases, while
+validation of the JUDGE's fraud detection capabilities rests on the 19 adversarial
+trap scenarios of Section~\ref{sec:self-check} where frauds were actively planted.
+The failure the external study did observe was
 \emph{undeclared scope}: in one run (deepseek, bare), the session
 changed \texttt{tools/intranges.py} to regenerate a code-point table but
 declared only \texttt{idna/core.py}; the JUDGE flagged the extra file as
@@ -2005,6 +1989,10 @@ where verification is ambiguous --- while producing an auditable provenance
 trail (24 persistent task files with Git baseline anchors), which the bare
 arm omitted entirely.
 
+This yields an actionable operational guideline for practitioners:
+(1)~\textbf{Continuous Integration and Pull-Request Gating}: Teams should deploy the decoupled verification gate (\texttt{kata --judge} or \texttt{kata --check-only}), which operates in approximately two seconds, enforcing real exit codes, hunting weakened assertions, and blocking undeclared scope with negligible developer friction;
+(2)~\textbf{Complex or Autonomous Authoring}: Teams should mandate the full authoring scaffold (\texttt{kata --task}) for open-ended, multi-file, or safety-critical modifications, where the nine-fold overhead is justified by the prevention of reward hacking, explicit intent reconciliation, and the construction of an immutable provenance trail.
+
 The \texttt{kata} arm is also auditable after the fact. The 24 task files the
 sessions left behind grade, under the audit mode of Section~\ref{sec:audit},
 151 phase executions as followed, 13 as skipped (the documented headless
@@ -2027,7 +2015,18 @@ under
 \texttt{eval/\allowbreak results/\allowbreak external\_study\_sessions/},
 and the derived audit is archived in
 \texttt{eval/\allowbreak results/\allowbreak external\_study\_audit.json},
-so the audit is reproducible from the repository. The harness did not
+so the audit is reproducible from the repository.
+
+However, this episode reveals an important methodological nuance regarding
+legacy technical debt in software engineering. When repositories contain
+pre-existing test breakages or flaky suites, a context-blind gate flagging
+\texttt{FAKED} on unverified success can create perverse incentives: developers
+or agents may feel pressured to modify unrelated tests or bypass the quality gate
+altogether. While Kata's audit appropriately avoided validating unverified success
+on its own authority, industrial adoption requires a formal mechanism for declaring
+known baseline debt (\texttt{baseline\_failures}) at \texttt{base\_commit},
+allowing the gate to certify that no new regressions were introduced without
+penalizing pre-existing repository debt. The harness did not
 capture a JUDGE verdict from the sessions themselves
 (\texttt{session\_judge\_verdict} is null in all 48 runs), so the JUDGE
 enters this study as the independent review pass, not as the sessions' own
@@ -2098,59 +2097,34 @@ general pattern for trustworthy AI-assisted work, and Kata is a concrete
 instantiation for software engineering.
 
 The executed comparison of Section~\ref{sec:exec-comparison} sharpens
-this positioning. All four gates detected every planted fraud, so the
-comparison separates \emph{detection} from \emph{restraint}: the
-difference showed up entirely on honest and blind-spot scenarios. Detection,
-in other words, did not require the executable core on these fixtures: a
-prompted reviewer carrying the fraud taxonomy matched the gates that run
-code. What the executable core buys is a verdict that does not depend on
-the model --- the same outcome every run, about one second per review, and
-a confession instead of a guess when the mechanism is out of reach. The
-agent gates accused honest work (the baseline on s07), accused a later
-task's changes as scope creep (all agents on s17) and reported false
-completion on blind spots the ground truth declares UNVERIFIABLE (s12,
-s13, s19). Two caveats bound this reading: the fixtures, the fraud
-taxonomy and the mechanisms at issue are Kata's own, so the restraint
-measured on the Kata-specific scenarios is partly knowledge of its
-conventions; and the agent schema has no UNVERIFIABLE verdict, so the
-agents could only accuse or stay silent, not confess. A gate that cannot
-see the mechanism --- \texttt{approved\_commit},
-a Git-ignore rule, a language without probes --- can only guess, and the
-guesses are what the comparison measured. Kata instead confesses the blind
-spot as UNVERIFIABLE. This is the same reliability-beyond-the-mean point
-of the Double Measurement Confound \cite{double-measurement}, applied to
-a change review rather than a benchmark; the archived exploratory campaigns
-show this directly, with agent false-positive counts fluctuating across runs
-(nova: 4, 3, 4; claude-wizard: 4, 4, 2; bare: 4, 3, 5) while Kata's
-remained at zero throughout (Table~\ref{tab:gate-comparison}).
+this positioning. All four gates detected every planted fraud, separating
+\emph{detection} from \emph{restraint}: the difference appeared entirely on
+honest and blind-spot scenarios. Detection did not require an executable core
+on these fixtures, as prompted reviewers carrying the fraud taxonomy matched
+code-executing gates. What the executable core buys is a model-independent
+verdict: reproducible outcomes, review times of roughly one second, and
+honest confessions when mechanisms are unobservable. As analyzed in
+Section~\ref{sec:exec-comparison}, agent false positives stemmed from
+repository boundary conditions (\texttt{approved\_commit}, Git-ignores,
+unprobed languages) where heuristic agents guess, whereas Kata programmatically
+confesses blind spots as \texttt{UNVERIFIABLE}. This reflects the
+reliability-beyond-the-mean insight of the Double Measurement Confound
+\cite{double-measurement}: agent false positives fluctuated across runs
+(Table~\ref{tab:gate-comparison}), while Kata's deterministic execution
+produced identical, zero-FP verdicts throughout.
 
-Third, the limitations of Kata are honest and worth stating. Kata is a
-gate, not a silver bullet: it guarantees that what was claimed was
-verified, not that the solution is the best possible. It is interactive:
-the cycle asks a question at nearly every phase, and in headless mode the
-judgment phases use defaults and the report says explicitly that nobody
-answered. It requires Git for diff and branch detection. The success
-criterion is subjective, and the JUDGE accepts it without verification and
-says so in voice. The JUDGE has blind spots --- test languages without
-probes, files outside the diff --- and confesses them as UNVERIFIABLE
-rather than silencing them. And it re-executes the project's own checks:
-where the oracle itself is wrong --- the classic oracle problem
-\cite{barr-oracle} --- re-execution confirms a false oracle, which is why
-independent oracle generation (property-based and metamorphic testing,
-\cite{chen-metamorphic}) is complementary future work. Finally, the
-self-evaluation is smoke-test
-grade: the trap scenarios are deterministic fixtures, not a statistical
-study of agent behavior, and the honest scenarios are few. The executed
-comparison of Section~\ref{sec:exec-comparison} mitigates this: it is the
-first external evaluation of Kata against related gates on identical
-workloads. A larger empirical study comparing Kata against a bare agent on
-real tasks, following the Fable Method's cross-model methodology
-\cite{fable}, is future work. In the same vein, the paper's central claim
-is descriptive --- Kata re-executes claimed checks and returns an
-objective verdict --- and the causal question (``does the cycle improve
-the quality of AI-assisted changes?'') is deliberately left to that future
-study; the tools and harnesses described in
-Section~\ref{sec:algorithms} are exactly what such a study would run.
+Third, the limitations of Kata must be stated explicitly. Kata is a
+verification quality gate, not a panacea: it guarantees that what was claimed
+was objectively verified against real exit codes and diffs, not that the
+generated patch is optimal or complete beyond the declared checks. It is
+interactive (falling back to defaults in headless mode); it requires Git;
+and its success criterion is subjective. When project tests are flawed,
+re-execution confirms a false oracle \cite{barr-oracle}, highlighting
+metamorphic and property-based testing \cite{chen-metamorphic} as complementary
+future work. Finally, the central claim of this paper is descriptive --- Kata
+re-executes claimed checks and returns an objective verdict; causal evaluation
+of whether the cycle improves AI-assisted code quality remains for future
+controlled empirical studies \cite{fable}.
 
 \section{Threats to validity}
 \label{sec:threats}
@@ -2162,7 +2136,12 @@ validity that we state explicitly.
 detects planted frauds and does not accuse honest work. The construct
 ``fraud'' is operationalized as the seven categories the JUDGE hunts, which
 are derived from the failure modes documented in the Fable Method
-\cite{fable} and from the reward-hacking literature \cite{specbench}. A
+\cite{fable} and from the reward-hacking literature \cite{specbench}. While
+the trap suite demonstrates high sensitivity to these planted categories,
+real-world bug fixes on well-scoped tasks (as observed in
+Section~\ref{sec:external-evaluation}) rarely produce active test-weakening fraud
+under modern frontier models, meaning the ecological validity of these constructs
+remains to be probed on larger and more ambiguous industrial changes. A
 fraud category not in the list (for example, a new class of weakened test
 that the probes do not recognize) would not be detected, and the blind-spot
 mechanism is the honest response: the JUDGE confesses what it could not
@@ -2177,7 +2156,11 @@ scenarios test what the author thought to test. The honest scenarios
 mitigate this: they encode false positives that were actually observed in
 development (the debris false positive, the triviality-gate false positive,
 the \texttt{.kata/} visibility false positive), so they are regression
-tests for real defects rather than hypothetical ones.
+tests for real defects rather than hypothetical ones. In the external
+study, evaluating single runs ($N=1$) per cell across two models limits
+statistical inference regarding stochastic variance in session execution
+times, serving instead as a deterministic sanity check on the tool's behavior
+across non-author code.
 
 \textbf{External validity.} The evaluation is bounded in two ways. First,
 the trap suite of Section~\ref{sec:self-check} uses small synthetic
@@ -2214,27 +2197,22 @@ compares it with the gate, and refuses to approve if it fails. The skill
 says ``be honest''; the JUDGE re-runs the claimed checks and hunts seven
 categories of fraud.
 
-The evaluation shows where the approach works, and where it does not. The
-trap suite closes on the JUDGE's two-sided contract: every planted fraud is
-detected with the expected verdict and no honest scenario is accused. The
-executed comparison of Section~\ref{sec:exec-comparison} extends this
-beyond self-verification: over the same 19 scenarios, all four gates
-detected every fraud --- detection parity --- while Kata was the only gate
-with zero false positives on honest work and a median review of about one
-second, against tens of seconds per scenario for every agent gate. What
-the evaluation does not show is that Kata improves the quality of
-AI-assisted changes; a controlled comparison of changes made with and
-without the cycle remains future work. The limitations are honest: Kata is a gate, not a
-silver bullet --- it guarantees that what was claimed was verified, not
-that the solution is the best possible; it is interactive (in headless
-mode the judgment phases use defaults and the report says explicitly that
-nobody answered); it requires Git; and the success criterion is
-subjective, which the JUDGE accepts without verification and says so in
-voice.
+The evaluation demonstrates where executable gating succeeds and where its
+boundaries lie. The 19 trap scenarios close on the JUDGE's two-sided contract:
+every planted fraud is detected with the expected verdict and no honest scenario
+is accused. The executed comparison of Section~\ref{sec:exec-comparison} shows
+detection parity across gates, while Kata uniquely achieved zero false positives
+on honest work at approximately one second per review. However, the evaluation
+does not show that the cycle causally improves the quality of AI-assisted code;
+a controlled study of changes with and without Kata remains future work. Furthermore,
+Kata is an enforcement gate, not a panacea: it verifies claimed exit codes and diffs
+rather than proving patch optimality; it is interactive; it requires Git; and
+subjective criteria are accepted with explicit caveats.
 
-If you use AI agents to change code and want to know \emph{for real}
-whether what was claimed is true, Kata is a concrete answer: it re-executes,
-compares, and refuses. The rest is conversation.
+For software engineering teams seeking objective assurance over AI-assisted code
+modifications, Kata provides an executable enforcement boundary: it re-executes
+claimed verification steps, confronts claims with the underlying repository, and
+programmatically rejects unverified or fraudulent assertions.
 
 \begin{acknowledgements}
 We thank the open-source communities of the Fable Method \cite{fable} and of
@@ -2248,29 +2226,17 @@ Section~\ref{sec:field} for the comparison that sharpened Kata's design.
 \noindent\textbf{Availability of data and materials.}
 Kata is open-source software distributed under the MIT
 License~\href{https://github.com/walternagai/kata/blob/main/LICENSE}{[MIT licensed]}.
-The source code, the installers, the adversarial trap suite, the
-comparison harness, the external-study harness, and the raw results of the
-evaluations reported in Section~\ref{sec:impact} are publicly available at
+The source code, installers, evaluation harnesses, and raw experimental data are publicly available at
 \href{https://github.com/walternagai/kata}{\texttt{github.com/walternagai/kata}}.
-The revision tag \texttt{v0.7.0} contains everything cited in this paper:
-the harnesses, the shared-fraction measurement
-(\texttt{scripts/build\_skills.py -{}-stats}), the session audit
-(\texttt{eval/external\_study.py -{}-audit-sessions}), and the archived
-results. The evaluated code under \texttt{src/kata/} was unchanged between
-commit \texttt{230e81a} (the trap-suite run) and commit \texttt{6f56b35}
-(the comparison and external-study campaign); later commits add measurement
-tooling and touch help text, version metadata, and documentation, not the
-verification logic. The final harnesses at \texttt{6f56b35} therefore
-review the code described in this paper. The \texttt{v0.6.0} release tag contains the CLI and the
-trap suite but predates the comparison and external-study harnesses;
-\texttt{v0.7.0} is the revision state cited here. The
-trap and comparison verdicts used for Tables~\ref{tab:results} and
-\ref{tab:gate-comparison} are reproducible with
+Release tag \texttt{v0.7.0} contains all artifacts cited in this paper:
+the test harnesses, shared-fraction measurements
+(\texttt{scripts/build\_skills.py -{}-stats}), and archived study logs.
+The evaluated logic under \texttt{src/kata/} was unchanged between commit \texttt{230e81a}
+(trap-suite run) and \texttt{6f56b35} (comparison and external campaign).
+All verdicts in Tables~\ref{tab:results} and \ref{tab:gate-comparison} are reproducible via
 \texttt{python3 eval/run\_traps.py} and \texttt{python3 eval/compare\_gates.py},
-and the external study with \texttt{python3 eval/external\_study.py}
-(the session audit with \texttt{-{}-audit-sessions -{}-runs-dir
-eval/results/external\_study\_sessions}, archived in
-\texttt{eval/\allowbreak results/\allowbreak external\_study\_audit.json}).
+and the external study via \texttt{python3 eval/external\_study.py}
+(session audit archived in \texttt{eval/\allowbreak results/\allowbreak external\_study\_audit.json}).
 
 \noindent\textbf{Author contributions.}
 W.A.N. conceptualized Kata, implemented the software, designed the
@@ -2281,16 +2247,13 @@ This research received no specific funding from public, commercial, or
 not-for-profit agencies.
 
 \noindent\textbf{Competing interests.}
-The author is the developer of Kata, the software evaluated in this
-paper. The evaluation is self-reported and the manuscript states its
-limitations; the author declares no other competing interests.
+The author is the developer of Kata. The evaluation is self-reported
+and states its limitations; the author declares no other competing interests.
 
 \noindent\textbf{Use of AI in writing.}
 The author used generative AI tools for language editing, \LaTeX{}
-formatting, and internal review of the manuscript. All technical claims,
-citations, and evaluation results were verified by the author and by the
-tooling described in this paper; the author takes full responsibility for
-the content.
+formatting, and internal review. All technical claims, citations, and evaluation
+results were verified by the author, who takes full responsibility for the content.
 
 \bibliographystyle{apalike}
 \bibliography{paper}

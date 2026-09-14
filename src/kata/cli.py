@@ -1254,7 +1254,14 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
 
     files = surgical.get("files", [])
     if files:
-        needed = [f.get("path") for f in files if f.get("necessary")]
+        # Aceita {"path": ...} e {"file": ...} — o schema do orquestrador
+        # OpenCode grava "file"; o CLI esperava "path" e quebrava no NoneType.
+        needed = [
+            f.get("path") or f.get("file")
+            for f in files
+            if f.get("necessary")
+        ]
+        needed = [f for f in needed if f]
         if needed:
             print(f"  Arquivos alterados: {', '.join(needed)}")
 

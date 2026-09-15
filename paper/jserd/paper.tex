@@ -88,7 +88,8 @@ that instruct the agent to be careful, Kata moves the objective parts of the
 discipline out of the prompt and into executable, testable Python code: lint,
 test, and coverage read real exit codes, the JUDGE confronts the task file
 with the repository state, and an audit mode grades each phase as followed,
-skipped, or faked, naming the risk each skip or fake created. Kata is
+skipped, faked, or degraded, naming the risk each grade other than followed
+created. Kata is
 implemented as a Python command-line interface with two agent frontends
 generated from a single source of truth. The paper describes the algorithms
 behind each executable phase --- the fit gate, the verification pipeline, the
@@ -97,7 +98,7 @@ harness --- presented as code-anchored, numbered Listings, so that the
 objective logic can be inspected and reproduced from the text itself. An
 executed comparison over 19
 adversarial scenarios shows detection parity with related gates; Kata returned
-every expected verdict at about one second per review, but ten of the eleven
+every expected verdict at about one second per review on the trap scenarios, but ten of the eleven
 agent false positives fell on blind-spot scenarios or on a Kata-specific diff
 convention, so the measured advantage is determinism and cost rather than
 general reviewer restraint; a minimum external
@@ -145,8 +146,8 @@ objective parts of the discipline out of the prompt and into executable,
 testable Python code. The lint, test, and coverage steps read real exit codes;
 the JUDGE re-runs claimed checks against the real repository, including
 committed and untracked files; and the audit mode grades each phase of a
-completed task as followed, skipped, or faked, naming the concrete risk each
-skip or fake created. A skill prescribes honesty; Kata provides an executable mechanism to verify it.
+completed task as followed, skipped, faked, or degraded, naming the concrete
+risk each grade other than followed created. A skill prescribes honesty; Kata provides an executable mechanism to verify it.
 
 This paper is a \textbf{software article}. Following the journal's
 guidelines, it describes a tool, positions it as a significant advance over
@@ -157,7 +158,7 @@ reports an executed comparison in which Kata and three alternative gates
 baseline) review the same 19 adversarial scenarios. All four detected the
 planted frauds; the comparison locates Kata's measured advantage in
 determinism and cost --- the same verdict every run, at about one second per
-review. Kata also made no false accusations, but most agent false positives
+review on the trap scenarios. Kata also made no false accusations, but most agent false positives
 fell on scenarios built around Kata's own conventions, so that result is not
 evidence of superior reviewer restraint.
 
@@ -237,8 +238,8 @@ plan can be reviewed or handed off before a single line changes.
 \texttt{kata --judge} re-runs every claimed check and hunts seven fraud
 categories before a merge or hand-over.
 \item \textbf{Auditing tasks after the fact}: \texttt{kata --audit} grades
-each phase of a completed task as followed, skipped, or faked, and names the
-concrete risk each skip or fake created.
+each phase of a completed task as followed, skipped, faked, or degraded, and
+names the concrete risk each grade other than followed created.
 \item \textbf{Continuous integration}: \texttt{kata --check-only} runs lint,
 tests, and coverage with the coverage gate, non-interactively, as a CI entry
 point.
@@ -485,32 +486,32 @@ re-scored with the final debris (s06) rule (see text). The last block excludes t
 (s12, s13, s19), whose ground truth expects UNVERIFIABLE, a verdict the
 agents' reporting format did not offer.}
 \centering
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \hline\hline
-Gate & Detection & FP (range) & Correct & Median time & Median output \\
+Gate & Detection & FP (range) & Correct & Median time \\
 \hline
-\multicolumn{6}{l}{\emph{Fraud scenarios (11 REFUTED)}} \\
-Kata & 11/11 & --- & 11/11 & 0.1\,s & 28 lines \\
-nova & 11/11 & --- & 11/11 & 16\,s & 1 line \\
-claude-wizard & 11/11 & --- & 11/11 & 17\,s & 1 line \\
-bare (prompt-only) & 11/11 & --- & 11/11 & 18\,s & 1 line \\
-\multicolumn{6}{l}{\emph{Non-REFUTED scenarios (8): honest (4), debris (1), blind spots (3)}} \\
-Kata & --- & 0 [0--0] & 8/8 & 1.0\,s & 28 lines \\
-nova & --- & 4 [3--4] & 4/8 & 40\,s & 1 line \\
-claude-wizard & --- & 2 [2--3] & 6/8 & 27\,s & 1 line \\
-bare (prompt-only) & --- & 5 [3--5] & 3/8 & 32\,s & 1 line \\
+\multicolumn{5}{l}{\emph{Fraud scenarios (11 REFUTED)}} \\
+Kata & 11/11 & --- & 11/11 & 0.1\,s \\
+nova & 11/11 & --- & 11/11 & 16\,s \\
+claude-wizard & 11/11 & --- & 11/11 & 17\,s \\
+bare (prompt-only) & 11/11 & --- & 11/11 & 18\,s \\
+\multicolumn{5}{l}{\emph{Non-REFUTED scenarios (8): honest (4), debris (1), blind spots (3)}} \\
+Kata & --- & 0 [0--0] & 8/8 & 1.0\,s \\
+nova & --- & 4 [3--4] & 4/8 & 40\,s \\
+claude-wizard & --- & 2 [2--3] & 6/8 & 27\,s \\
+bare (prompt-only) & --- & 5 [3--5] & 3/8 & 32\,s \\
 \hline
-\multicolumn{6}{l}{All scenarios --- correctness (final campaign)} \\
-Kata & & & \textbf{19/19} & & \\
-nova & & & 15/19 & & \\
-claude-wizard & & & 17/19 & & \\
-bare (prompt-only) & & & 14/19 & & \\
+\multicolumn{5}{l}{All scenarios --- correctness (final campaign)} \\
+Kata & & & \textbf{19/19} & \\
+nova & & & 15/19 & \\
+claude-wizard & & & 17/19 & \\
+bare (prompt-only) & & & 14/19 & \\
 \hline
-\multicolumn{6}{l}{Excluding blind-spot scenarios s12, s13, s19 (16) --- correctness (final campaign)} \\
-Kata & & & 16/16 & & \\
-nova & & & 15/16 & & \\
-claude-wizard & & & 15/16 & & \\
-bare (prompt-only) & & & 14/16 & & \\
+\multicolumn{5}{l}{Excluding blind-spot scenarios s12, s13, s19 (16) --- correctness (final campaign)} \\
+Kata & & & 16/16 & \\
+nova & & & 15/16 & \\
+claude-wizard & & & 15/16 & \\
+bare (prompt-only) & & & 14/16 & \\
 \hline\hline
 \end{tabular}
 \label{tab:gate-comparison}
@@ -540,13 +541,12 @@ real fraud (s06, debris), the three agent gates found the debris and spared
 the look-alike names, and Kata's verdict matched the expected VERIFIED
 WITH CAVEATS --- the trap suite verifies that its output lists the three
 debris findings (Section~\ref{sec:self-check}). Third, \textbf{the gates
-differ by orders of
-magnitude in time}: Kata's median review is about one second (0.1\,s on
-fraud scenarios, 1.0\,s on the others), while every agent gate takes tens
-of seconds per scenario, because the gate reads exit codes while the agents
+differ in time}: Kata's median review took 0.1\,s on fraud scenarios and
+1.0\,s on the others, while the agent gates' medians ranged from 16\,s to
+40\,s, because the gate reads exit codes while the agents
 run a model. Kata's verdicts here are model-independent: its measured
 advantage over the agent gates is determinism (the same verdict every run)
-and cost (about one second per review) --- not detection, which every gate
+and cost (0.1--1.0\,s per review on these fixtures) --- not detection, which every gate
 achieved on these fixtures, and not general restraint, since Kata's absence
 of false accusations was measured on scenarios built around its own
 conventions.
@@ -554,7 +554,7 @@ conventions.
 The comparison is subject to important methodological caveats that we state explicitly.
 First, the 19 scenarios and the underlying fraud taxonomy were developed iteratively alongside Kata to serve as regression fixtures. Consequently, the test workloads are strictly in-distribution for Kata --- which includes dedicated architectural mechanisms for these specific boundary conditions --- and out-of-distribution for the alternative gates. The false positives incurred by the agent gates were concentrated precisely on scenarios exercising these repository-level conventions (e.g., \texttt{approved\_commit} diff ceiling on s17, Git local excludes on s19, and missing language probes on s12). Hence, the false positive metric reflects familiarity with these architectural conventions and the presence of direct repository query tools as much as generic reviewer restraint.
 
-Second, the alternative tools were evaluated in a constrained, emulated configuration: \texttt{nova} and \texttt{claude-wizard} were invoked as structured review prompts within a single headless Claude Code CLI session (\texttt{claude -p}), rather than within their native end-to-end interactive developer workflows. For instance, \texttt{nova} provides a full Model Context Protocol (MCP) server with specialized subagents that was not wired into this isolated review harness, which was scoped to measure a standalone, single-turn change review pass. Furthermore, the agent gates operated through a single underlying LLM (Claude Code's default model), meaning their false positives and heuristic tendencies characterize this specific model under review prompting, rather than the tools in their entirety.
+Second, the alternative tools were evaluated in a constrained, emulated configuration: \texttt{nova} and \texttt{claude-wizard} were invoked as structured review prompts within a single headless Claude Code CLI session (\texttt{claude -p}), rather than within their native end-to-end interactive developer workflows. For instance, \texttt{nova} provides a full Model Context Protocol (MCP) server with specialized subagents that was not wired into this isolated review harness, which was scoped to measure a standalone, single-turn change review pass. Furthermore, the agent gates operated through a single underlying LLM, Claude Code's default model. The harness did not record which model that was; the local Claude Code session logs of the final campaign's 57 agent reviews, which are not archived in the repository, show \texttt{claude-sonnet-5} through Claude Code CLI 2.1.268. This means their false positives and heuristic tendencies characterize this specific model under review prompting, rather than the tools in their entirety.
 
 Third, agent reviews are inherently stochastic, and the scoring rules changed during the study. The repository archives five comparison files, described in \texttt{eval/results/README.md}. Two are complete, independent campaigns: \texttt{compare\_gates.json} and the final \texttt{compare\_gates\_round2.json} reported in Table~\ref{tab:gate-comparison}. \texttt{compare\_gates\_refined.json} re-runs only the eight non-REFUTED scenarios; \texttt{compare\_gates\_merged.json} consolidates the first campaign with that re-run and is not an independent campaign; and \texttt{compare\_gates\_final.json} is a campaign aborted by the account spend limit, whose INCONCLUSIVE entries from s13 onward are infrastructure blocks, not gate behaviour. Two scoring changes were made after the first campaign's results were seen: the agent-output parser was replaced by a decoder that takes the first complete JSON object, and the debris scenario (s06) stopped counting an accusation of the real debris as a false positive, counting one only when a look-alike file is named. The s06 change favoured the agent gates: under the first rule, all three were charged a false positive on s06 for finding the real debris. The parser change did not: in the first campaign, the baseline's answer on the honest s07 task could not be parsed and was recorded as INCONCLUSIVE, although its archived prefix reports \texttt{fraud\_detected: true}, so the final parser would most likely have scored it as a false positive. Scored as they were at the time, the agent false-positive counts in the two complete campaigns were 4 and 4 for nova, 4 and 2 for claude-wizard, and 4 and 5 for the baseline; applying the final s06 rule to the first campaign lowers each of its counts to 3 (4 for the baseline if its s07 accusation is counted), which gives the ranges in Table~\ref{tab:gate-comparison}. Re-scoring the final campaign with the final rules from its archived output reproduces every published status. The first campaign cannot be fully re-scored, because it archives only a truncated excerpt of each agent answer (at most 300 characters); the s06 answers fit whole, so that re-scoring is verifiable, while the s07 answer is cut off and remains INCONCLUSIVE. Kata yielded identical verdicts across every run, with zero false positives on these Kata-built fixtures. Furthermore, the agent reporting schema lacked an explicit \texttt{UNVERIFIABLE} verdict, forcing agents either to accuse or remain silent, precluding explicit confessions of unobservable state.
 
@@ -578,7 +578,7 @@ repository.
 
 Architecturally, Kata operationalizes this discipline along two distinct usage tiers:
 (1) an \emph{interactive authoring scaffold} (\texttt{kata --task}), which guides the developer or agent step-by-step through the nine-phase cycle, generating structured evidence, enforcing minimality, and anchoring baseline commits in the task file; and
-(2) a \emph{decoupled reviewer gate} (\texttt{kata --judge} and \texttt{kata --check-only}), which operates non-interactively in approximately two seconds, re-executing verification commands and auditing repository diffs against baseline anchors. This architectural separation ensures that while the authoring cycle provides deliberate friction and governance for complex, open-ended tasks, automated pipelines and routine pre-commit workflows can deploy the verification gate, which took about two seconds per change in our measurements (Section~\ref{sec:external-evaluation}).
+(2) a \emph{decoupled reviewer gate} (\texttt{kata --judge} and \texttt{kata --check-only}), which operates non-interactively, re-executing verification commands and auditing repository diffs against baseline anchors. This architectural separation ensures that while the authoring cycle provides deliberate friction and governance for complex, open-ended tasks, automated pipelines and routine pre-commit workflows can deploy the verification gate, which took a median of about two seconds per change on the real repositories of Section~\ref{sec:external-evaluation}.
 
 \begin{figure*}[!ht]
 \centering
@@ -814,7 +814,7 @@ directions. It does not over-claim: claims it cannot re-execute are
 confessed, not assumed. And it does not under-claim: claims it can
 re-execute are always re-run, never taken at face value. The same model
 applies to the audit mode, which grades each phase as followed, skipped,
-or faked by comparing the task file's content with what the phase was
+faked, or degraded by comparing the task file's content with what the phase was
 supposed to record. Section~\ref{sec:algorithms} makes the objective
 logic behind these phases explicit: Listings~\ref{alg:fit}--\ref{alg:traps}
 describe, in a readable form, exactly what each executable phase computes,
@@ -1646,12 +1646,10 @@ interface, so that the demonstrations of
 Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced. The
 canonical user documentation --- README, \texttt{DOCUMENTATION.md}, and
 the installers --- is versioned with the source at
-\href{https://github.com/walternagai/kata/tree/v0.6.0}{\texttt{github.com/walternagai/kata/tree/v0.6.0}};
-the instructions below mirror that tagged release. The comparison and
-external-study harnesses referenced in this paper postdate the tag and are
-present in commit \texttt{6f56b35}; the measurement and audit tooling cited
-in Sections~\ref{sec:design} and \ref{sec:external-evaluation} is included
-in tag \texttt{v0.7.0}. The Declarations section gives the exact commits
+\href{https://github.com/walternagai/kata/tree/v0.7.0}{\texttt{github.com/walternagai/kata/tree/v0.7.0}};
+the instructions below mirror that tagged release, which also contains the
+comparison and external-study harnesses and the measurement and audit
+tooling cited in Sections~\ref{sec:design} and \ref{sec:external-evaluation}. The Declarations section gives the exact commits
 and the reproduction commands.
 
 \subsection{Installation}
@@ -2114,7 +2112,7 @@ produce.
 
 This suggests two usage hypotheses for future evaluation, not guidelines
 established by these data:
-(1)~\textbf{Continuous integration and pull-request gating} with the decoupled verification gate (\texttt{kata --judge} or \texttt{kata --check-only}), which reviewed each change here in about two seconds, subject to the evasions of Section~\ref{sec:threat-model};
+(1)~\textbf{Continuous integration and pull-request gating} with the decoupled verification gate (\texttt{kata --judge} or \texttt{kata --check-only}), which reviewed each change here in a median of about two seconds (at most 116\,s), subject to the evasions of Section~\ref{sec:threat-model};
 (2)~\textbf{Complex or autonomous authoring} with the full scaffold (\texttt{kata --task}) for open-ended, multi-file, or safety-critical changes, where the nine-fold overhead would have to be justified by effects this study did not observe.
 
 The \texttt{kata} arm is also auditable after the fact. The 24 task files the
@@ -2187,7 +2185,7 @@ of Section~\ref{sec:self-check}.
 The gate comparison of Section~\ref{sec:exec-comparison} complements the
 external study with a second kind of external evidence: four gates reviewed
 the same 19 trap scenarios with detection parity. Kata returned every
-expected verdict at a median review time of about one second, while ten of
+expected verdict at a median review time of about one second on those scenarios, while ten of
 the eleven agent false positives fell on blind-spot scenarios or on a
 Kata-specific diff convention (Section~\ref{sec:exec-comparison}). That comparison is
 a direct answer to the journal's request for a software article to
@@ -2228,7 +2226,7 @@ this positioning. All four gates detected every planted fraud, separating
 honest and blind-spot scenarios. Detection did not require an executable core
 on these fixtures, as prompted reviewers carrying the fraud taxonomy matched
 code-executing gates. What the executable core buys is a model-independent
-verdict: reproducible outcomes, review times of roughly one second, and
+verdict: reproducible outcomes, review times of 0.1--1.0\,s on the trap scenarios, and
 honest confessions when mechanisms are unobservable. As analyzed in
 Section~\ref{sec:exec-comparison}, agent false positives stemmed from
 repository boundary conditions (\texttt{approved\_commit}, Git-ignores,
@@ -2336,7 +2334,8 @@ boundaries lie. The 19 trap scenarios close on the JUDGE's two-sided contract:
 every planted fraud is detected with the expected verdict and no honest scenario
 is accused. The executed comparison of Section~\ref{sec:exec-comparison} shows
 detection parity across gates. Kata returned every expected verdict at
-approximately one second per review, but most agent false positives fell on
+approximately one second per review on the trap scenarios (a median of about
+two seconds on real repositories), but most agent false positives fell on
 blind-spot scenarios and on a Kata-specific convention, so the comparison
 establishes determinism and cost rather than superior restraint. The external
 study shows the cycle is feasible on real repositories at roughly nine times

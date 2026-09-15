@@ -83,8 +83,9 @@ the following situations:
   debris, and baseline tampering — the YAML's `base_commit` diverging from the
   Git anchor recorded when the task started) before a merge or hand-over.
 - **Auditing tasks after the fact**: `kata --audit` grades each phase of a
-  completed task as followed, skipped, or faked, and names the concrete risk
-  each skip or fake created — useful for review queues and hand-overs.
+  completed task as followed, skipped, faked, or degraded, and names the
+  concrete risk each grade other than followed created — useful for review
+  queues and hand-overs.
 - **Continuous integration**: `kata --check-only` runs Ruff, pytest, and
   coverage with the coverage gate, non-interactively, as a CI entry point.
 - **Unsticking a fix-verify loop**: after 3 failed verification attempts the

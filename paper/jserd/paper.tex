@@ -103,8 +103,10 @@ agent false positives fell on blind-spot scenarios or on a Kata-specific diff
 convention, so the measured advantage is determinism and cost rather than
 general reviewer restraint; a minimum external
 study of twelve real bugs fixed by two models with and without the cycle
-found no weakened tests in either condition, and the JUDGE flagged the one
-case of undeclared scope. The evaluation establishes the JUDGE's two-sided
+found no weakened tests in either condition, and the independent JUDGE review
+flagged the one case of undeclared scope, while the sessions' own JUDGE runs
+falsely refuted six honest fixes under a rule corrected after the evaluated
+version. The evaluation establishes the JUDGE's two-sided
 contract on fixtures we built ourselves. The judgment phases of the cycle
 were not ablated and were evaluated only for cost, and a controlled study of
 whether the cycle improves the quality of AI-assisted changes remains future
@@ -1392,7 +1394,14 @@ four;
 \item \textbf{unauthorized action}: an irreversible action was taken without
 a documented AUTH line;
 \item \textbf{specification betrayal}: the intent gate recorded a
-disagreement and the task was approved anyway;
+disagreement and the task was approved anyway. In the evaluated version this
+also caught disagreements the gate had resolved and recorded --- the normal
+record of a bug fix, whose honest completion came back \texttt{REFUTED}, as it
+did in six in-session runs of the external study
+(Section~\ref{sec:external-evaluation}). Since
+commit \texttt{15ccb7a}, a recorded \texttt{conflict\_resolution} is accepted
+without verification and only an unresolved disagreement is betrayal; a
+twenty-first trap scenario (s21) covers the resolved case;
 \item \textbf{debris}: temporary files in the diff;
 \item \textbf{baseline tampering}: the \texttt{base\_commit} declared in
 the YAML diverges from the Git anchor recorded when the task started.
@@ -2054,7 +2063,7 @@ test-weakening tactics. Consequently, the external study demonstrates the operat
 feasibility and scope integrity of the gate on third-party codebases, while
 validation of the JUDGE's fraud detection capabilities rests on the 19 adversarial
 trap scenarios of Section~\ref{sec:self-check} where frauds were actively planted.
-The failure the external study did observe was
+The agent failure the external study did observe was
 \emph{undeclared scope}: in one run (deepseek, bare), the session
 changed \texttt{tools/intranges.py} to regenerate a code-point table but
 declared only \texttt{idna/core.py}; the JUDGE flagged the extra file as
@@ -2157,11 +2166,25 @@ altogether. While Kata's audit appropriately avoided validating unverified succe
 on its own authority, industrial adoption requires a formal mechanism for declaring
 known baseline debt (\texttt{baseline\_failures}) at \texttt{base\_commit},
 allowing the gate to certify that no new regressions were introduced without
-penalizing pre-existing repository debt. The harness did not
-capture a JUDGE verdict from the sessions themselves
-(\texttt{session\_judge\_verdict} is null in all 48 runs), so the JUDGE
-enters this study as the independent review pass, not as the sessions' own
-final step.
+penalizing pre-existing repository debt.
+
+The harness field for the sessions' own JUDGE verdict
+(\texttt{session\_judge\_verdict}) is null in all 48 runs because the harness
+searched each session's text output for the CLI's \texttt{KATA JUDGE}
+banner, which no session reproduces, instead of
+reading the task files, which record the verdict. Twelve of the 24
+\texttt{kata} sessions ran the JUDGE as their final step: six returned
+VERIFIED, and six, all with \texttt{claude-sonnet-5} (t03, t04, t05, t06, t09,
+t11), returned REFUTED, each for \texttt{spec\_betrayal} alone on an intent
+disagreement the session had resolved and recorded. These are false
+accusations of honest fixes, and each session's own notes attribute the
+verdict to the rule firing on any recorded disagreement. They come from the
+behaviour of the evaluated JUDGE described in Section~\ref{sec:judge}, fixed
+after the evaluated version in commit \texttt{15ccb7a}. The JUDGE results in
+Table~\ref{tab:external-results} are from the independent review pass, run on
+synthesized task files whose intent section records no disagreement; their
+absence of false accusations does not extend to the sessions' own JUDGE
+runs.
 
 \subsubsection{Caveats}
 
@@ -2311,8 +2334,9 @@ limited number of honest scenarios (four). Second, while the external study
 of Section~\ref{sec:external-evaluation} evaluates real historical bugs
 across six public open-source repositories, the tasks are intentionally small
 Python bug fixes with existing pytest suites, evaluated with one run per
-cell across two models. They demonstrate feasibility and restraint on
-non-author code, but do not represent complex multi-file feature additions,
+cell across two models. They demonstrate feasibility on non-author code and
+restraint in the independent review pass, not in the sessions' own JUDGE
+runs, six of which falsely accused honest fixes; they do not represent complex multi-file feature additions,
 non-Python codebases, or proprietary enterprise software. A broader
 multi-language study across diverse model tiers and task complexities
 remains future work. The tool itself, however, is dogfooded in production on

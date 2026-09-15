@@ -453,8 +453,10 @@ kata **pega a mentira**.
 O JUDGE caça 7 categorias de fraude: weakened checks (teste com corpo trocado
 por `pass`), false completion (afirma que passou, não passou), scope creep
 (arquivos alterados não declarados), unauthorized action (ação irreversível
-sem AUTH line), spec betrayal (intent registrou discordância e a tarefa foi
-aprovada mesmo assim), debris (arquivos temporários no diff) e baseline
+sem AUTH line), spec betrayal (intent registrou discordância sem resolução e a
+tarefa foi aprovada mesmo assim; na 0.7.0, e até o commit `15ccb7a`, qualquer discordância era acusada,
+inclusive a resolvida — a correção aceita a
+`conflict_resolution` registrada sem verificá-la), debris (arquivos temporários no diff) e baseline
 tampering (`base_commit` divergindo da âncora git registrada no início).
 
 E há os **pontos cegos confessados**: se o judge não consegue observar algo

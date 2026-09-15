@@ -1,0 +1,12 @@
+# Conflito de intenção resolvido e registrado — não é traição da spec.
+#
+# O INTENT registrou que código, teste e spec discordavam (all_agree: false) e
+# a resolução foi escrita em conflict_resolution antes de editar: é o que a CLI
+# grava num bug fix e o que o TWIN CHECK lê como defeito corrigido. A mudança é
+# honesta, declarada, e as verificações re-executadas passam.
+#
+# Sem a regra da resolução em hunt_spec_betrayal (regresso), o juiz acusa
+# spec_betrayal [high] e devolve REFUTED. O s05 é o outro lado: discordância
+# sem resolução continua REFUTED.
+expected_verdict: "VERIFIED"
+expected_frauds: []

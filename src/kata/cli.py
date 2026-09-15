@@ -1105,7 +1105,7 @@ def _detect_twins_owed(data: dict[str, Any]) -> bool:
     normal de uma tarefa concluída, não evidência de defeito corrigido.
     Sobram os sinais que de fato indicam correção de defeito.
     """
-    # Sinal 1: intent teve conflito (spec betrayal potencial)
+    # Sinal 1: intent registrou conflito código/teste/spec (resolvido ou não)
     intent = _secao(data, "intent")
     if intent.get("answered") and not intent.get("all_agree"):
         return True

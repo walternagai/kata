@@ -1,0 +1,46 @@
+task: conflito-resolvido
+status: approved
+base_commit: BASE_COMMIT_PLACEHOLDER
+fit:
+  trivial: false
+  route: code-loop
+  reason: "Mudança cirúrgica em calculadora."
+  answered: true
+think:
+  problem: "Melhorar a formatação da divisão."
+  answered: true
+simplify:
+  minimum_code: true
+  no_single_use_abstractions: true
+  no_speculative_config: true
+  answered: true
+surgical:
+  files:
+    - path: src/calculadora.py
+      necessary: true
+    - path: tests/test_calculadora.py
+      necessary: true
+  removed_imports_clean: true
+  answered: true
+intent:
+  code_does: "não existe formatação do resultado"
+  check_expects: "o teste novo espera formatar_resultado com duas casas"
+  spec_says: "README: resultados exibidos com duas casas decimais"
+  all_agree: false
+  conflict_resolution: "spec > código: implementar formatar_resultado com duas casas, como o teste espera"
+  answered: true
+verify:
+  ruff_clean: true
+  tests_pass: true
+  coverage_pct: 100.0
+  coverage_pass: true
+  success_criteria_met: true
+artifact:
+  intent_owed: true
+  intent_present: true
+  auth_owed: false
+  auth_present: true
+  pending_owed: false
+  pending_present: true
+  twins_owed: false
+  twins_present: true

@@ -447,7 +447,22 @@ def collect_unverifiable_claims(task_data: dict[str, Any]) -> list[str]:
     claims: list[str] = []
     if task_data.get("verify", {}).get("success_criteria_met"):
         claims.append("critério de sucesso satisfeito")
+    resolucao = _resolucao_de_conflito(task_data.get("intent", {}))
+    if resolucao:
+        claims.append(f"conflito código/teste/spec resolvido por declaração: {resolucao}")
     return claims
+
+
+def _resolucao_de_conflito(intent: dict[str, Any]) -> str:
+    """A resolução registrada para uma discordância do INTENT, ou "".
+
+    Só texto não vazio conta: `true`, uma lista ou espaços num YAML escrito
+    à mão não registram resolução nenhuma.
+    """
+    if not intent.get("answered") or intent.get("all_agree") is not False:
+        return ""
+    resolucao = intent.get("conflict_resolution")
+    return resolucao.strip() if isinstance(resolucao, str) else ""
 
 
 # ── git helpers ───────────────────────────────────────────────────────────
@@ -1206,15 +1221,29 @@ def hunt_spec_betrayal(task_data: dict[str, Any]) -> list[JudgeFraud]:
     `{answered: true}` sem `all_agree` viraria fraude high (K-06). O
     tratamento de omissão é o mesmo das demais seções: vira ponto cego na
     normalização, nunca acusação.
+
+    Discordância com `conflict_resolution` registrada não é traição: é o
+    INTENT funcionando. A CLI grava exatamente isso quando o conflito é
+    resolvido antes de editar, e o TWIN CHECK lê o mesmo `all_agree: false`
+    como defeito corrigido — acusar fazia toda correção honesta sair
+    REFUTED. A resolução é autodeclarada e o juiz não a verifica: ela vai
+    para as claims aceitas sem verificação.
     """
     frauds: list[JudgeFraud] = []
     intent = task_data.get("intent", {})
-    if intent.get("answered") and intent.get("all_agree") is False:
+    if (
+        intent.get("answered")
+        and intent.get("all_agree") is False
+        and not _resolucao_de_conflito(intent)
+    ):
         frauds.append(
             JudgeFraud(
                 type="spec_betrayal",
                 severity="high",
-                description="intenção não alinhada: código, teste e spec discordam",
+                description=(
+                    "intenção não alinhada: código, teste e spec discordam "
+                    "e nenhuma resolução foi registrada"
+                ),
                 evidence=(
                     f"code_does={intent.get('code_does', '')} | "
                     f"check_expects={intent.get('check_expects', '')} | "

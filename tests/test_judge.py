@@ -130,6 +130,19 @@ class TestCollectClaims:
         assert collect_unverifiable_claims({"verify": {"success_criteria_met": False}}) == []
         assert collect_unverifiable_claims({}) == []
 
+    def test_resolucao_de_conflito_entra_nas_claims_nao_verificaveis(self) -> None:
+        """A resolução do conflito código/teste/spec é declarada no INTENT e
+        nenhum comando a reproduz: o juiz a aceita, mas diz que não verificou."""
+        data = {
+            "intent": {
+                "answered": True,
+                "all_agree": False,
+                "conflict_resolution": "spec ganha: teste corrigido",
+            }
+        }
+        claims = collect_unverifiable_claims(data)
+        assert any("spec ganha: teste corrigido" in c for c in claims)
+
     def test_partial_claims(self) -> None:
         data = {"verify": {"ruff_clean": True}}
         claims = collect_claims(data)
@@ -725,6 +738,32 @@ class TestHuntSpecBetrayal:
         assert len(frauds) == 1
         assert "spec" in frauds[0].description.lower()
 
+    def test_discordancia_resolvida_nao_e_traicao(self) -> None:
+        """O INTENT da CLI grava `all_agree: false` com `conflict_resolution`
+        quando o conflito é resolvido antes de editar — o fluxo normal de um
+        bug fix, que o TWIN CHECK lê como defeito corrigido. Acusar isso de
+        traição da spec fazia toda correção honesta sair REFUTED."""
+        task = {
+            "intent": {
+                "answered": True,
+                "all_agree": False,
+                "code_does": "retorna None",
+                "check_expects": "retorna str",
+                "spec_says": "retorna str",
+                "conflict_resolution": "spec > código: código passa a retornar str",
+            }
+        }
+        assert hunt_spec_betrayal(task) == []
+
+    @pytest.mark.parametrize("resolucao", ["", "   ", None, True, ["x"], {"spec": "ganha"}])
+    def test_resolucao_vazia_ou_nao_texto_continua_traicao(self, resolucao) -> None:
+        """Só uma resolução escrita desarma a acusação: vazio, espaços ou um
+        valor que não é texto (YAML à mão) não registram resolução nenhuma."""
+        task = {"intent": {"answered": True, "all_agree": False, "conflict_resolution": resolucao}}
+        frauds = hunt_spec_betrayal(task)
+        assert len(frauds) == 1
+        assert frauds[0].severity == "high"
+
 
 class TestHuntDebris:
     """Testa caça a detritos."""
@@ -1002,6 +1041,30 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         result = judge_task(task)
         assert result.verdict == "REFUTED"
         assert any(f.type == "spec_betrayal" for f in result.frauds)
+
+    def test_spec_betrayal_resolvida_nao_refuta(
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        mock_diff.return_value = ""
+        mock_files.return_value = []
+        mock_run_all.return_value = {"ruff": VerifyResult(ok=True, output="")}
+        task = {
+            "verify": {"ruff_clean": True},
+            "intent": {
+                "answered": True,
+                "all_agree": False,
+                "conflict_resolution": "spec ganha",
+            },
+        }
+        result = judge_task(task)
+        assert not any(f.type == "spec_betrayal" for f in result.frauds)
+        assert result.verdict != "REFUTED"
+        assert any("spec ganha" in c for c in result.unverifiable_claims)
 
     def test_claims_collected(
         self,

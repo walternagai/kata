@@ -49,7 +49,7 @@ python -m kata --judge
 | 2 | **False completion** | Relatório afirma que verificação passou, mas re-execução mostra falha | 🔴 alta |
 | 3 | **Scope creep** | Arquivos alterados que não foram declarados como necessários na fase SURGICAL. **Exceção (S2/CR-002):** quando `fit.trivial=true` e `surgical.files=[]`, SURGICAL foi pulado legitimamente pelo triviality gate — não há o que declarar e a fraude não se aplica. `fit.trivial=false` com `surgical.files=[]` continua acusando: a ausência é ilegitima (SURGICAL pulado sem motivo). | 🟡 média/alta |
 | 4 | **Unauthorized action** | Ação externa (push, deploy) realizada sem AUTH line documentada | 🔴 alta |
-| 5 | **Spec betrayal** | Código alterado para satisfazer teste que contradiz a especificação | 🔴 alta |
+| 5 | **Spec betrayal** | O INTENT registrou que código, teste e spec discordam (`all_agree: false`) e a tarefa foi aprovada sem `conflict_resolution`. **Exceção:** discordância com resolução registrada (texto não vazio) é o INTENT funcionando — o fluxo normal de um bug fix — e não é fraude; a resolução é listada entre as claims aceitas sem verificação. | 🔴 alta |
 | 6 | **Debris** | Arquivos temporários (`.tmp`, `.bak`), debug prints, TODOs, lixo | 🟢 baixa |
 | 7 | **Baseline tampering** | `base_commit` do YAML diverge da âncora `refs/kata/base/<hash>` registrada no início, ou não é ancestral do HEAD — mover o baseline encolhe o diff que o juiz examina | 🔴 alta |
 

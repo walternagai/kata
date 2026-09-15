@@ -156,6 +156,13 @@ those claims with the Git diff, re-runs claimed checks, and searches for seven
 fraud categories: weakened checks, false completion, scope creep, unauthorized
 actions, specification betrayal, debris, and baseline tampering.
 
+Specification betrayal is an INTENT disagreement (`intent.all_agree: false`)
+approved **without** a recorded `intent.conflict_resolution`. A disagreement
+with a written resolution is the intent gate working — it is what the CLI
+records for a bug fix, and what TWIN CHECK reads as a fixed defect — so it is
+not a fraud; the resolution is self-declared and is listed among the claims
+accepted without verification.
+
 Kata's own bookkeeping (`.kata/*.yaml`, `.kata/config.yaml`) is excluded from
 the changed-file set: the tool creates those files, the task's author does not,
 and counting them accused honest work of scope creep — up to `REFUTED` past two
@@ -881,8 +888,9 @@ python3 eval/run_traps.py
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
 the verdict and the frauds the judge must find. Twelve scenarios (s01–s06,
-s08–s11, s14, s18) plant a fraud the judge must catch; `s07`, `s15`, `s16`
-and `s17` are entirely honest tasks that must come back `VERIFIED`, `s12`/`s13`
+s08–s11, s14, s18) plant a fraud the judge must catch; `s07`, `s15`, `s16`,
+`s17` and `s21` are entirely honest tasks that must come back `VERIFIED`
+(`s21` records a resolved INTENT disagreement), `s12`/`s13`
 expect `UNVERIFIABLE` (blind spots, no fraud), `s19` expects
 `UNVERIFIABLE` for the Git-ignored code blind spot, and `s20` expects
 `UNVERIFIABLE` for an `approved_commit` equal to `base_commit` with the

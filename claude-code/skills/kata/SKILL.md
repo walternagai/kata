@@ -501,7 +501,7 @@ gravado por um host que tenha feito e verificado a edição de fato.
    - **False completion**: re-execução falhou — corrija e reexecute
    - **Scope creep**: arquivos não declarados — reverta ou justifique
    - **Unauthorized action**: ação externa sem AUTH — documente ou reverta
-   - **Spec betrayal**: spec contradita — alinhe código/teste/spec
+   - **Spec betrayal**: discordância de INTENT aprovada sem resolução — volte ao INTENT, resolva o conflito com o usuário pela ordem de autoridade e só então reaprove. Não escreva `conflict_resolution` depois do veredito só para limpá-lo: o juiz aceita o texto sem verificar, e isso seria a fraude que ele caça
    - **Debris**: limpe arquivos temporários, debug prints, TODOs
 6. Registre o resultado no `.kata/<task>.yaml` sob chave `judge`.
 

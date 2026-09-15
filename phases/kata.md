@@ -179,7 +179,9 @@ approved_commit: ""   # R14: HEAD no momento da aprovação. O JUDGE diffa
                         # então arquivos alterados por tasks POSTERIORES não
                         # contam como "não declarados" para esta. Ausente em
                         # tasks antigas (aprovadas antes desta rodada) — elas
-                        # continuam diffando até HEAD.
+                        # continuam diffando até HEAD. Não é gravado enquanto
+                        # o HEAD ainda é o base_commit (aprovação antes do
+                        # commit): teto igual ao piso é janela de diff vazia.
 fit:
   trivial: false
   route: code-loop     # code-loop | plan-first | question | research | inference

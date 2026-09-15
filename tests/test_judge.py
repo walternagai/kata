@@ -1553,6 +1553,67 @@ class TestJudgeTaskDetectsCommittedFraud:
         result = judge_task(task, cwd=tmp_path)
         assert any(f.type == "baseline_tampering" for f in result.frauds)
 
+    @staticmethod
+    def _repo_com_teste_real(tmp_path: Path, task: str) -> str:
+        """Commita um teste com asserção de verdade e ancora o baseline nele."""
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_foo.py").write_text(
+            "def test_foo():\n    assert soma(1, 2) == 3\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        assert record_baseline_ref(task, base, cwd=tmp_path) is True
+        return base
+
+    def test_approved_commit_igual_ao_base_antes_do_commit_ve_a_arvore(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """Janela vazia (artigo JSERD §6.4): a tarefa aprovada antes do commit
+        grava approved_commit == base_commit, e `git diff base base` é vazio e
+        ignora a árvore de trabalho — o teste enfraquecido e ainda não
+        commitado saía VERIFIED. Com o HEAD ainda no baseline não existe task
+        posterior a isolar (R14), então o juiz difa contra a árvore."""
+        monkeypatch.chdir(tmp_path)
+        base = self._repo_com_teste_real(tmp_path, "t")
+        (tmp_path / "tests" / "test_foo.py").write_text(
+            "def test_foo():\n    pass\n", encoding="utf-8"
+        )
+
+        task = {"task": "t", "base_commit": base, "approved_commit": base, "verify": {}}
+        result = judge_task(task, cwd=tmp_path)
+        assert any(f.type == "weakened_checks" for f in result.frauds)
+        assert result.verdict == "REFUTED"
+
+    def test_approved_commit_igual_ao_base_depois_do_commit_nao_e_verified(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """Janela vazia depois do commit: o trabalho está em algum commit
+        posterior ao teto, misturável com tasks seguintes, e o juiz não tem
+        como separá-lo. O que não pode acontecer é VERIFIED sem ter olhado —
+        vira ponto cego confessado."""
+        monkeypatch.chdir(tmp_path)
+        base = self._repo_com_teste_real(tmp_path, "t")
+        (tmp_path / "tests" / "test_foo.py").write_text(
+            "def test_foo():\n    pass\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "commit", "-q", "-am", "tarefa"], cwd=tmp_path, check=True)
+
+        # Um check re-executado com sucesso: sem ele o veredito já sairia
+        # UNVERIFIABLE por outro ponto cego e o teste passaria sem o fix.
+        task = {
+            "task": "t",
+            "base_commit": base,
+            "approved_commit": base,
+            "verify": {"ruff_clean": True},
+        }
+        with patch("kata.judge.run_all", return_value={"ruff": VerifyResult(ok=True, output="")}):
+            result = judge_task(task, cwd=tmp_path)
+        assert result.verdict != "VERIFIED"
+        assert any("janela de diff vazia" in spot for spot in result.blind_spots)
+
 
 class TestIsDebrisFile:
     """Regra única de detrito, compartilhada entre JUDGE e CLI."""

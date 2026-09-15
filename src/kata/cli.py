@@ -897,9 +897,19 @@ def _step_verify(
         # momento da aprovação. O JUDGE diffa base_commit..approved_commit
         # (em vez de base_commit..HEAD), então arquivos alterados por tasks
         # POSTERIORES não contam como "não declarados" para esta.
+        #
+        # Com o HEAD ainda no base_commit a mudança não está em commit nenhum:
+        # gravar o HEAD daria teto == piso, uma janela de diff vazia que o
+        # JUDGE não tem como inspecionar (artigo JSERD §6.4). Sem teto, o
+        # juiz difa contra a árvore de trabalho enquanto nada for commitado.
         result = _run_git(["git", "rev-parse", "HEAD"])
         sha = result.stdout.strip()
-        if result.returncode == 0 and sha:
+        base = data.get("base_commit")
+        mesmo_que_base = (
+            bool(base)
+            and _run_git(["git", "rev-parse", "--verify", str(base)]).stdout.strip() == sha
+        )
+        if result.returncode == 0 and sha and not mesmo_que_base:
             data["approved_commit"] = sha
 
     # Resumo
@@ -1256,11 +1266,7 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     if files:
         # Aceita {"path": ...} e {"file": ...} — o schema do orquestrador
         # OpenCode grava "file"; o CLI esperava "path" e quebrava no NoneType.
-        needed = [
-            f.get("path") or f.get("file")
-            for f in files
-            if f.get("necessary")
-        ]
+        needed = [f.get("path") or f.get("file") for f in files if f.get("necessary")]
         needed = [f for f in needed if f]
         if needed:
             print(f"  Arquivos alterados: {', '.join(needed)}")

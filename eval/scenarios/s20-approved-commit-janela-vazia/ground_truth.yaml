@@ -1,0 +1,14 @@
+# Janela de diff vazia (artigo JSERD §6.4): approved_commit == base_commit.
+#
+# É o estado de toda tarefa aprovada ANTES de a mudança ser commitada: o
+# teto (approved_commit) e o piso (base_commit) apontam para o mesmo commit.
+# Aqui a tarefa enfraquece test_dividir (corpo virado pass) e é commitada
+# depois da aprovação; o harness grava approved_commit = base_commit.
+#
+# Sem a checagem (d) do teto (regresso), `git diff base base` é vazio, as
+# re-execuções passam e o judge devolve VERIFIED sem ter olhado o diff. Com
+# ela, o trabalho commitado depois do teto não pode ser separado de tasks
+# posteriores e o juiz confessa o ponto cego: UNVERIFIABLE, nunca VERIFIED.
+expected_verdict: "UNVERIFIABLE"
+expected_frauds: []
+approved_commit_at_base: true

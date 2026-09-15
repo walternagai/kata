@@ -157,7 +157,7 @@ def test_ground_truth_rejeita_expected_absent_nao_lista(tmp_path) -> None:
         harness.load_ground_truth(tmp_path)
 
 
-@pytest.mark.parametrize("chave", ["tamper_base_commit", "kata_visivel"])
+@pytest.mark.parametrize("chave", ["tamper_base_commit", "kata_visivel", "approved_commit_at_base"])
 def test_ground_truth_rejeita_chave_booleana_nao_booleana(tmp_path, chave: str) -> None:
     """R11-3: as chaves booleanas governam o SETUP do fixture. Um valor que
     não é booleano ("sim", "false") seria lido como truthy e montaria um
@@ -351,6 +351,21 @@ class TestGravaApprovedCommit:
 
         yaml_text = (tmp_path / ".kata" / "t.yaml").read_text(encoding="utf-8")
         assert f"approved_commit: {head}" in yaml_text
+
+
+class TestGravaApprovedCommitNoBaseline:
+    """s20: _grava_approved_commit_no_baseline iguala o teto ao piso (janela vazia)."""
+
+    def test_copia_base_commit_para_approved_commit(self, tmp_path) -> None:
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "t.yaml").write_text(
+            "task: t\nbase_commit: abc123\n", encoding="utf-8"
+        )
+
+        harness._grava_approved_commit_no_baseline(tmp_path, "t")
+
+        yaml_text = (tmp_path / ".kata" / "t.yaml").read_text(encoding="utf-8")
+        assert "approved_commit: abc123" in yaml_text
 
 
 class TestAplicaPosterior:

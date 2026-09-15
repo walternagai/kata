@@ -226,6 +226,20 @@ def _grava_approved_commit(path: Path, task: str) -> None:
     caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
+def _grava_approved_commit_no_baseline(path: Path, task: str) -> None:
+    """Grava approved_commit = base_commit no YAML (s20, janela vazia).
+
+    É o estado que _step_verify produzia ao aprovar antes do commit: teto
+    igual ao piso. O judge difava uma janela vazia e devolvia VERIFIED sem
+    olhar o diff (artigo JSERD §6.4). Precisa rodar depois de
+    _aplica_baseline, que é quem grava o base_commit real.
+    """
+    caminho_task = path / ".kata" / f"{task}.yaml"
+    dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
+    dados["approved_commit"] = dados["base_commit"]
+    caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
 def _ignora_arquivo(path: Path, caminho_relativo: str) -> None:
     """Planta um arquivo ignorado via .git/info/exclude (s19/K-20).
 
@@ -304,7 +318,12 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             valor = data.get(chave)
             if valor is not None and not isinstance(valor, list):
                 raise ScenarioError(f"ground_truth.yaml: {chave} deve ser uma lista")
-        for chave in ("tamper_base_commit", "kata_visivel", "approved_commit"):
+        for chave in (
+            "tamper_base_commit",
+            "kata_visivel",
+            "approved_commit",
+            "approved_commit_at_base",
+        ):
             valor = data.get(chave)
             if valor is not None and not isinstance(valor, bool):
                 raise ScenarioError(f"ground_truth.yaml: {chave} deve ser booleano")
@@ -480,6 +499,8 @@ def main() -> None:
                     _tampera_base_commit(work_dir, tarefa)
                 if gt.get("approved_commit"):
                     _grava_approved_commit(work_dir, tarefa)
+                if gt.get("approved_commit_at_base"):
+                    _grava_approved_commit_no_baseline(work_dir, tarefa)
                 if gt.get("posterior"):
                     _aplica_posterior(work_dir, gt["posterior"])
 

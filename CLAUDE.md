@@ -103,7 +103,7 @@ src/kata/
   (`_LANGUAGES`: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift); a test in an unlisted language becomes a
   declared blind spot instead of silence. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
   (medium/low findings only), `UNVERIFIABLE` (no fraud, but nothing could be
-  observed — one of six blind spots), `REFUTED` (any high-severity finding).
+  observed — one of seven blind spots), `REFUTED` (any high-severity finding).
   Two rules are easy to break by accident:
   - **Kata's own bookkeeping is not the task's work.** `is_kata_bookkeeping()` keeps
     `.kata/*.{yaml,yml,json}` out of the changed-file set and the synthetic untracked diff.

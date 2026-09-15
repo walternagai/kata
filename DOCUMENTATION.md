@@ -529,13 +529,17 @@ The judge is opt-in. It re-runs claimed checks and returns:
 
 A **blind spot** is the judge admitting what it could not observe — not an
 accusation, since not having looked is evidence of neither fraud nor honesty.
-Six are detected: the report claims no check the judge knows how to re-run,
+Seven are detected: the report claims no check the judge knows how to re-run,
 the diff touches a test file in a language the judge has no probes for, an
 ignored source/test candidate is outside Git's diff, a `base_commit` declared
 in the YAML has no independent `refs/kata/base/<hash>` anchor, a baseline
-no longer resolves in the repository history, or a section of the task file
-is not a map (`surgical: true` in hand-written YAML, or a list at the top of
-the file). A baseline that resolves but is not an ancestor of the current
+no longer resolves in the repository history, `approved_commit` equals
+`base_commit` while the task's work was committed after it (an empty diff
+window the judge cannot separate from later tasks), or a section of the task
+file is not a map (`surgical: true` in hand-written YAML, or a list at the
+top of the file). When `approved_commit` equals `base_commit` and `HEAD` is
+still there, nothing was committed yet, so the judge ignores the ceiling and
+diffs the working tree instead. A baseline that resolves but is not an ancestor of the current
 `HEAD` is a high-severity `baseline_tampering` finding rather than a blind
 spot.
 
@@ -594,6 +598,9 @@ approved_commit: ""  # R14: HEAD at the moment of approval. JUDGE diffs
                     # so files changed by LATER tasks don't count as
                     # "undeclared" for this one. Absent in legacy tasks
                     # (approved before this round) — they keep diffing to HEAD.
+                    # Not recorded while HEAD is still base_commit (approved
+                    # before committing): a ceiling equal to the floor is an
+                    # empty diff window (JSERD paper §6.4).
                     #
                     # P-1 (0.6.0): legacy tasks WITHOUT approved_commit are
                     # expected to come back REFUTED for structural scope
@@ -876,8 +883,10 @@ Each scenario contains a fixture project and a `ground_truth.yaml` describing
 the verdict and the frauds the judge must find. Twelve scenarios (s01–s06,
 s08–s11, s14, s18) plant a fraud the judge must catch; `s07`, `s15`, `s16`
 and `s17` are entirely honest tasks that must come back `VERIFIED`, `s12`/`s13`
-expect `UNVERIFIABLE` (blind spots, no fraud), and `s19` expects
-`UNVERIFIABLE` for the Git-ignored code blind spot. `s06` doubles as a guard
+expect `UNVERIFIABLE` (blind spots, no fraud), `s19` expects
+`UNVERIFIABLE` for the Git-ignored code blind spot, and `s20` expects
+`UNVERIFIABLE` for an `approved_commit` equal to `base_commit` with the
+work committed afterwards (the empty diff window). `s06` doubles as a guard
 against refusing legitimate work, planting real debris beside files whose
 names merely look like debris, and `s14` plants `baseline_tampering` (the
 harness rewrites `base_commit` in the YAML after recording the Git anchor).

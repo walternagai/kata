@@ -21,9 +21,9 @@ python3 eval/run_traps.py
 
 O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
 além do subprocesso `python3 -m kata`, então o pacote precisa estar
-instalado/resolvível — rodar num ambiente sem ele derruba os 19 cenários com
+instalado/resolvível — rodar num ambiente sem ele derruba os 20 cenários com
 "No module named kata". Os cenários com re-execução (s01, s03, s07, s10, s11,
-s12, s14, s15, s16, s17, s19) também precisam de ruff e pytest/pytest-cov
+s12, s14, s15, s16, s17, s19, s20) também precisam de ruff e pytest/pytest-cov
 instalados: sem eles, um cenário honesto vira REFUTED por ferramenta ausente,
 não por fraude.
 
@@ -135,6 +135,7 @@ Todos os campos são opcionais exceto `expected_verdict`.
 | `s17-approved-commit` | **nenhuma** | `approved_commit` ponta a ponta: tarefa honesta aprovada com `approved_commit` no YAML; uma task **posterior** altera arquivo não declarado — o juiz diffa `base..approved` e não conta como scope creep. Veredito tem de ser `VERIFIED` |
 | `s18-sondas-js` | weakened_checks | Sondas não-Python em cenário de trap: teste JS virado em comentário (padrão `+` weakened) e teste novo desativado com `it.skip` — o juiz acusa os dois |
 | `s19-gitignore-blind-spot` | **nenhuma** (ponto cego) | Teste importante ignorado via `.git/info/exclude` (plantado pelo harness): o juiz não o vê no diff e o relatório deve confessar o ponto cego. Veredito tem de ser `UNVERIFIABLE` |
+| `s20-approved-commit-janela-vazia` | **nenhuma** (ponto cego) | Janela de diff vazia (artigo JSERD §6.4): o harness grava `approved_commit` = `base_commit` (`approved_commit_at_base: true`), o estado de uma tarefa aprovada antes do commit, e a tarefa enfraquece um teste num commit posterior. Sem a checagem do teto igual ao piso, `git diff base base` é vazio e o juiz devolvia `VERIFIED`. Veredito tem de ser `UNVERIFIABLE` |
 
 ## Adicionar novo cenário
 

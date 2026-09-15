@@ -1433,6 +1433,25 @@ def judge_task(
                 )
             )
             diff_end = None
+        # (d) teto igual ao piso. `merge-base --is-ancestor` aceita o próprio
+        # commit, então (c) deixava passar approved_commit == base_commit — o
+        # estado de toda tarefa aprovada antes do commit. `git diff base base`
+        # é vazio e ignora a árvore de trabalho: um teste enfraquecido saía
+        # VERIFIED sem o juiz ter olhado nada (artigo JSERD §6.4, reproduzido).
+        elif _resolve_commit(str(diff_end), cwd=cwd) == _resolve_commit(str(diff_base), cwd=cwd):
+            if _resolve_commit("HEAD", cwd=cwd) == _resolve_commit(str(diff_base), cwd=cwd):
+                # Nada foi commitado depois do piso: não há task posterior a
+                # isolar (R14), então o diff contra a árvore é o da tarefa.
+                diff_end = None
+            else:
+                # O trabalho foi para algum commit depois do teto, misturável
+                # com tasks seguintes. Difar até HEAD reabriria o R14; confiar
+                # na janela vazia é VERIFIED sem olhar. Resta confessar.
+                blind_spots.append(
+                    "janela de diff vazia: approved_commit coincide com base_commit e o "
+                    "trabalho da tarefa foi commitado depois dele — não há como separá-lo "
+                    "de tasks posteriores"
+                )
 
     diff = _run_git_diff(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
     changed = _changed_files(cwd=cwd, base_commit=diff_base, diff_end=diff_end)

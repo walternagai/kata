@@ -625,6 +625,41 @@ class TestStepVerify:
 
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
+    def test_step_verify_nao_grava_approved_commit_com_head_no_baseline(
+        self, mock_run_all, mock_confirm, repo_git, monkeypatch
+    ) -> None:
+        """Janela vazia (artigo JSERD §6.4): aprovar antes de commitar deixava
+        approved_commit == base_commit, e o JUDGE difava uma janela vazia.
+        Com o HEAD ainda no baseline o teto não existe; ele só é gravado
+        quando a mudança já está num commit."""
+        monkeypatch.chdir(repo_git)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, output="All clear"),
+            "pytest": VerifyResult(ok=True, output="10 passed"),
+            "coverage": VerifyResult(
+                ok=True, output="TOTAL 100 5 95%", details={"coverage_pct": 95.0, "gate": 70.0}
+            ),
+        }
+        mock_confirm.return_value = True
+
+        result = cli._step_verify("my-task", {"base_commit": head})
+        assert result["status"] == "approved"
+        assert "approved_commit" not in result
+
+        (repo_git / "novo.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "tarefa"], check=True)
+        novo_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        result = cli._step_verify("my-task", {"base_commit": head})
+        assert result["approved_commit"] == novo_head
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
     def test_step_verify_ruff_fails(self, mock_run_all, mock_confirm, capsys) -> None:
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=False, output="F401 unused import"),

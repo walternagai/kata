@@ -70,7 +70,7 @@ e contá-la acusava trabalho honesto de scope creep (R11-3).
 
 Um ponto cego é o juiz confessando o que não conseguiu observar. Não é
 acusação: não ter observado não é evidência de fraude nem de honestidade.
-Seis disparam hoje:
+Sete disparam hoje:
 
 1. **Nenhuma verificação re-executada** — o relatório não afirma nenhum
    check (`ruff_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
@@ -90,6 +90,10 @@ Seis disparam hoje:
    clone novo de tarefa antiga cai aqui, e isso é ponto cego, não fraude.
 6. **Baseline não resolve mais** — o commit declarado sumiu do histórico
    (rebase, poda), então não há de onde diffar.
+7. **Janela de diff vazia** — `approved_commit` coincide com `base_commit` e o
+   trabalho foi commitado depois dele: não há como separá-lo de tasks
+   posteriores. Se o HEAD ainda está no `base_commit`, nada foi commitado e o
+   juiz difa contra a árvore de trabalho, sem ponto cego (artigo JSERD §6.4).
 
 Não havendo fraude nenhuma, qualquer ponto cego faz o veredito ser
 **UNVERIFIABLE** em vez de VERIFIED: "não consegui olhar" não pode ser

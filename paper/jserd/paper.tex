@@ -1528,7 +1528,16 @@ as the HEAD at approval (\texttt{cli.py:902}), so a task approved before its
 change is committed produces exactly this window. The demonstration task of
 Listing~\ref{lst:taskfile} is such a case, and the trap suite does not
 exercise it: s17 records an \texttt{approved\_commit} later than the
-baseline.
+baseline. This path was fixed after the evaluated version, in commit
+\texttt{3cacc5a}: when \texttt{approved\_commit} equals
+\texttt{base\_commit} and \texttt{HEAD} is still there, the JUDGE diffs the
+working tree; when \texttt{HEAD} has moved on, it confesses the empty window
+as a blind spot and can no longer return VERIFIED (UNVERIFIABLE when no other
+fraud is found); and the cycle no longer records
+\texttt{approved\_commit} while \texttt{HEAD} is still the baseline.
+Regression tests and a twentieth trap scenario (s20) cover the fix; the fix
+does not close the anchor rewrite above, which we re-ran against it and
+which still yields VERIFIED.
 \item \textbf{Manufacturing a blind spot.} UNVERIFIABLE exits 0 by design
 (\texttt{cli.py:1649}), a fail-open policy chosen so that projects in
 unprobed languages are not failed wholesale. An agent can exploit it: a
@@ -1548,8 +1557,8 @@ plausible but false content is graded followed.
 These paths bound what a verdict means: VERIFIED says that the claims
 survived the checks the JUDGE could run over the diff window it was given,
 not that an agent with repository access could not have arranged that
-window. Rejecting an empty window, keeping the anchor out of the agent's
-reach, a fail-closed option for UNVERIFIABLE, and an evaluation against an
+window. Keeping the anchor out of the agent's reach, a fail-closed option
+for UNVERIFIABLE, and an evaluation against an
 adaptive adversary instructed to evade the JUDGE are future work.
 
 \section{The audit mode}
@@ -2276,8 +2285,9 @@ mechanism is the honest response: the JUDGE confesses what it could not
 observe rather than claiming to have looked. The adversary is bounded as
 well: the trap suite plants frauds in claims, not in Git metadata, and
 Section~\ref{sec:threat-model} reproduces evasions it does not exercise,
-including an empty diff window that the cycle itself produces when a task
-is approved before its change is committed.
+including an empty diff window that the evaluated version of the cycle
+produced when a task was approved before its change was committed (fixed
+afterwards, in commit \texttt{3cacc5a}).
 
 \textbf{Internal validity.} The trap scenarios are deterministic fixtures
 with a ground truth that specifies the exact verdict and the exact frauds

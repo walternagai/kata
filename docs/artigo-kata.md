@@ -354,8 +354,11 @@ tarefas **posteriores** não contam como escopo não declarado desta.
 porque a tarefa foi aprovada antes de a mudança ser commitada. A janela
 `base..approved` fica vazia e o JUDGE, na versão 0.7.0, não compara as
 afirmações de escopo e de testes com diff nenhum — e devolve VERIFIED mesmo com
-um teste enfraquecido. O defeito foi reproduzido e está documentado na §6.4 do
-artigo JSERD; a correção é a task `judge-janela-vazia`.
+um teste enfraquecido. O defeito foi reproduzido, está documentado na §6.4 do
+artigo JSERD e foi corrigido depois da 0.7.0, no commit `3cacc5a`: com o HEAD
+ainda no `base_commit` o JUDGE difa a árvore de trabalho, com o HEAD avançado
+confessa o ponto cego e não sai mais VERIFIED (sai UNVERIFIABLE se não houver
+outra fraude), e a CLI não grava mais `approved_commit` nesse estado.
 
 ## 4. A camada adversarial (demo 2)
 

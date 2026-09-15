@@ -350,6 +350,13 @@ tarefa e no momento da aprovação. São eles que permitem ao JUDGE difar
 `base..approved` mesmo depois de a tarefa ter sido commitada — mudanças de
 tarefas **posteriores** não contam como escopo não declarado desta.
 
+**Ressalva (2026-09-15):** nesta demonstração os dois commits são iguais,
+porque a tarefa foi aprovada antes de a mudança ser commitada. A janela
+`base..approved` fica vazia e o JUDGE, na versão 0.7.0, não compara as
+afirmações de escopo e de testes com diff nenhum — e devolve VERIFIED mesmo com
+um teste enfraquecido. O defeito foi reproduzido e está documentado na §6.4 do
+artigo JSERD; a correção é a task `judge-janela-vazia`.
+
 ## 4. A camada adversarial (demo 2)
 
 Agora a parte que nenhuma skill faz: o JUDGE. Ele trata o YAML como um
@@ -520,7 +527,7 @@ skills pedem. A distinção é a tese deste artigo:
 | Verificação | Depende do modelo obedecer | Executa ruff/pytest/coverage e lê exit codes |
 | Honestidade | Pede | Detecta (JUDGE, 7 fraudes) |
 | Evidência | Conversada | Persistida em `.kata/<task>.yaml` |
-| Auditoria | Não existe | `--audit` gradua followed/skipped/faked |
+| Auditoria | Não existe | `--audit` gradua followed/skipped/faked/degraded |
 | Aplica-se a si mesmo | Não | Sim (lint+coverage+19 traps no CI) |
 
 Se você usa agentes de IA para mudar código e quer saber **de verdade** se o

@@ -269,3 +269,27 @@ medido e o que é afirmado**, e isso tem conserto.
 | `.kata/jserd-m5-modelo-ameaca.yaml` | M5 (texto) |
 | `.kata/jserd-m7-enquadramento-rqs.yaml` | M7 |
 | `.kata/jserd-menores-consistencia.yaml` | Menores 1–6 |
+
+## 7. Resposta do autor: estado do mínimo para aceite
+
+**Data:** 2026-09-15. **Versão do manuscrito após as correções:** `paper.tex` em `ecce09a`
+(23 páginas). Cada item foi executado como task kata, com critério de pronto declarado antes da
+edição, verificação e audit limpo.
+
+| Item | O que mudou no manuscrito | Commit | Ressalvas |
+|---|---|---|---|
+| M1 | §3.3 decompõe as 11 falsas acusações dos agentes (7 nos pontos cegos s12/s13/s19, 3 no s17, 1 do baseline no s07); a Tabela 2 ganha o placar sem pontos cegos (16/15/15/14); resumo, introdução, §3.2, §9.3, §10 e conclusão apresentam a vantagem como determinismo e custo | `63a04c0` | O claude-wizard respondeu "sem fraude" no s12 e s13 e foi pontuado correto: o formato não forçava acusação, só não oferecia `UNVERIFIABLE`. Nova campanha com `UNVERIFIABLE` no formato não foi feita |
+| M2 | §3.3 descreve os cinco arquivos de campanha e as duas mudanças de pontuação com a direção de cada uma; o intervalo de FP usa só as duas campanhas completas, com a regra final do s06 na primeira (claude-wizard [2–4] → [2–3]) | `1d69f67` | Correção a este parecer: a troca de parser **não** favoreceu os agentes (escondeu uma acusação do baseline no s07). A rodada 1 guarda só 300 caracteres por resposta; só o s06 é re-pontuável |
+| M5 | Nova §6.4 "Threat model" com adversário, escopo e cinco evasões reproduzidas contra o `judge.py` avaliado; §6.1, §7.1, §8.3 e §11 remetem a ela | `d9e9218` | Achado novo: `approved_commit == base_commit` dá VERIFIED sem olhar o diff, e o próprio ciclo produz esse estado ao aprovar antes do commit (inclusive a demonstração da Listing 10). Correção no código em `.kata/judge-janela-vazia.yaml`, ainda não executada. As evasões foram reproduzidas fora do repositório |
+| M7 | RQ1–RQ3 na Introdução, ligadas às §9.1, §3.3 e §9.2; resumo, §9 e conclusão dizem que as fases de julgamento não tiveram ablação e só custo medido; as diretrizes da §9.2.2 viram hipóteses; "guarantees", "immutable", "negligible overhead" e "rejects fraudulent assertions" qualificados | `0c38d63` | Título mantido por decisão do autor |
+| Menores 1–6 | Quatro graus do audit; tempos com a carga medida; coluna "Median output" removida; "orders of magnitude" trocado pelos números; tag única `v0.7.0`; modelo dos agentes declarado | `ecce09a` | O harness não registrou o modelo; `claude-sonnet-5` via Claude Code 2.1.268 vem de logs locais não arquivados. DOI ainda não depositado |
+
+**Não atendidos nesta rodada** (nível "artigo forte"): M3 (baseline determinístico), M4 (recall
+do detector medido por mutação e valor esperado alterado), M6 (poder do estudo externo), M8
+(dimensões neutras na Tabela 1) e menores 7–15.
+
+**Pendências antes de declarar a submissão pronta:**
+
+- Executar `judge-janela-vazia`. Se a correção entrar antes da submissão, criar tag nova e
+  atualizar os commits citados no manuscrito; se não, a §6.4 já documenta o defeito.
+- Depositar a release no Zenodo ou Software Heritage e citar o DOI.

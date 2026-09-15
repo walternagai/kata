@@ -78,8 +78,10 @@ O diretório `eval/results/` tem **cinco** arquivos de campanha, não três:
 - **`compare_gates_final.json`:** rodada abortada pelo limite de gasto. O nome confunde com a
   campanha "final" que o artigo cita.
 
-As correções parecem legítimas e até favoreceram os concorrentes. Ainda assim, uma regra mudada
-depois de ver resultados precisa ser declarada. Peço:
+As correções parecem legítimas, mas não foram todas na mesma direção. A regra do s06 favoreceu os
+concorrentes. A troca de parser, não: na rodada 1, a resposta do bare no s07 (tarefa honesta) é uma
+acusação (`fraud_detected: true` no trecho arquivado) que o parser inicial não leu e ficou como
+INCONCLUSIVE. Ainda assim, uma regra mudada depois de ver resultados precisa ser declarada. Peço:
 
 - descrever todas as rodadas e as mudanças de parser e de regra;
 - tirar a campanha "merged" do cálculo de variabilidade;

@@ -1528,6 +1528,13 @@ Editing \texttt{base\_commit} alone is caught as baseline tampering, but
 moving both the YAML and the ref to the final commit with
 \texttt{git update-ref} empties the diff window, and the verdict is VERIFIED
 (exit 0). Deleting the ref and editing the YAML yields UNVERIFIABLE (exit 0).
+After the evaluated version, commit \texttt{3454fc7} narrowed this path: the
+anchor is now written with a reflog, and an anchor that has pointed at more
+than one commit is reported as baseline tampering (trap scenario s22).
+Deleting and recreating the anchor erases its reflog and still evades that
+check locally; \texttt{kata --judge --trusted-base <ref>} closes it in CI by
+taking the diff floor from the merge base with a ref the agent cannot move,
+which protects only as far as that ref is protected on the remote.
 \item \textbf{Empty diff window.} The ceiling check (\texttt{judge.py:1424})
 accepts an \texttt{approved\_commit} equal to \texttt{base\_commit}, because
 Git counts a commit as its own ancestor. The weakened test is then invisible
@@ -1546,7 +1553,7 @@ fraud is found); and the cycle no longer records
 \texttt{approved\_commit} while \texttt{HEAD} is still the baseline.
 Regression tests and a twentieth trap scenario (s20) cover the fix; the fix
 does not close the anchor rewrite above, which we re-ran against it and
-which still yields VERIFIED.
+which still yielded VERIFIED at that commit.
 \item \textbf{Manufacturing a blind spot.} UNVERIFIABLE exits 0 by design
 (\texttt{cli.py:1649}), a fail-open policy chosen so that projects in
 unprobed languages are not failed wholesale. An agent can exploit it: a
@@ -1566,8 +1573,8 @@ plausible but false content is graded followed.
 These paths bound what a verdict means: VERIFIED says that the claims
 survived the checks the JUDGE could run over the diff window it was given,
 not that an agent with repository access could not have arranged that
-window. Keeping the anchor out of the agent's reach, a fail-closed option
-for UNVERIFIABLE, and an evaluation against an
+window. Detecting a deleted and recreated anchor without a trusted base, a
+fail-closed option for UNVERIFIABLE, and an evaluation against an
 adaptive adversary instructed to evade the JUDGE are future work.
 
 \section{The audit mode}

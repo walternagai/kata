@@ -104,8 +104,10 @@ general reviewer restraint; a minimum external
 study of twelve real bugs fixed by two models with and without the cycle
 found no weakened tests in either condition, and the JUDGE flagged the one
 case of undeclared scope. The evaluation establishes the JUDGE's two-sided
-contract on fixtures we built ourselves; a controlled study of whether the
-cycle improves the quality of AI-assisted changes remains future work.
+contract on fixtures we built ourselves. The judgment phases of the cycle
+were not ablated and were evaluated only for cost, and a controlled study of
+whether the cycle improves the quality of AI-assisted changes remains future
+work.
 \end{abstract}
 
 \begin{keywords}
@@ -158,6 +160,24 @@ determinism and cost --- the same verdict every run, at about one second per
 review. Kata also made no false accusations, but most agent false positives
 fell on scenarios built around Kata's own conventions, so that result is not
 evidence of superior reviewer restraint.
+
+The evaluation answers three research questions, each tied to the evidence
+that answers it:
+\begin{itemize}
+\item \textbf{RQ1.} Does the JUDGE honour its two-sided contract ---
+detecting planted frauds without accusing honest work, and confessing what
+it cannot observe? (Section~\ref{sec:self-check}: 19 trap scenarios.)
+\item \textbf{RQ2.} How does the JUDGE compare with related gates reviewing
+the same scenarios, in detection, false accusations, determinism, and cost?
+(Section~\ref{sec:exec-comparison}.)
+\item \textbf{RQ3.} Is the cycle feasible on real repositories the author did
+not write, and what does it cost? (Section~\ref{sec:external-evaluation}: 12
+real bugs, 48 agent sessions.)
+\end{itemize}
+The evaluation does not address whether the judgment phases of the cycle
+(THINK, SIMPLIFY, INTENT, SURGICAL, TWIN CHECK) improve the changes an agent
+produces: they were not ablated, and their contribution was measured only as
+cost.
 
 The remainder of this paper is organized as follows. Section~\ref{sec:need}
 states the problem and the research purpose of the software.
@@ -558,7 +578,7 @@ repository.
 
 Architecturally, Kata operationalizes this discipline along two distinct usage tiers:
 (1) an \emph{interactive authoring scaffold} (\texttt{kata --task}), which guides the developer or agent step-by-step through the nine-phase cycle, generating structured evidence, enforcing minimality, and anchoring baseline commits in the task file; and
-(2) a \emph{decoupled reviewer gate} (\texttt{kata --judge} and \texttt{kata --check-only}), which operates non-interactively in approximately two seconds, re-executing verification commands and auditing repository diffs against baseline anchors. This architectural separation ensures that while the authoring cycle provides deliberate friction and governance for complex, open-ended tasks, automated pipelines and routine pre-commit workflows can deploy the verification gate with negligible overhead.
+(2) a \emph{decoupled reviewer gate} (\texttt{kata --judge} and \texttt{kata --check-only}), which operates non-interactively in approximately two seconds, re-executing verification commands and auditing repository diffs against baseline anchors. This architectural separation ensures that while the authoring cycle provides deliberate friction and governance for complex, open-ended tasks, automated pipelines and routine pre-commit workflows can deploy the verification gate, which took about two seconds per change in our measurements (Section~\ref{sec:external-evaluation}).
 
 \begin{figure*}[!ht]
 \centering
@@ -1779,7 +1799,8 @@ models with and without Kata, with the JUDGE reviewing every final
 artifact. The layers answer different questions: the traps measure the
 two-sided contract of the JUDGE on fixtures we built ourselves, while the
 external study measures what real agent sessions produce on code we did
-not write.
+not write. The first layer answers RQ1 and, reused as the workload of
+Section~\ref{sec:exec-comparison}, RQ2; the second answers RQ3.
 
 \subsection{Self-check: the adversarial trap suite}
 \label{sec:self-check}
@@ -2083,16 +2104,18 @@ costing two seconds per change is viable as an automated CI or pre-commit
 check. In contrast, the full nine-phase authoring cycle (\texttt{kata --task})
 is an interactive development discipline. On clean, well-isolated bugs with
 clear regression tests (such as these 12 tasks), bare agents readily find
-the direct fix without incentives to game visible checks. The authoring
-cycle's primary benefit is defensive --- mitigating reward hacking,
-unauthorized side-effects, and scope creep on complex or open-ended changes
-where verification is ambiguous --- while producing an auditable provenance
-trail (24 persistent task files with Git baseline anchors), which the bare
-arm omitted entirely.
+the direct fix without incentives to game visible checks. Whether the
+authoring cycle pays for itself on complex or open-ended changes, where
+verification is ambiguous and the incentive to game visible checks is
+stronger, is a hypothesis this study cannot test: its tasks gave the agents
+no such incentive. What the cycle measurably added here is an auditable
+record (24 task files with Git baseline anchors), which the bare arm did not
+produce.
 
-This yields an actionable operational guideline for practitioners:
-(1)~\textbf{Continuous Integration and Pull-Request Gating}: Teams should deploy the decoupled verification gate (\texttt{kata --judge} or \texttt{kata --check-only}), which operates in approximately two seconds, enforcing real exit codes, hunting weakened assertions, and blocking undeclared scope with negligible developer friction;
-(2)~\textbf{Complex or Autonomous Authoring}: Teams should mandate the full authoring scaffold (\texttt{kata --task}) for open-ended, multi-file, or safety-critical modifications, where the nine-fold overhead is justified by the prevention of reward hacking, explicit intent reconciliation, and the construction of an immutable provenance trail.
+This suggests two usage hypotheses for future evaluation, not guidelines
+established by these data:
+(1)~\textbf{Continuous integration and pull-request gating} with the decoupled verification gate (\texttt{kata --judge} or \texttt{kata --check-only}), which reviewed each change here in about two seconds, subject to the evasions of Section~\ref{sec:threat-model};
+(2)~\textbf{Complex or autonomous authoring} with the full scaffold (\texttt{kata --task}) for open-ended, multi-file, or safety-critical changes, where the nine-fold overhead would have to be justified by effects this study did not observe.
 
 The \texttt{kata} arm is also auditable after the fact. The 24 task files the
 sessions left behind grade, under the audit mode of Section~\ref{sec:audit},
@@ -2220,9 +2243,10 @@ produced identical verdicts throughout, with no false accusations on these
 fixtures.
 
 Third, the limitations of Kata must be stated explicitly. Kata is a
-verification quality gate, not a panacea: it guarantees that what was claimed
-was objectively verified against real exit codes and diffs, not that the
-generated patch is optimal or complete beyond the declared checks. It is
+verification quality gate, not a panacea: it checks what was claimed against
+real exit codes and the diff window it is given, within the threat model of
+Section~\ref{sec:threat-model}, and says nothing about whether the generated
+patch is optimal or complete beyond the declared checks. It is
 interactive (falling back to defaults in headless mode); it requires Git;
 and its success criterion is subjective. When project tests are flawed,
 re-execution confirms a false oracle \cite{barr-oracle}, highlighting
@@ -2314,7 +2338,9 @@ is accused. The executed comparison of Section~\ref{sec:exec-comparison} shows
 detection parity across gates. Kata returned every expected verdict at
 approximately one second per review, but most agent false positives fell on
 blind-spot scenarios and on a Kata-specific convention, so the comparison
-establishes determinism and cost rather than superior restraint. However, the evaluation
+establishes determinism and cost rather than superior restraint. The external
+study shows the cycle is feasible on real repositories at roughly nine times
+the median session time, and the judgment phases were not ablated. However, the evaluation
 does not show that the cycle causally improves the quality of AI-assisted code;
 a controlled study of changes with and without Kata remains future work. Furthermore,
 Kata is an enforcement gate, not a panacea: it verifies claimed exit codes and diffs
@@ -2324,7 +2350,8 @@ subjective criteria are accepted with explicit caveats.
 For software engineering teams seeking objective assurance over AI-assisted code
 modifications, Kata provides an executable enforcement boundary: it re-executes
 claimed verification steps, confronts claims with the underlying repository, and
-programmatically rejects unverified or fraudulent assertions.
+flags the claims that re-execution or the diff contradict, within the threat
+model of Section~\ref{sec:threat-model}.
 
 \begin{acknowledgements}
 We thank the open-source communities of the Fable Method \cite{fable} and of

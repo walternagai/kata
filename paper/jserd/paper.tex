@@ -307,9 +307,9 @@ Kata needed to serve two agent hosts (OpenCode and Claude Code) with
 identical behavior; a single Python backend with generated frontends
 guarantees that the checks a task claims to have passed are the same checks
 in both hosts. Third, Kata needed to be verifiable itself: its own lint,
-tests, and coverage are measured, and 19 adversarial trap scenarios run in
-continuous integration to ensure the JUDGE catches planted frauds and does
-not accuse honest work.
+tests, and coverage are measured, and in the evaluated version (v0.7.0) 19
+adversarial trap scenarios ran in continuous integration to check that the
+JUDGE catches planted frauds and does not accuse honest work.
 
 \subsection{Recent research on agent verification}
 
@@ -1532,7 +1532,7 @@ baseline. This path was fixed after the evaluated version, in commit
 \texttt{3cacc5a}: when \texttt{approved\_commit} equals
 \texttt{base\_commit} and \texttt{HEAD} is still there, the JUDGE diffs the
 working tree; when \texttt{HEAD} has moved on, it confesses the empty window
-as a blind spot and can no longer return VERIFIED (UNVERIFIABLE when no other
+as a blind spot and can no longer return VERIFIED (UNVERIFIABLE when no
 fraud is found); and the cycle no longer records
 \texttt{approved\_commit} while \texttt{HEAD} is still the baseline.
 Regression tests and a twentieth trap scenario (s20) cover the fix; the fix

@@ -358,7 +358,7 @@ um teste enfraquecido. O defeito foi reproduzido, está documentado na §6.4 do
 artigo JSERD e foi corrigido depois da 0.7.0, no commit `3cacc5a`: com o HEAD
 ainda no `base_commit` o JUDGE difa a árvore de trabalho, com o HEAD avançado
 confessa o ponto cego e não sai mais VERIFIED (sai UNVERIFIABLE se não houver
-outra fraude), e a CLI não grava mais `approved_commit` nesse estado.
+fraude), e a CLI não grava mais `approved_commit` nesse estado.
 
 ## 4. A camada adversarial (demo 2)
 

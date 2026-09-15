@@ -1417,7 +1417,12 @@ the claimed checks and returned:
 Note that the success criterion is listed as \emph{accepted without
 verification}: it is a subjective confirmation the user gives during VERIFY,
 and no command reproduces it. Presenting it as verified would be exactly the
-fraud the judge exists to hunt.
+fraud the judge exists to hunt. The verdict also has a limit the output does
+not show: this task was approved before its change was committed, so its
+\texttt{base\_commit} and \texttt{approved\_commit} coincide
+(Listing~\ref{lst:taskfile}), the diff window was empty, and the surgical and
+weakened-check claims were not confronted with a diff
+(Section~\ref{sec:threat-model}).
 
 \subsection{Fraudulent work: REFUTED}
 
@@ -1461,6 +1466,72 @@ VERIFIED. ``I could not look'' is never reported as ``all clear''. With
 fraud present, the fraud decides the verdict and the blind spots are still
 listed.
 
+\subsection{Threat model}
+\label{sec:threat-model}
+
+The JUDGE is adversarial toward the claims in a task file, not toward an
+agent that controls the repository. We state the threat model explicitly,
+because the difference matters to anyone who uses the JUDGE as a merge gate.
+
+\textbf{Adversary.} A coding agent that writes both the code and the task
+file, runs shell commands, and can write to the working tree and to the local
+Git repository, including its refs and \texttt{.git/info/exclude}. It wants a
+passing exit code for work that does not meet its claims.
+
+\textbf{In scope.} Claims that re-execution or the Git diff contradict:
+checks declared as passing that fail, changed files that were not declared,
+the planted patterns of Section~\ref{sec:self-check}, and a
+\texttt{base\_commit} edited in the YAML after the anchor was recorded (s14).
+
+\textbf{Out of scope, with reproduced evasions.} Tampering with Git metadata,
+with the environment the checks run in, or with the machine that runs the
+JUDGE, and content that is plausible but false. We reproduced the evasions
+below against \texttt{kata/judge.py} as evaluated (unchanged since commit
+\texttt{230e81a}), in a temporary repository whose task replaces a test body
+with \texttt{pass}. Without evasion, the JUDGE returns REFUTED for weakened
+checks.
+
+\begin{itemize}
+\item \textbf{Rewriting the anchor.} The anchor
+\texttt{refs/kata/base/<sha256(task)>} is an ordinary ref in the repository
+the agent controls (\texttt{record\_baseline\_ref}, \texttt{judge.py:465}).
+Editing \texttt{base\_commit} alone is caught as baseline tampering, but
+moving both the YAML and the ref to the final commit with
+\texttt{git update-ref} empties the diff window, and the verdict is VERIFIED
+(exit 0). Deleting the ref and editing the YAML yields UNVERIFIABLE (exit 0).
+\item \textbf{Empty diff window.} The ceiling check (\texttt{judge.py:1424})
+accepts an \texttt{approved\_commit} equal to \texttt{base\_commit}, because
+Git counts a commit as its own ancestor. The weakened test is then invisible
+and the verdict is VERIFIED (exit 0), whether or not the change has been
+committed. No tampering is needed: the cycle records \texttt{approved\_commit}
+as the HEAD at approval (\texttt{cli.py:902}), so a task approved before its
+change is committed produces exactly this window. The demonstration task of
+Listing~\ref{lst:taskfile} is such a case, and the trap suite does not
+exercise it: s17 records an \texttt{approved\_commit} later than the
+baseline.
+\item \textbf{Manufacturing a blind spot.} UNVERIFIABLE exits 0 by design
+(\texttt{cli.py:1649}), a fail-open policy chosen so that projects in
+unprobed languages are not failed wholesale. An agent can exploit it: a
+weakened test hidden with \texttt{.git/info/exclude} (s19) or written in an
+unprobed language (s12) yields UNVERIFIABLE and passes a gate that reads only
+the exit code.
+\item \textbf{Declaring everything.} Scope creep compares the diff with the
+declared files, and \texttt{necessary: true} is self-reported: an agent that
+declares every file it touched is never charged with scope creep, however
+unnecessary the change.
+\item \textbf{Plausible but false content.} The audit grades a phase as faked
+when it is marked answered with empty or default content
+(\texttt{\_audit\_task}, \texttt{report.py:169}); a phase filled with
+plausible but false content is graded followed.
+\end{itemize}
+
+These paths bound what a verdict means: VERIFIED says that the claims
+survived the checks the JUDGE could run over the diff window it was given,
+not that an agent with repository access could not have arranged that
+window. Rejecting an empty window, keeping the anchor out of the agent's
+reach, a fail-closed option for UNVERIFIABLE, and an evaluation against an
+adaptive adversary instructed to evade the JUDGE are future work.
+
 \section{The audit mode}
 \label{sec:audit}
 
@@ -1491,8 +1562,9 @@ The faked pattern (tracked in the project as issue R7-1) is a phase
 marked as answered without real content. This is only possible because
 there is objective logic behind it:
 the audit reads the YAML and detects \texttt{answered: true} with empty
-content. A skill has no way to know whether a phase was ``faked''; Kata
-does.
+content. A skill has no way to detect even that. Kata detects a phase marked
+answered with empty or default content, though not one filled with plausible
+but false content (Section~\ref{sec:threat-model}).
 
 \begin{lstlisting}
 [x] FIT: faked
@@ -1680,7 +1752,10 @@ audit, or an \texttt{UNVERIFIABLE} blind spot confession). In particular,
 \texttt{VERIFIED WITH CAVEATS} and \texttt{UNVERIFIABLE} exit 0: the judge
 verified what it could and approved with notes, or found no fraud but could
 observe nothing --- treating either as failure would equate an honest
-limitation with high-severity fraud.
+limitation with high-severity fraud. This makes UNVERIFIABLE fail-open: an
+agent can manufacture a blind spot, so a CI job that must fail on anything
+short of VERIFIED has to read the verdict rather than the exit code
+(Section~\ref{sec:threat-model}).
 \item \textbf{1}: Failure (a rejected cycle, a \texttt{REFUTED} judge
 verdict, an audit with any phase graded \texttt{faked}, \texttt{skipped}, or
 \texttt{degraded}, or a partial frontend skill installation).
@@ -2176,7 +2251,11 @@ remains to be probed on larger and more ambiguous industrial changes. A
 fraud category not in the list (for example, a new class of weakened test
 that the probes do not recognize) would not be detected, and the blind-spot
 mechanism is the honest response: the JUDGE confesses what it could not
-observe rather than claiming to have looked.
+observe rather than claiming to have looked. The adversary is bounded as
+well: the trap suite plants frauds in claims, not in Git metadata, and
+Section~\ref{sec:threat-model} reproduces evasions it does not exercise,
+including an empty diff window that the cycle itself produces when a task
+is approved before its change is committed.
 
 \textbf{Internal validity.} The trap scenarios are deterministic fixtures
 with a ground truth that specifies the exact verdict and the exact frauds

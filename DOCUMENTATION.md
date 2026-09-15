@@ -163,6 +163,21 @@ records for a bug fix, and what TWIN CHECK reads as a fixed defect — so it is
 not a fraud; the resolution is self-declared and is listed among the claims
 accepted without verification.
 
+The baseline anchor `refs/kata/base/<hash>` is written with a reflog. An
+anchor that has pointed at more than one commit was moved after the task
+started — rewriting it together with the YAML empties the diff window — and is
+a high-severity `baseline_tampering` finding; the tool itself deletes the
+anchor before re-recording a restarted task, so its history starts over.
+Deleting and recreating the anchor erases the reflog too, so an agent with
+write access to the repository can still evade this locally. The judge only
+closes that with a base the agent cannot move: `kata --judge --trusted-base
+origin/main` in CI takes the diff floor from `merge-base(origin/main, HEAD)`
+and ignores the YAML's `base_commit` and `approved_commit` for the window.
+The anchor, which a CI clone does not carry, and a `base_commit` outside the
+fetched history then produce no blind spot; a divergent or moved anchor that is
+present is still reported. On a branch that carries several tasks, the other
+tasks' files count as undeclared scope.
+
 Kata's own bookkeeping (`.kata/*.yaml`, `.kata/config.yaml`) is excluded from
 the changed-file set: the tool creates those files, the task's author does not,
 and counting them accused honest work of scope creep — up to `REFUTED` past two
@@ -302,6 +317,7 @@ either one, and `--audit` is mutually exclusive with `--init`, `--plan`,
 | `--ignore PATH ...` | none | Paths excluded from pytest |
 | `--cov-source VALUE` | auto-detected | Coverage source passed to pytest-cov: read from `[tool.coverage.run] source` in `pyproject.toml`, falling back to `src` |
 | `--gate PERCENT` | `verify.gate`, else `70` | Minimum coverage percentage |
+| `--trusted-base REF` | none | With `--judge` only: a ref the agent does not control (e.g. `origin/main` in CI). The diff floor becomes `merge-base(REF, HEAD)` and the YAML ceiling is ignored; a REF without a merge base with `HEAD` (it does not resolve, or the clone is shallow — use `fetch-depth: 0`) exits 1 without judging |
 
 These flags configure the **built-in Python defaults**. A role declared in
 `.kata/config.yaml` is run verbatim, so the path flags for that role no
@@ -536,14 +552,15 @@ The judge is opt-in. It re-runs claimed checks and returns:
 
 A **blind spot** is the judge admitting what it could not observe — not an
 accusation, since not having looked is evidence of neither fraud nor honesty.
-Seven are detected: the report claims no check the judge knows how to re-run,
+Eight are detected: the report claims no check the judge knows how to re-run,
 the diff touches a test file in a language the judge has no probes for, an
 ignored source/test candidate is outside Git's diff, a `base_commit` declared
 in the YAML has no independent `refs/kata/base/<hash>` anchor, a baseline
 no longer resolves in the repository history, `approved_commit` equals
 `base_commit` while the task's work was committed after it (an empty diff
-window the judge cannot separate from later tasks), or a section of the task
-file is not a map (`surgical: true` in hand-written YAML, or a list at the
+window the judge cannot separate from later tasks), a `--trusted-base` ref
+with no merge base with `HEAD` (library call; the CLI exits 1 instead), or a section of
+the task file is not a map (`surgical: true` in hand-written YAML, or a list at the
 top of the file). When `approved_commit` equals `base_commit` and `HEAD` is
 still there, nothing was committed yet, so the judge ignores the ceiling and
 diffs the working tree instead. A baseline that resolves but is not an ancestor of the current
@@ -887,8 +904,8 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and the frauds the judge must find. Twelve scenarios (s01–s06,
-s08–s11, s14, s18) plant a fraud the judge must catch; `s07`, `s15`, `s16`,
+the verdict and the frauds the judge must find. Thirteen scenarios (s01–s06,
+s08–s11, s14, s18, s22) plant a fraud the judge must catch; `s07`, `s15`, `s16`,
 `s17` and `s21` are entirely honest tasks that must come back `VERIFIED`
 (`s21` records a resolved INTENT disagreement), `s12`/`s13`
 expect `UNVERIFIABLE` (blind spots, no fraud), `s19` expects

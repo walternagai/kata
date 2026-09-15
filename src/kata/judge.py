@@ -478,12 +478,59 @@ def baseline_ref(task: str) -> str:
 
 
 def record_baseline_ref(task: str, commit: str, cwd: Path | None = None) -> bool:
-    """Registra o baseline fora do YAML, em metadata do Git."""
+    """Registra o baseline fora do YAML, em metadata do Git.
+
+    A âncora é gravada com reflog: sem ele, reescrevê-la junto com o YAML
+    não deixava rastro nenhum e o juiz devolvia VERIFIED (artigo JSERD
+    §6.4). Uma âncora que já aponta para outro commit é apagada antes — é a
+    ferramenta reiniciando a tarefa, e o histórico recomeça com ela. Um
+    agente que apague e recrie a âncora apaga o reflog do mesmo jeito: isso
+    continua indetectável localmente, e só uma base confiável (`--trusted-base`)
+    fecha essa evasão.
+    """
+    ref = baseline_ref(task)
+    novo = _resolve_commit(commit, cwd=cwd)
+    if novo is None:
+        # Sem commit válido não há o que gravar — e apagar a âncora antes de
+        # descobrir isso deixaria a tarefa sem âncora nenhuma.
+        return False
     try:
-        result = _run(["git", "update-ref", baseline_ref(task), commit], cwd=cwd)
+        atual = _read_baseline_ref(task, cwd=cwd)
+        if atual is not None and atual != novo:
+            _run(["git", "update-ref", "-d", ref], cwd=cwd)
+        result = _run(["git", "update-ref", "--create-reflog", ref, novo], cwd=cwd)
     except OSError:
         return False
     return result.returncode == 0
+
+
+def _anchor_history(task: str, cwd: Path | None = None) -> list[str]:
+    """Commits distintos para os quais a âncora já apontou, do mais recente ao mais antigo.
+
+    Âncora sem reflog (tarefa gravada antes dele) devolve lista vazia: não
+    ter histórico não é evidência de adulteração.
+    """
+    try:
+        result = _run(["git", "reflog", "show", "--format=%H", baseline_ref(task)], cwd=cwd)
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+    vistos: list[str] = []
+    for sha in result.stdout.split():
+        if sha not in vistos:
+            vistos.append(sha)
+    return vistos
+
+
+def _merge_base(ref: str, cwd: Path | None = None) -> str | None:
+    """merge-base entre uma ref e o HEAD, ou None se a ref não resolve."""
+    try:
+        result = _run(["git", "merge-base", ref, "HEAD"], cwd=cwd)
+    except OSError:
+        return None
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and value else None
 
 
 def _read_baseline_ref(task: str, cwd: Path | None = None) -> str | None:
@@ -1366,8 +1413,14 @@ def judge_task(
     cov_source: str | list[str] = "src",
     gate: float = 70.0,
     config: VerifyConfig | None = None,
+    trusted_base: str | None = None,
 ) -> JudgeResult:
     """Executa verificação adversarial completa em uma tarefa.
+
+    `trusted_base` é uma ref que o agente não controla (a de destino do PR,
+    no CI). Com ela, o piso da janela é merge-base(trusted_base, HEAD) e o
+    teto do YAML é ignorado: base_commit, approved_commit e a âncora vivem no
+    repositório do agente e podem ser arrumados para esvaziar a janela.
 
     1. Coleta claims do YAML da tarefa
     2. Estabelece verdade material (git diff)
@@ -1386,10 +1439,24 @@ def judge_task(
     task_name = task_data.get("task")
     diff_base = base_commit
 
+    # Base confiável primeiro: quando ela resolve, o piso da janela não vem do
+    # YAML nem da âncora, e o que não os achar (a âncora não vem no clone do
+    # CI; um base_commit fora do histórico raso) não pode virar ponto cego ou
+    # acusação — só a evidência positiva de adulteração continua valendo.
+    piso_confiavel: str | None = None
+    if trusted_base:
+        piso_confiavel = _merge_base(trusted_base, cwd=cwd)
+        if piso_confiavel is None:
+            blind_spots.append(
+                f"base confiável '{trusted_base}' não resolve ou não tem merge-base com o "
+                "HEAD — a janela veio do YAML, que o agente controla"
+            )
+
     if isinstance(task_name, str) and base_commit:
         anchor = _read_baseline_ref(task_name, cwd=cwd)
         if anchor is None:
-            blind_spots.append("baseline declarado no YAML não tem âncora independente no Git")
+            if piso_confiavel is None:
+                blind_spots.append("baseline declarado no YAML não tem âncora independente no Git")
         else:
             yaml_commit = _resolve_commit(str(base_commit), cwd=cwd)
             if yaml_commit != anchor:
@@ -1399,6 +1466,18 @@ def judge_task(
                         severity="high",
                         description="baseline do YAML diverge da âncora Git registrada no início",
                         evidence=f"YAML={base_commit} | Git={anchor}",
+                    )
+                )
+            historico = _anchor_history(task_name, cwd=cwd)
+            if len(historico) > 1:
+                # Mover a âncora junto com o YAML passava pela checagem acima
+                # e esvaziava a janela. O reflog guarda cada posição anterior.
+                baseline_frauds.append(
+                    JudgeFraud(
+                        type="baseline_tampering",
+                        severity="high",
+                        description="âncora refs/kata/base movida depois de criada",
+                        evidence=" -> ".join(reversed(historico)),
                     )
                 )
             diff_base = anchor
@@ -1421,7 +1500,7 @@ def judge_task(
     if approved_commit and _base_commit_resolves(str(approved_commit), cwd=cwd):
         diff_end = str(approved_commit)
 
-    if diff_base:
+    if diff_base and piso_confiavel is None:
         if not _base_commit_resolves(str(diff_base), cwd=cwd):
             blind_spots.append("baseline não resolve mais no histórico Git")
             diff_base = None
@@ -1435,6 +1514,13 @@ def judge_task(
                 )
             )
             diff_base = None
+
+    janela_confiavel: str | None = None
+    if piso_confiavel is not None:
+        diff_base, diff_end = piso_confiavel, None
+        janela_confiavel = (
+            f"janela a partir da base confiável {trusted_base} ({piso_confiavel[:12]})"
+        )
 
     if diff_end and diff_base:
         # (b) o teto é ancestral do HEAD atual.
@@ -1548,6 +1634,10 @@ def judge_task(
 
     high = [f for f in frauds if f.severity == "high"]
     caveats: list[str] = []
+    if janela_confiavel:
+        caveats.append(
+            f"{janela_confiavel}: base_commit e approved_commit do YAML não definem a janela"
+        )
     oversized = _oversized_untracked(untracked_files(cwd=cwd), cwd=cwd)
     if oversized:
         caveats.append(

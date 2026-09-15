@@ -52,7 +52,7 @@ python -m kata --judge
 | 4 | **Unauthorized action** | Ação externa (push, deploy) realizada sem AUTH line documentada | 🔴 alta |
 | 5 | **Spec betrayal** | O INTENT registrou que código, teste e spec discordam (`all_agree: false`) e a tarefa foi aprovada sem `conflict_resolution`. **Exceção:** discordância com resolução registrada (texto não vazio) é o INTENT funcionando — o fluxo normal de um bug fix — e não é fraude; a resolução é listada entre as claims aceitas sem verificação. | 🔴 alta |
 | 6 | **Debris** | Arquivos temporários (`.tmp`, `.bak`), debug prints, TODOs, lixo | 🟢 baixa |
-| 7 | **Baseline tampering** | `base_commit` do YAML diverge da âncora `refs/kata/base/<hash>` registrada no início, ou não é ancestral do HEAD — mover o baseline encolhe o diff que o juiz examina | 🔴 alta |
+| 7 | **Baseline tampering** | `base_commit` do YAML diverge da âncora `refs/kata/base/<hash>` registrada no início, a âncora foi movida depois de criada (o reflog dela aponta para mais de um commit), ou o baseline não é ancestral do HEAD — mover o baseline encolhe o diff que o juiz examina. Apagar e recriar a âncora apaga o reflog e escapa localmente: no CI, use `--trusted-base <ref>` para tirar o piso de uma ref que o agente não move | 🔴 alta |
 
 A escrituração do próprio kata (`.kata/*.yaml`, `.kata/config.yaml`) não conta
 como arquivo alterado: ela é criada pela ferramenta, não pelo autor da tarefa,
@@ -71,7 +71,7 @@ e contá-la acusava trabalho honesto de scope creep (R11-3).
 
 Um ponto cego é o juiz confessando o que não conseguiu observar. Não é
 acusação: não ter observado não é evidência de fraude nem de honestidade.
-Sete disparam hoje:
+Oito disparam hoje:
 
 1. **Nenhuma verificação re-executada** — o relatório não afirma nenhum
    check (`ruff_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
@@ -95,6 +95,12 @@ Sete disparam hoje:
    trabalho foi commitado depois dele: não há como separá-lo de tasks
    posteriores. Se o HEAD ainda está no `base_commit`, nada foi commitado e o
    juiz difa contra a árvore de trabalho, sem ponto cego (artigo JSERD §6.4).
+8. **Base confiável sem merge-base** — `judge_task(..., trusted_base=...)`
+   recebeu uma ref que não resolve ou não tem merge-base com o HEAD (clone raso);
+   a janela veio do YAML, que o agente controla. A CLI não chega aqui: nesse
+   caso ela sai 1 sem julgar. Com a base confiável resolvida, a âncora ausente
+   (o clone do CI não a traz) e um `base_commit` fora do histórico não viram
+   ponto cego.
 
 Não havendo fraude nenhuma, qualquer ponto cego faz o veredito ser
 **UNVERIFIABLE** em vez de VERIFIED: "não consegui olhar" não pode ser

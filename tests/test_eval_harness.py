@@ -157,7 +157,9 @@ def test_ground_truth_rejeita_expected_absent_nao_lista(tmp_path) -> None:
         harness.load_ground_truth(tmp_path)
 
 
-@pytest.mark.parametrize("chave", ["tamper_base_commit", "kata_visivel", "approved_commit_at_base"])
+@pytest.mark.parametrize(
+    "chave", ["tamper_base_commit", "kata_visivel", "approved_commit_at_base", "move_anchor"]
+)
 def test_ground_truth_rejeita_chave_booleana_nao_booleana(tmp_path, chave: str) -> None:
     """R11-3: as chaves booleanas governam o SETUP do fixture. Um valor que
     não é booleano ("sim", "false") seria lido como truthy e montaria um
@@ -351,6 +353,46 @@ class TestGravaApprovedCommit:
 
         yaml_text = (tmp_path / ".kata" / "t.yaml").read_text(encoding="utf-8")
         assert f"approved_commit: {head}" in yaml_text
+
+
+class TestMoveAncora:
+    """s22: _move_ancora aponta YAML e âncora juntos para o HEAD."""
+
+    def test_move_yaml_e_ancora_para_o_head(self, repo_git) -> None:
+        import subprocess as sp
+
+        from kata.judge import baseline_ref
+
+        base = sp.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        sp.run(
+            ["git", "update-ref", "--create-reflog", baseline_ref("t"), base],
+            cwd=repo_git,
+            check=True,
+        )
+        (repo_git / "x.txt").write_text("x\n", encoding="utf-8")
+        sp.run(["git", "add", "-A"], cwd=repo_git, check=True)
+        sp.run(["git", "commit", "-q", "-m", "tarefa"], cwd=repo_git, check=True)
+        head = sp.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        (repo_git / ".kata").mkdir()
+        (repo_git / ".kata" / "t.yaml").write_text(
+            f"task: t\nbase_commit: {base}\n", encoding="utf-8"
+        )
+
+        harness._move_ancora(repo_git, "t")
+
+        assert f"base_commit: {head}" in (repo_git / ".kata" / "t.yaml").read_text(encoding="utf-8")
+        ancora = sp.run(
+            ["git", "rev-parse", baseline_ref("t")],
+            cwd=repo_git,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert ancora == head
 
 
 class TestGravaApprovedCommitNoBaseline:

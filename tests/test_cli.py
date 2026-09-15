@@ -2244,6 +2244,81 @@ class TestPickTaskInteractiveMenu:
 class TestMainJudge:
     """Testa o modo --judge (adversarial verification)."""
 
+    def test_resolve_trusted_base_exige_merge_base_com_o_head(self, repo_git, monkeypatch) -> None:
+        """A ref resolver não basta: quem define o piso é o merge-base. Num
+        clone raso, ou numa história sem ancestral comum, o merge-base falha e
+        o juiz cairia de volta na janela do YAML."""
+        monkeypatch.chdir(repo_git)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        subprocess.run(["git", "branch", "alvo"], check=True)
+        assert cli._resolve_trusted_base("alvo") == head
+
+        subprocess.run(["git", "checkout", "-q", "--orphan", "orfao"], check=True)
+        (repo_git / "o.txt").write_text("o\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "orfao"], check=True)
+        assert cli._resolve_trusted_base("alvo") is None
+
+    def test_trusted_base_sem_judge_e_erro_de_argumento(self) -> None:
+        """--trusted-base só define a janela do JUDGE; fora dele seria
+        ignorado em silêncio, e quem o passou acharia que o gate o usou."""
+        with patch("sys.argv", ["kata", "--check-only", "--trusted-base", "main"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+    @patch("kata.cli.judge_task")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_trusted_base_irresolvel_sai_1_sem_julgar(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge, tmp_path, monkeypatch
+    ) -> None:
+        """No CI, uma base confiável errada não pode cair de volta na janela do
+        YAML — é justamente a janela que o agente controla. Sai 1 sem julgar."""
+        monkeypatch.chdir(tmp_path)
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "t.yaml"
+        task_file.write_text("task: t\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {"task": "t"}
+
+        with patch("kata.cli._resolve_trusted_base", return_value=None):
+            with patch("sys.argv", ["kata", "--task", "t", "--judge", "--trusted-base", "x"]):
+                with pytest.raises(SystemExit) as exc:
+                    cli.main()
+        assert exc.value.code == 1
+        mock_judge.assert_not_called()
+
+    @patch("kata.cli.judge_task")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_trusted_base_e_repassada_ao_judge(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge, tmp_path, monkeypatch
+    ) -> None:
+        from kata.judge import JudgeResult
+
+        monkeypatch.chdir(tmp_path)
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "t.yaml"
+        task_file.write_text("task: t\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {"task": "t"}
+        mock_judge.return_value = JudgeResult(verdict="VERIFIED")
+
+        with patch("kata.cli._resolve_trusted_base", return_value="abc123"):
+            with patch("sys.argv", ["kata", "--task", "t", "--judge", "--trusted-base", "main"]):
+                with pytest.raises(SystemExit):
+                    cli.main()
+        assert mock_judge.call_args.kwargs["trusted_base"] == "main"
+
     @patch("kata.cli.judge_task")
     @patch("kata.cli._deserialize")
     @patch("kata.cli._task_path")

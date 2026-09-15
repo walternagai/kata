@@ -29,6 +29,7 @@ from kata.judge import (
     _run_git_diff,
     _unreadable_test_files,
     _untracked_diff,
+    baseline_ref,
     collect_claims,
     collect_unverifiable_claims,
     hunt_debris,
@@ -1676,6 +1677,119 @@ class TestJudgeTaskDetectsCommittedFraud:
             result = judge_task(task, cwd=tmp_path)
         assert result.verdict != "VERIFIED"
         assert any("janela de diff vazia" in spot for spot in result.blind_spots)
+
+    @staticmethod
+    def _enfraquece_e_commita(tmp_path: Path) -> str:
+        """Troca a asserção do teste por `pass`, commita e devolve o SHA."""
+        (tmp_path / "tests" / "test_foo.py").write_text(
+            "def test_foo():\n    pass\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "commit", "-q", "-am", "tarefa"], cwd=tmp_path, check=True)
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    def test_ancora_movida_e_baseline_tampering(self, repo_git, tmp_path, monkeypatch) -> None:
+        """Evasão do artigo JSERD §6.4: reescrever o base_commit do YAML e a
+        âncora para o commit final esvazia a janela e o juiz dava VERIFIED.
+        Gravada com reflog, a âncora movida deixa rastro."""
+        monkeypatch.chdir(tmp_path)
+        self._repo_com_teste_real(tmp_path, "t")
+        final = self._enfraquece_e_commita(tmp_path)
+        subprocess.run(["git", "update-ref", baseline_ref("t"), final], cwd=tmp_path, check=True)
+
+        result = judge_task({"task": "t", "base_commit": final, "verify": {}}, cwd=tmp_path)
+        assert any(
+            f.type == "baseline_tampering" and "movida" in f.description for f in result.frauds
+        )
+        assert result.verdict == "REFUTED"
+
+    def test_reinit_legitimo_da_ancora_nao_e_adulteracao(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """Regravar a âncora pela própria ferramenta (tarefa reiniciada com o
+        mesmo nome) zera o histórico: não pode virar acusação de âncora movida."""
+        monkeypatch.chdir(tmp_path)
+        self._repo_com_teste_real(tmp_path, "t")
+        (tmp_path / "novo.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "outro"], cwd=tmp_path, check=True)
+        novo = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        assert record_baseline_ref("t", novo, cwd=tmp_path) is True
+
+        result = judge_task({"task": "t", "base_commit": novo, "verify": {}}, cwd=tmp_path)
+        assert not any(f.type == "baseline_tampering" for f in result.frauds)
+
+    def test_trusted_base_fecha_a_evasao_de_apagar_e_recriar_a_ancora(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """Apagar e recriar a âncora apaga o reflog: localmente é indetectável.
+        Uma base confiável que o agente não move (a ref de destino do PR, no
+        CI) define o piso da janela e o enfraquecimento reaparece."""
+        monkeypatch.chdir(tmp_path)
+        base = self._repo_com_teste_real(tmp_path, "t")
+        subprocess.run(["git", "branch", "alvo", base], cwd=tmp_path, check=True)
+        final = self._enfraquece_e_commita(tmp_path)
+        subprocess.run(["git", "update-ref", "-d", baseline_ref("t")], cwd=tmp_path, check=True)
+        subprocess.run(["git", "update-ref", baseline_ref("t"), final], cwd=tmp_path, check=True)
+        task = {"task": "t", "base_commit": final, "verify": {}}
+
+        # O limite documentado: sem base confiável, a evasão continua passando.
+        assert not any(f.type == "weakened_checks" for f in judge_task(task, cwd=tmp_path).frauds)
+
+        result = judge_task(task, cwd=tmp_path, trusted_base="alvo")
+        assert any(f.type == "weakened_checks" for f in result.frauds)
+        assert result.verdict == "REFUTED"
+
+    def test_trusted_base_sem_ancora_no_clone_nao_vira_ponto_cego(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """No CI a âncora não vem no clone. Com base confiável, a janela não
+        depende dela nem do base_commit do YAML: trabalho honesto tem de sair
+        VERIFIED, não UNVERIFIABLE por 'baseline sem âncora'."""
+        monkeypatch.chdir(tmp_path)
+        base = self._repo_com_teste_real(tmp_path, "t")
+        subprocess.run(["git", "branch", "alvo", base], cwd=tmp_path, check=True)
+        (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "tarefa"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "update-ref", "-d", baseline_ref("t")], cwd=tmp_path, check=True)
+        task = {
+            "task": "t",
+            "base_commit": base,
+            "surgical": {"files": [{"path": "novo.py", "necessary": True}]},
+            "verify": {"ruff_clean": True},
+        }
+        with patch("kata.judge.run_all", return_value={"ruff": VerifyResult(ok=True, output="")}):
+            result = judge_task(task, cwd=tmp_path, trusted_base="alvo")
+        assert result.blind_spots == []
+        assert result.verdict == "VERIFIED"
+
+    def test_record_baseline_ref_com_commit_invalido_preserva_a_ancora(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """Regravar para um commit que não resolve não pode apagar a âncora
+        boa antes de falhar — a tarefa ficaria sem âncora nenhuma."""
+        monkeypatch.chdir(tmp_path)
+        base = self._repo_com_teste_real(tmp_path, "t")
+        assert record_baseline_ref("t", "deadbeef" * 5, cwd=tmp_path) is False
+        from kata.judge import _read_baseline_ref
+
+        assert _read_baseline_ref("t", cwd=tmp_path) == base
+
+    def test_trusted_base_irresolvel_vira_ponto_cego(self, repo_git, tmp_path, monkeypatch) -> None:
+        """Uma base confiável que não resolve não pode virar traceback nem
+        passar em silêncio: o juiz confessa que não teve a base pedida."""
+        monkeypatch.chdir(tmp_path)
+        base = self._repo_com_teste_real(tmp_path, "t")
+        result = judge_task(
+            {"task": "t", "base_commit": base, "verify": {}},
+            cwd=tmp_path,
+            trusted_base="nao-existe",
+        )
+        assert any("base confiável" in spot for spot in result.blind_spots)
 
 
 class TestIsDebrisFile:

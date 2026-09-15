@@ -1,0 +1,17 @@
+# Âncora movida junto com o YAML (artigo JSERD §6.4).
+#
+# O harness grava a âncora refs/kata/base/<hash> com reflog no baseline, como
+# a CLI; depois reescreve o base_commit do YAML E a âncora para o HEAD (commit
+# da tarefa). YAML e âncora concordam, então a checagem de divergência do s14
+# não dispara, e a janela base..HEAD fica vazia.
+#
+# Sem a leitura do reflog da âncora (regresso), o juiz não vê diff nenhum e
+# devolve VERIFIED. Com ela, a âncora que apontou para dois commits é
+# baseline_tampering [high] -> REFUTED. Apagar e recriar a âncora apaga o
+# reflog e continua indetectável localmente: só --trusted-base fecha isso.
+move_anchor: true
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: baseline_tampering
+    severity: high
+    description_contains: "movida"

@@ -419,6 +419,18 @@ def _ask_text(prompt: str, default: str = "") -> str:
 # ── step implementations ────────────────────────────────────────────────
 
 
+def _resolve_trusted_base(ref: str) -> str | None:
+    """merge-base entre a base confiável e o HEAD, ou None.
+
+    A ref resolver não basta: é o merge-base que vira o piso do JUDGE. Num
+    clone raso (o default do actions/checkout) ou numa história sem
+    ancestral comum ele falha, e o juiz cairia de volta na janela do YAML.
+    """
+    result = _run_git(["git", "merge-base", ref, "HEAD"])
+    sha = result.stdout.strip()
+    return sha if result.returncode == 0 and sha else None
+
+
 def _capture_base_commit(data: dict[str, Any], task: str | None = None) -> dict[str, Any]:
     """Registra o HEAD do git no início da tarefa, uma única vez.
 
@@ -1541,6 +1553,15 @@ def main() -> None:
         help="Modo adversarial verification — re-executa verificações e caça fraudes",
     )
     parser.add_argument(
+        "--trusted-base",
+        metavar="REF",
+        default=None,
+        help=(
+            "Com --judge: ref que o agente não controla (ex.: origin/main no CI). O "
+            "piso da janela vira merge-base(REF, HEAD) e o teto do YAML é ignorado"
+        ),
+    )
+    parser.add_argument(
         "--report",
         action="store_true",
         help="Gera relatório outcome-first de tarefa concluída",
@@ -1556,6 +1577,8 @@ def main() -> None:
 
     if args.plan and args.check_only:
         parser.error("--plan e --check-only são mutuamente exclusivos")
+    if args.trusted_base and not args.judge:
+        parser.error("--trusted-base só vale com --judge")
     if args.judge and (args.plan or args.check_only):
         parser.error("--judge é mutuamente exclusivo com --plan e --check-only")
     if args.report and args.judge:
@@ -1646,6 +1669,14 @@ def main() -> None:
         if path is None:
             sys.exit(1)
         data = _load_task_or_exit(path)
+        if args.trusted_base and _resolve_trusted_base(args.trusted_base) is None:
+            # Cair de volta na janela do YAML seria julgar exatamente o que
+            # a base confiável existe para não confiar.
+            print(
+                f"❌ base confiável '{args.trusted_base}' não resolve ou não tem merge-base "
+                "com o HEAD (clone raso? use fetch-depth: 0)"
+            )
+            sys.exit(1)
         _print_header(f"JUDGE — Verificação adversarial de '{task}'")
         result = judge_task(
             data,
@@ -1655,6 +1686,7 @@ def main() -> None:
             cov_source=cov_source,
             gate=gate,
             config=config,
+            trusted_base=args.trusted_base,
         )
         _print_judge_verdict(result)
         # Só REFUTED é falha. "VERIFIED WITH CAVEATS" significa que o juiz

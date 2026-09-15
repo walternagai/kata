@@ -110,7 +110,9 @@ def _aplica_baseline(
     sha = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=True
     ).stdout.strip()
-    git("update-ref", baseline_ref(task), sha)
+    # --create-reflog: é como a CLI grava a âncora (record_baseline_ref), e o
+    # reflog é o que deixa uma âncora movida visível ao juiz (s22).
+    git("update-ref", "--create-reflog", baseline_ref(task), sha)
 
     for arquivo, conteudo in posterior.items():
         arquivo.write_bytes(conteudo)
@@ -226,6 +228,23 @@ def _grava_approved_commit(path: Path, task: str) -> None:
     caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
+def _move_ancora(path: Path, task: str) -> None:
+    """Planta a evasão da âncora movida (s22): YAML e refs/kata/base apontam
+    juntos para o HEAD (commit da tarefa), esvaziando a janela do diff.
+
+    Diferente do s14, os dois concordam; só o reflog da âncora, gravado no
+    baseline, guarda a posição anterior.
+    """
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    caminho_task = path / ".kata" / f"{task}.yaml"
+    dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
+    dados["base_commit"] = sha
+    caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    _git_em(path)("update-ref", baseline_ref(task), sha)
+
+
 def _grava_approved_commit_no_baseline(path: Path, task: str) -> None:
     """Grava approved_commit = base_commit no YAML (s20, janela vazia).
 
@@ -323,6 +342,7 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             "kata_visivel",
             "approved_commit",
             "approved_commit_at_base",
+            "move_anchor",
         ):
             valor = data.get(chave)
             if valor is not None and not isinstance(valor, bool):
@@ -497,6 +517,8 @@ def main() -> None:
                     )
                 if gt.get("tamper_base_commit"):
                     _tampera_base_commit(work_dir, tarefa)
+                if gt.get("move_anchor"):
+                    _move_ancora(work_dir, tarefa)
                 if gt.get("approved_commit"):
                     _grava_approved_commit(work_dir, tarefa)
                 if gt.get("approved_commit_at_base"):

@@ -189,6 +189,7 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
 | `--cov-source` | auto-detectado | Pacote fonte para coverage: lê `[tool.coverage.run] source` do `pyproject.toml`, com fallback `src` |
 | `--gate` | `verify.gate`, senão `70` | Gate mínimo de coverage (%) |
+| `--trusted-base` | (nenhum) | Só com `--judge`: ref que o agente não controla (ex.: `origin/main` no CI); o piso do diff vira `merge-base(ref, HEAD)` e o teto do YAML é ignorado; sem merge-base (ex.: clone raso) sai 1 sem julgar |
 
 Essas flags configuram os **defaults Python**. Um papel declarado em
 `.kata/config.yaml` roda verbatim, e as flags de caminho daquele papel

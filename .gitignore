@@ -40,3 +40,4 @@ paper/jserd/*.out
 paper/jserd/*.toc
 paper/jserd/*.fls
 paper/jserd/*.fdb_latexmk
+.nova/

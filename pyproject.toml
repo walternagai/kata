@@ -3,8 +3,8 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kata"
-version = "0.7.0"
+name = "kata-dev"
+version = "0.7.1"
 description = "Kata (型) — Karpathy Development Cycle: CLI + OpenCode agent + Claude Code skills"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,6 +26,9 @@ kata = "kata.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+kata = ["assets/**/*.md"]
 
 [tool.ruff]
 line-length = 100

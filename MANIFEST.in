@@ -1,0 +1,4 @@
+# O sdist leva somente o pacote: fora tests/, eval/ e paper/.
+prune tests
+prune eval
+prune paper

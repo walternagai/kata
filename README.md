@@ -36,7 +36,7 @@ intenção, mudanças cirúrgicas e verificar com critérios objetivos.
 ### Agente OpenCode (recomendado)
 
 ```bash
-git clone <repo> ~/dev/ninja-apps/kata
+git clone https://github.com/walternagai/kata.git ~/dev/ninja-apps/kata
 cd ~/dev/ninja-apps/kata
 make install
 # Reinicie o OpenCode
@@ -60,7 +60,7 @@ O instalador usa `OPENCODE_CONFIG_DIR` quando definido; caso contrário, usa
 ### Skills Claude Code
 
 ```bash
-git clone <repo> ~/dev/ninja-apps/kata
+git clone https://github.com/walternagai/kata.git ~/dev/ninja-apps/kata
 cd ~/dev/ninja-apps/kata
 make install-claude-code
 ```
@@ -86,7 +86,18 @@ Diferente do agente `@kata` do OpenCode, a versão Claude Code é só skills
 fase — e isso se encaixa melhor rodando na conversa principal do que em um
 subagente isolado que só reporta um resumo ao final.
 
-### CLI Python (opcional, para CI/headless)
+### CLI Python (via PyPI ou checkout)
+
+Via PyPI (distribuição `kata-dev`; o comando continua `kata` — sem clonar nada):
+
+```bash
+pipx install kata-dev
+kata --install all       # opencode + claude-code (copia as skills empacotadas)
+kata --doctor            # confere a instalação
+kata --uninstall all     # remove só o que o Kata criou
+```
+
+A partir do checkout (desenvolvimento):
 
 ```bash
 # As extras `dev` trazem o ruff/pytest/pytest-cov que `kata --check-only`
@@ -110,7 +121,9 @@ uv tool install . --force
 
 Todas as rotas usam o mesmo entry point `kata.cli:main` do
 `pyproject.toml` — `pip`, `pipx` e `uv` apenas entregam o binário de jeitos
-diferentes.
+diferentes. `kata --install` copia as skills do wheel e funciona sem clonar
+o repositório; `make install` / `make install-claude-code` (symlinks para o
+checkout) continuam como fluxo de desenvolvimento local.
 
 ### O que o projeto alvo precisa
 
@@ -171,6 +184,8 @@ kata --task minha-tarefa        # Retoma tarefa específica
 kata --task minha-tarefa --report  # Relatório outcome-first
 kata --doctor                      # As skills de fase estão instaladas?
                                    # (parcial sai 1; domain adapters ausentes só avisam)
+kata --install all [--force]       # Instala skills empacotadas (opencode, claude-code ou all)
+kata --uninstall all               # Remove só o que o --install criou
 kata --task minha-tarefa --audit   # Gradua fases (followed/skipped/faked/degraded)
 kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 ```
@@ -184,6 +199,9 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
 | `--doctor` | `False` | Confere as skills de fase por frontend; domain adapters ausentes só avisam |
+| `--install` | (nenhum) | Copia as skills empacotadas: `opencode`, `claude-code` ou `all` (sem clone do repo) |
+| `--uninstall` | (nenhum) | Remove as skills do `--install` (só o que o Kata criou) |
+| `--force` | `False` | Só com `--install`: guarda personalização existente em `.bak` e substitui |
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
 | `--test-paths` | `tests/` | Caminhos para pytest |
 | `--ignore` | (nenhum) | Caminhos para ignorar no pytest |
@@ -296,7 +314,7 @@ O kata usa `.kata/` na raiz do projeto. Cada tarefa é um arquivo YAML:
 ## Desenvolvimento
 
 ```bash
-make build-skills          # gera opencode/ e claude-code/ a partir de phases/
+make build-skills          # gera opencode/, claude-code/ e src/kata/assets/ de phases/+domains/
 make test                  # pytest + coverage
 make lint                  # ruff check
 make format                # ruff format
@@ -315,7 +333,8 @@ migrar tarefas existentes:
 ln -s .karpathy .kata   # symlink preserva acesso ao legado
 ```
 
-Tarefas podem declarar um domínio (`coding`, `devops`). O domínio padrão é
+Tarefas podem declarar um domínio (`coding`, `devops`, `data-analysis`,
+`research`, `docs`). O domínio padrão é
 `coding`; os demais carregam um adapter de `domains/` (fonte única, gerado
 para OpenCode e Claude Code). Domínio sem adapter conhecido roda com aviso,
 sem o adapter — ver `domains/TEMPLATE.md` para criar um novo.
@@ -330,16 +349,22 @@ kata/
 │                                         que se edita; o resto é gerado.
 ├── opencode/                          ← GERADO (make build-skills)
 │   ├── agent/kata.md                  ← Agente @kata (OpenCode)
-│   └── skills/kata-*/SKILL.md         ← 11 skills (9 fases + JUDGE + QUESTION
-│                                         + domain adapter kata-devops; TWIN
-│                                         CHECK vive no orquestrador)
+│   └── skills/kata-*/SKILL.md         ← 14 skills (10 de fase + 4 domain
+│                                         adapters; TWIN CHECK vive no orquestrador)
 ├── claude-code/                       ← GERADO (make build-skills)
-│   └── skills/kata-*/SKILL.md         ← 12 skills (orquestrador kata + as 11 acima)
+│   └── skills/kata-*/SKILL.md         ← 15 skills (orquestrador kata + as 14 acima)
 ├── domains/                           ← FONTE ÚNICA dos domain adapters
 │   ├── TEMPLATE.md                    ← schema de um adapter (não gera skill)
-│   └── kata-devops.md                 ← primeiro adapter (gera a skill)
+│   ├── kata-devops.md                 ← adapters (um .md por skill kata-*)
+│   ├── kata-data-analysis.md
+│   ├── kata-research.md
+│   └── kata-docs.md
+├── MANIFEST.in                        ← sdist leva só o pacote (poda tests/, eval/, paper/)
 ├── src/kata/
-│   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge)
+│   ├── cli.py                  ← CLI (orquestra as 9 fases + audit + judge + install)
+│   ├── install.py              ← `kata --install`: copia as skills empacotadas
+│   ├── assets/                 ← GERADO (make build-skills): espelho do gerado
+│   │                             que viaja no wheel (lido via importlib.resources)
 │   ├── report.py               ← I/O de relatório/auditoria (S7-refactor)
 │   ├── fit.py                  ← Lógica do fit gate (diff_stats, is_trivial)
 │   ├── config.py               ← .kata/config.yaml (comandos do projeto alvo)

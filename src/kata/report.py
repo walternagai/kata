@@ -308,18 +308,20 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
             print(f"  ℹ️  {frontend}: domain skills opcionais faltando: {', '.join(faltando)}")
     if domain_warnings:
         print("     Domain adapters só são necessárias quando a tarefa usa um")
-        print("     domínio diferente de coding. Instale com `make reinstall` /")
-        print("     `make reinstall-claude-code` se for usar devops/data-analysis/etc.")
+        print("     domínio diferente de coding. Instale com `kata --install all`")
+        print("     (ou `make reinstall` / `make reinstall-claude-code` no checkout).")
         print()
 
     if parciais:
         print(f"  ⚠  {parciais} frontend(s) com instalação parcial.")
         print("     O ciclo vai tentar carregar a skill que falta, não conseguir,")
         print("     e improvisar a fase — que é o que o --audit chama de fase fingida.")
-        print("     Rode `make reinstall` / `make reinstall-claude-code`.")
+        print("     Rode `kata --install all` (ou `make reinstall` /")
+        print("     `make reinstall-claude-code` no checkout).")
     elif all(e.ausente for e in estados):
-        print("  ⚠  Nenhum frontend instalado. Rode `make install` ou")
-        print("     `make install-claude-code`. O CLI `kata` funciona sem isso.")
+        print("  ⚠  Nenhum frontend instalado. Rode `kata --install all` (ou")
+        print("     `make install` / `make install-claude-code` no checkout).")
+        print("     O CLI `kata` funciona sem isso.")
     else:
         print("  ✅  Instalação completa.")
     print()

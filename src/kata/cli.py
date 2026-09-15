@@ -42,6 +42,7 @@ from kata.config import (
     load_verify_config,
 )
 from kata.fit import diff_stats, is_trivial, untracked_stats
+from kata.install import FRONTENDS_VALIDOS, config_dir_de, run_install, run_uninstall
 from kata.judge import (
     is_debris_file,
     judge_task,
@@ -1548,6 +1549,28 @@ def main() -> None:
         help="Confere se as skills de fase estão instaladas em cada frontend",
     )
     parser.add_argument(
+        "--install",
+        metavar="FRONTEND",
+        default=None,
+        choices=[*FRONTENDS_VALIDOS, "all"],
+        help=(
+            "Instala as skills empacotadas (copia, sem exigir clone do repo). "
+            "FRONTEND: opencode, claude-code ou all"
+        ),
+    )
+    parser.add_argument(
+        "--uninstall",
+        metavar="FRONTEND",
+        default=None,
+        choices=[*FRONTENDS_VALIDOS, "all"],
+        help="Remove as skills instaladas por --install (só o que o Kata criou)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Com --install: guarda personalização existente em .bak e substitui",
+    )
+    parser.add_argument(
         "--judge",
         action="store_true",
         help="Modo adversarial verification — re-executa verificações e caça fraudes",
@@ -1597,6 +1620,41 @@ def main() -> None:
         parser.error("--init é mutuamente exclusivo com --judge, --report, --plan e --check-only")
     if args.task and args.check_only:
         parser.error("--task é mutuamente exclusivo com --check-only")
+    if args.install and args.uninstall:
+        parser.error("--install e --uninstall são mutuamente exclusivos")
+    if args.force and not args.install:
+        parser.error("--force só vale com --install")
+    if (args.install or args.uninstall) and (
+        args.init or args.plan or args.check_only or args.judge or args.report or args.audit
+    ):
+        parser.error("--install/--uninstall são mutuamente exclusivos com os outros modos")
+    if (args.install or args.uninstall) and args.task:
+        parser.error("--install/--uninstall não usam --task (são globais por frontend)")
+
+    # --install/--uninstall não tocam em tarefa nem precisam de .kata/: são
+    # sobre a instalação das skills, e têm de funcionar de qualquer diretório.
+    if args.install or args.uninstall:
+        _print_header(
+            "INSTALL — Skills empacotadas" if args.install else "UNINSTALL — Skills empacotadas"
+        )
+        if args.install:
+            reports, code = run_install(args.install, force=args.force)
+        else:
+            reports, code = run_uninstall(args.uninstall)
+        for rep in reports:
+            print(f"  {rep.frontend}: destino {config_dir_de(rep.frontend)}")
+            for nome in rep.instaladas:
+                print(f"    ✅ {nome}")
+            for nome in rep.removidas:
+                print(f"    🗑  {nome}")
+            for nome in rep.backups:
+                print(f"    💾 backup em {nome}")
+            for msg in rep.recusadas:
+                print(f"    ❌ {msg}")
+            for msg in rep.erros:
+                print(f"    ⚠  {msg}")
+        print()
+        sys.exit(code)
 
     # --doctor não toca em tarefa nem precisa de .kata/: é sobre a
     # instalação das skills, e tem de funcionar de qualquer diretório.

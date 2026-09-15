@@ -299,6 +299,21 @@ def _destino(slug: str, frontend: str) -> Path:
     return REPO / spec["fase"].format(slug=slug)
 
 
+def _assets_root() -> Path:
+    """Raiz dos assets embarcados no wheel (lida via importlib.resources).
+
+    Função, e não constante: os testes trocam `REPO` por tmp_path via
+    monkeypatch, e o espelho tem de acompanhar.
+    """
+    return REPO / "src" / "kata" / "assets"
+
+
+def _destinos(slug: str, frontend: str) -> list[Path]:
+    """Destino no repo + espelho em src/kata/assets/ (conteúdo idêntico)."""
+    destino = _destino(slug, frontend)
+    return [destino, _assets_root() / destino.relative_to(REPO)]
+
+
 def _destino_dir(frontend: str) -> Path:
     """Diretório onde as skills de fase de um frontend são geradas.
 
@@ -308,6 +323,12 @@ def _destino_dir(frontend: str) -> Path:
     spec = FRONTENDS[frontend]
     caminho = REPO / spec["fase"].format(slug="kata-fit")
     return caminho.parent.parent
+
+
+def _destino_dirs(frontend: str) -> list[Path]:
+    """Diretório no repo + espelho em src/kata/assets/."""
+    raiz = _destino_dir(frontend)
+    return [raiz, _assets_root() / raiz.relative_to(REPO)]
 
 
 def _fontes() -> list[Path]:
@@ -354,18 +375,24 @@ def build(check: bool = False) -> int:
                 render(fonte, frontend, origem=str(caminho.relative_to(REPO))),
                 str(caminho.relative_to(REPO)),
             )
-            destino = _destino(slug, frontend)
-            gerados.add(destino)
-            atual = destino.read_text(encoding="utf-8") if destino.exists() else None
+            for destino in _destinos(slug, frontend):
+                gerados.add(destino)
+                atual = destino.read_text(encoding="utf-8") if destino.exists() else None
 
-            if atual == saida:
-                continue
-            if check:
-                divergentes.append(str(destino.relative_to(REPO)))
-                continue
-            destino.parent.mkdir(parents=True, exist_ok=True)
-            destino.write_text(saida, encoding="utf-8")
-            print(f"  ✅ {destino.relative_to(REPO)}")
+                if atual == saida:
+                    continue
+                if check:
+                    try:
+                        divergentes.append(str(destino.relative_to(REPO)))
+                    except ValueError:
+                        divergentes.append(str(destino))
+                    continue
+                destino.parent.mkdir(parents=True, exist_ok=True)
+                destino.write_text(saida, encoding="utf-8")
+                try:
+                    print(f"  ✅ {destino.relative_to(REPO)}")
+                except ValueError:
+                    print(f"  ✅ {destino}")
 
     # K-24: gerados órfãos — deletar phases/kata-x.md deixa o SKILL.md
     # correspondente nos dois frontends sem fonte. O --check só compara o que
@@ -373,21 +400,24 @@ def build(check: bool = False) -> int:
     # lista do filesystem e linkam o órfão. Remover (ou denunciar no --check)
     # o que não tem fonte correspondente.
     for frontend in FRONTENDS:
-        dest_dir = _destino_dir(frontend)
-        if not dest_dir.exists():
-            continue
-        for filho in dest_dir.iterdir():
-            if not filho.is_dir():
+        for dest_dir in _destino_dirs(frontend):
+            if not dest_dir.exists():
                 continue
-            destino = filho / "SKILL.md"
-            if destino in gerados or not destino.exists():
-                continue
-            rel = str(destino.relative_to(REPO))
-            if check:
-                divergentes.append(f"{rel} (órfão — sem fonte em phases/)")
-                continue
-            filho.unlink() if not any(filho.iterdir()) else destino.unlink()
-            print(f"  🗑  {rel} (órfão — fonte removida)")
+            for filho in dest_dir.iterdir():
+                if not filho.is_dir():
+                    continue
+                destino = filho / "SKILL.md"
+                if destino in gerados or not destino.exists():
+                    continue
+                try:
+                    rel = str(destino.relative_to(REPO))
+                except ValueError:
+                    rel = str(destino)
+                if check:
+                    divergentes.append(f"{rel} (órfão — sem fonte em phases/)")
+                    continue
+                filho.unlink() if not any(filho.iterdir()) else destino.unlink()
+                print(f"  🗑  {rel} (órfão — fonte removida)")
 
     if check and divergentes:
         print("Arquivos gerados divergem da fonte em phases/:")

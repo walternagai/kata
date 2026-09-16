@@ -23,26 +23,29 @@ O ciclo é inspirado em duas fontes complementares:
 ## Arquitetura
 
 ```
-src/kata/       código Python (cli.py, config.py, fit.py, verify.py, judge.py,
-                report.py, skills.py, __init__.py, __main__.py)
+src/kata/       código Python (cli.py, config.py, install.py, fit.py, verify.py,
+                judge.py, report.py, skills.py, __init__.py, __main__.py —
+                e assets/, o gerado que viaja no wheel)
 tests/          testes pytest (test_cli.py, test_config.py, test_fit.py,
                 test_verify.py, test_judge.py, test_skills.py,
                 test_domains.py, test_install.py — roda os instaladores .sh
-                de verdade; test_eval_harness.py — parser de fraudes do
+                de verdade; test_install_bundled.py — o --install do wheel;
+                test_eval_harness.py — parser de fraudes do
                 run_traps.py; test_skills_build.py — gerados vs. phases/ fonte
                 única; test_schema_contract.py — schema documentado no
                 DOCUMENTATION.md contra o código e o template do --init)
 opencode/       definição do agente e skills para o OpenCode
   agent/kata.md          prompt do agente @kata
-  skills/kata-*/SKILL.md 11 skills (9 fases + JUDGE + QUESTION + domain adapter
-                         kata-devops; TWIN CHECK vive no orquestrador)
+  skills/kata-*/SKILL.md 14 skills (10 de fase + 4 domain adapters; TWIN CHECK
+                         vive no orquestrador)
 claude-code/    skills para o Claude Code
   skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
-  skills/kata-*/SKILL.md as mesmas 11 skills (mesmo procedimento,
+  skills/kata-*/SKILL.md as mesmas 14 skills (mesmo procedimento,
                          nomes de ferramenta do host — não são texto idêntico)
 domains/        adapters de domínio opcionais, fonte única como phases/
-                (TEMPLATE.md documenta o schema; kata-devops.md é o primeiro
-                adapter — gerados como skills e opcionais no --doctor)
+                (TEMPLATE.md documenta o schema; kata-devops.md,
+                kata-data-analysis.md, kata-research.md e kata-docs.md são os
+                adapters — gerados como skills e opcionais no --doctor)
 eval/           cenários de trap adversarial (python3 eval/run_traps.py)
 scripts/install.sh                instala via symlinks em ~/.config/opencode/
 scripts/install-claude-code.sh    instala via symlinks em ~/.claude/
@@ -106,6 +109,11 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
   a checagem de instalação por frontend (`kata --doctor`). Instalação parcial
   reprova; ausente não. Uma fase rodada sem a skill dela vai para
   `preflight.skills_missing` e o `--audit` a gradua como `degraded`.
+- `install.py` é o `kata --install` / `--uninstall` / `--force`: copia as
+  skills empacotadas de `src/kata/assets/` para o config dir do frontend, sem
+  exigir clone do repo (quem instalou via `pipx install kata-dev` não tem
+  checkout). A prova de "criado pelo Kata" é o marcador `.kata-managed`;
+  conteúdo do usuário é preservado ou vai para `.bak` com `--force`.
 - O CLI (`cli.py`) orquestra as 9 fases + audit + judge opcional e chama
   `fit.py`, `verify.py`, `judge.py`; o I/O de relatório/auditoria
   (`_step_report`, `_print_judge_verdict`, `_audit_task`, `_print_doctor`) vive
@@ -146,6 +154,11 @@ poder divergir.
 `~/.claude/skills/`. Isso significa que rodar `make build-skills` reflete
 imediatamente na instalação, sem reinstalar. Use `make reinstall` /
 `make reinstall-claude-code` só se criar **novos** arquivos de skill/agent.
+
+Para quem **não** tem o checkout (instalado via `pipx install kata-dev`), o
+mesmo efeito vem de `kata --install opencode|claude-code|all`, que **copia** o
+gerado embarcado em `src/kata/assets/` — sem symlink e sem repo. O `--doctor`
+diagnostica os dois casos; `--uninstall` remove só o que o `--install` criou.
 
 Ambos respeitam `OPENCODE_CONFIG_DIR` / `CLAUDE_CONFIG_DIR` quando definidos.
 Há instaladores PowerShell equivalentes (`scripts/*.ps1`) com `-Copy` para

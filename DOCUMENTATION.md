@@ -102,28 +102,33 @@ src/kata/
 ├── report.py    Report/audit/doctor I/O (`_step_report`, `_print_judge_verdict`, `_audit_task`)
 ├── config.py    `.kata/config.yaml` — the target project's own check commands
 ├── skills.py    Which phase skills the cycle needs, and whether they are installed
+├── install.py   `kata --install` / `--uninstall`: copies the bundled skills
 ├── fit.py       Diff measurement and triviality gate
 ├── verify.py    Lint, test, coverage, and pattern search
 ├── judge.py     Adversarial verification and fraud detection
 ├── __init__.py  Package version
-└── __main__.py python -m kata entry point
+├── __main__.py python -m kata entry point
+└── assets/      GENERATED (make build-skills): the skills bundled in the wheel
 
 phases/                           SINGLE SOURCE for every frontend prompt
 ├── kata.md                       The orchestrator
 └── kata-*.md                     The 10 phase skills (9 phases + JUDGE + QUESTION)
 
+domains/                          SINGLE SOURCE for the domain adapters
+├── TEMPLATE.md                   Adapter schema (renders no skill)
+└── kata-<domain>.md              One adapter per file (4 shipped)
+
 opencode/                         GENERATED — do not edit by hand
 ├── agent/kata.md                 OpenCode @kata agent definition
-└── skills/kata-*/SKILL.md        Phase-specific operating instructions
+└── skills/kata-*/SKILL.md        The 10 phase skills + the 4 domain adapters
 
 claude-code/                      GENERATED — do not edit by hand
 └── skills/kata-*/SKILL.md        kata orchestrator skill + the same 10
-                                   phase-specific skills + the kata-devops
-                                   domain adapter
+                                   phase-specific skills + the 4 domain adapters
 
 tests/                            Unit tests for the Python implementation
 eval/                             Adversarial trap scenarios
-scripts/build_skills.py           Renders phases/ into both frontends
+scripts/build_skills.py           Renders phases/ and domains/ into both frontends
 scripts/install.sh                OpenCode symlink installer
 scripts/install-claude-code.sh    Claude Code symlink installer
 ```
@@ -217,6 +222,15 @@ pipx install .
 uv tool install . --force
 ```
 
+The distribution is named `kata-dev` (the command stays `kata`), so the same
+tools install the released version with no checkout at all:
+
+```bash
+pipx install kata-dev
+kata --install all     # copies the bundled skills: opencode, claude-code or all
+kata --doctor          # confirm the install
+```
+
 All routes share the same `kata.cli:main` entry point from
 `pyproject.toml`; `pip`, `pipx` and `uv` only deliver the binary
 differently.
@@ -256,8 +270,9 @@ agent or skill entries.
 
 ### Claude Code skills
 
-Install the `kata` skill, its 10 phase skills, and the `kata-devops` domain
-adapter into Claude Code, also through symlinks:
+Install the `kata` skill, its 10 phase skills, and the 4 domain adapters
+(`kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs`) into
+Claude Code, also through symlinks:
 
 ```bash
 make install-claude-code
@@ -300,6 +315,9 @@ reports a summary at the end.
 | `kata --judge --task TASK` | Run adversarial verification |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
 | `kata --doctor` | Check whether the phase skills are installed in each frontend (missing domain adapters are optional warnings) |
+| `kata --install FRONTEND` | Copy the bundled skills (`opencode`, `claude-code` or `all`) without a checkout of this repository |
+| `kata --uninstall FRONTEND` | Remove what `--install` created (only what Kata itself wrote) |
+| `kata --force` | With `--install`: back up existing customization to `.bak` and replace it |
 | `kata --version` | Print the package version |
 
 The `--plan`, `--check-only`, `--judge`, `--report`, and `--audit`
@@ -529,9 +547,11 @@ installed a frontend loses nothing, while someone with 9 of the 10 phase skills
 runs the whole cycle and silently loses a phase. With no frontend installed
 at all, `--doctor` says so and exits `0` — the `kata` CLI works without any.
 
-Domain adapters are optional and never fail `--doctor`: a missing `kata-devops`
-is reported as a hint (installable with `make reinstall` /
-`make reinstall-claude-code`) because a `coding` task does not need it.
+Domain adapters are optional and never fail `--doctor`: a missing adapter
+(`kata-devops`, `kata-data-analysis`, `kata-research` or `kata-docs`) is
+reported as a hint (installable with `make reinstall` /
+`make reinstall-claude-code`, or `kata --install`) because a `coding` task
+does not need one.
 
 When a skill fails to load mid-cycle, the orchestrator is instructed not to
 improvise: it falls back to a per-phase minimum contract documented in the
@@ -746,9 +766,12 @@ by `make build-skills`. Each adapter defines:
 - **FIT routes by shape**: which route each task shape should take
 - **Red lines**: actions never allowed without documented human authorization
 
-The only adapter shipped today is `kata-devops` (Docker, Docker Compose,
-Terraform, Nginx, GitHub Actions, deploys and healthchecks). Adapters for
-`data-analysis`, `research` and `docs` are planned.
+Four adapters ship today: `kata-devops` (Docker, Docker Compose, Terraform,
+Nginx, GitHub Actions, deploys and healthchecks), `kata-data-analysis`
+(pandas, SQL, notebooks, dashboards and data pipelines), `kata-research`
+(bibliographic investigation, source analysis, experiments and literature
+review) and `kata-docs` (README, guides, changelogs, docstrings and
+specifications).
 
 ## Python API
 
@@ -837,7 +860,8 @@ phase to a dedicated skill and defines the expected use of OpenCode tools:
 
 The repository contains skills for FIT, QUESTION, THINK, SIMPLIFY, INTENT,
 SURGICAL, VERIFY, ARTIFACT, REPORT, and JUDGE. `scripts/install.sh` symlinks
-all 10 of them under `$CONFIG_DIR/skills/`, plus the `@kata` agent itself
+every directory under `opencode/skills/` — all 10 phase skills plus the 4
+domain adapters — under `$CONFIG_DIR/skills/`, plus the `@kata` agent itself
 under `$CONFIG_DIR/agent/`.
 
 ## Claude Code integration
@@ -854,10 +878,9 @@ set instead of OpenCode's:
 - `Bash` for Git and verification commands;
 - `Edit` or `Write` for surgical changes and task persistence.
 
-The repository contains the same 11 phase/domain skills as the OpenCode side
+The repository contains the same 14 phase/domain skills as the OpenCode side
 (`claude-code/skills/kata-*/SKILL.md` — the 10 phase skills — 9 phases +
-JUDGE + QUESTION — plus the `kata-devops`
-domain adapter), plus the `kata` skill itself.
+JUDGE + QUESTION — plus the 4 domain adapters), plus the `kata` skill itself.
 `scripts/install-claude-code.sh` symlinks every directory it finds under
 `claude-code/skills/` into `$CLAUDE_CONFIG_DIR/skills/`.
 

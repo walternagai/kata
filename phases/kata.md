@@ -84,7 +84,7 @@ Mapeamento de ferramentas do {{FRONTEND_NOME}} para cada tarefa do kata:
 | Tarefa | Ferramenta | Uso |
 |--------|------------|-----|
 | Carregar instruções da fase | {{LOAD_PHASE}} | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
-| Carregar adapter de domínio | {{LOAD_DOMAIN}} | `kata-devops` (e futuros: `kata-data-analysis`, `kata-research`, `kata-docs`) |
+| Carregar adapter de domínio | {{LOAD_DOMAIN}} | `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs` |
 <!--ifnot:closed_choice_ask-->
 | Perguntar ao usuário | {{ASK}} + `kata-question` | Uma pergunta por chamada; consulte a skill para a rota `question` e as regras |
 <!--/ifnot-->

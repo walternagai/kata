@@ -12,11 +12,11 @@ combining the Karpathy Development Cycle with fit-gate/verification-gate ideas f
 
 Two frontends share one Python backend, and both are **generated from a single source in
 `phases/`** (11 files: 10 phases + the orchestrator), plus optional domain adapters from `domains/`
-(currently `kata-devops`):
+(four shipped: `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs`):
 - **OpenCode**: `@kata` agent (`opencode/agent/kata.md`) backed by 10 phase skills + the
-  `kata-devops` adapter (`opencode/skills/kata-*/`).
+  4 domain adapters (`opencode/skills/kata-*/`).
 - **Claude Code**: `kata` orchestrator skill (`claude-code/skills/kata/SKILL.md`) backed by the same
-  10 phase skills + the `kata-devops` adapter (`claude-code/skills/kata-*/`). No subagent — the cycle
+  10 phase skills + the 4 domain adapters (`claude-code/skills/kata-*/`). No subagent — the cycle
   is interactive (asks a question at nearly every phase), so it runs in the main conversation.
 
 Only the orchestration layer differs between frontends; Ruff/pytest/coverage/judge logic always runs
@@ -66,7 +66,7 @@ immediately without reinstalling — `make reinstall` is only needed for newly a
 
 The `kata` CLI itself (this tool applied to *other* projects) is invoked as `kata` / `python -m kata`;
 see [`DOCUMENTATION.md`](DOCUMENTATION.md#cli) for its modes (`--init`, `--plan`, `--check-only`,
-`--judge`, `--report`, `--audit`) and verification flags (`--ruff-paths`, `--test-paths`, `--cov-source`, `--gate`, and `--trusted-base` for `--judge` in CI).
+`--judge`, `--report`, `--audit`, `--install`) and verification flags (`--ruff-paths`, `--test-paths`, `--cov-source`, `--gate`, and `--trusted-base` for `--judge` in CI).
 
 ## Architecture
 
@@ -75,12 +75,15 @@ src/kata/
 ├── cli.py       CLI, task persistence (.kata/*.yaml), cycle orchestration, reports
 ├── config.py    .kata/config.yaml — the target project's own lint/test/coverage commands
 ├── skills.py    PHASE_SKILLS + per-frontend install check (the --doctor preflight)
+├── install.py   kata --install / --uninstall / --force: copies the skills bundled in
+│                src/kata/assets/ (no checkout needed — pipx install kata-dev has none)
 ├── fit.py       diff_stats() / is_trivial() — the fit gate
 ├── verify.py    run_ruff / run_pytest / run_coverage / run_command / search_pattern / run_all()
 ├── judge.py     collect_claims() + the fraud hunters (six hunt_*() plus
 │                baseline tampering inside judge_task()) + judge_task()
 ├── __init__.py  package version
-└── __main__.py  python -m kata entry point (excluded from coverage)
+├── __main__.py  python -m kata entry point (excluded from coverage)
+└── assets/      GENERATED (make build-skills): the generated tree shipped in the wheel
 ```
 
 - `fit.py`: `diff_stats()` diffs against `HEAD` first (staged and unstaged in
@@ -122,6 +125,10 @@ src/kata/
   config dir; a **partial** install exits 1 (a missing skill makes the orchestrator improvise the phase),
   an absent one does not. A phase run without its skill is recorded in `preflight.skills_missing` and
   graded `degraded` by `--audit`.
+- `install.py`: `kata --install opencode|claude-code|all` copies the generated tree bundled in
+  `src/kata/assets/` into the frontend config dir — the route for `pipx install kata-dev`, which has no
+  checkout to symlink to. `.kata-managed` markers prove Kata created a directory; user content is kept
+  or moved to `.bak` under `--force`, and `--uninstall` removes only what Kata wrote.
 - Exit codes: `0` pass, `1` cycle/report/judge failure, audit fakes/skips/degraded, or a partial install
   found by `--doctor`; `2` invalid CLI args (argparse).
 

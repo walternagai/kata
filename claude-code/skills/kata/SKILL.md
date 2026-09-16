@@ -61,7 +61,7 @@ Mapeamento de ferramentas do Claude Code para cada tarefa do kata:
 | Tarefa | Ferramenta | Uso |
 |--------|------------|-----|
 | Carregar instruções da fase | `Skill` | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
-| Carregar adapter de domínio | `Skill` | `kata-devops` (e futuros: `kata-data-analysis`, `kata-research`, `kata-docs`) |
+| Carregar adapter de domínio | `Skill` | `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs` |
 | Perguntar ao usuário | Texto livre (aberta) ou `AskUserQuestion` (fechada) + `kata-question` | Uma pergunta por vez; consulte a skill `kata-question` para a regra de qual ferramenta usar |
 | Executar comandos | `Bash` | `git diff`, `ruff`, `pytest`, `python -m kata --check-only` etc. |
 | Ler arquivos | `Read` | Inspecionar diff/código de arquivos específicos |

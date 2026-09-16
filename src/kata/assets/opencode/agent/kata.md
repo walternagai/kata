@@ -63,7 +63,7 @@ Mapeamento de ferramentas do OpenCode para cada tarefa do kata:
 | Tarefa | Ferramenta | Uso |
 |--------|------------|-----|
 | Carregar instruções da fase | `skill` | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
-| Carregar adapter de domínio | `skill` | `kata-devops` (e futuros: `kata-data-analysis`, `kata-research`, `kata-docs`) |
+| Carregar adapter de domínio | `skill` | `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs` |
 | Perguntar ao usuário | `question` + `kata-question` | Uma pergunta por chamada; consulte a skill para a rota `question` e as regras |
 | Executar comandos | `bash` | `git diff`, `ruff`, `pytest`, `python -m kata --check-only` etc. |
 | Ler arquivos | `read` | Inspecionar diff/código de arquivos específicos |

@@ -195,6 +195,10 @@ ambientes sem symlink e `-Uninstall`.
 
 ## Compatibilidade com mushin
 
-O schema `.kata/<task>.yaml` é compatível com `.karpathy/` do mushin. Para
-migrar: `ln -s .karpathy .kata`. O `scripts/karpathy_cycle.py` do mushin não é
-removido — convive com o kata como fallback headless.
+mushin é um agente local anterior ao kata, de repositório privado do autor —
+não faz parte deste pacote, não é distribuído com ele, e não existe em lugar
+nenhum deste checkout. A única relação é de schema: `.kata/<task>.yaml` é
+compatível com o `.karpathy/` que o mushin usava, então migrar é
+`ln -s .karpathy .kata`. No repositório privado do mushin (não neste), o
+`scripts/karpathy_cycle.py` original não foi removido — continua lá como
+fallback headless daquele agente, sem relação com o código deste pacote.

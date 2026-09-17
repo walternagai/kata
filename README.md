@@ -327,8 +327,11 @@ make paper                   # compila paper/jserd/paper.pdf (exige TeX Live)
 
 ## Compatibilidade
 
-O schema `.kata/<task>.yaml` é compatível com o `.karpathy/` do mushin. Para
-migrar tarefas existentes:
+O schema `.kata/<task>.yaml` é compatível com o `.karpathy/` do mushin — um
+agente local anterior ao kata, de repositório privado do autor, que não faz
+parte deste pacote nem é distribuído com ele. A nota existe apenas para quem
+já tinha tarefas nesse formato; quem instala `kata-dev` do zero não precisa
+dela. Para migrar tarefas existentes:
 
 ```bash
 ln -s .karpathy .kata   # symlink preserva acesso ao legado

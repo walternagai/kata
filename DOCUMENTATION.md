@@ -91,8 +91,6 @@ the following situations:
 - **Unsticking a fix-verify loop**: after 3 failed verification attempts the
   task is handed back to the user with what was tried, the real output, and
   the current hypothesis, instead of looping forever.
-- **Migrating legacy mushin tasks**: `.kata/` is schema-compatible with
-  `.karpathy/`, so existing tasks keep working through a symbolic link.
 
 ## Architecture
 
@@ -1029,7 +1027,10 @@ source that had quietly coupled itself to a real frontend would fail there.
 ## Compatibility and limitations
 
 - The `.kata/<task>.yaml` schema is compatible with the `.karpathy/` schema used
-  by mushin. A symbolic link can preserve access to legacy tasks:
+  by mushin, an earlier local agent from the author's own private repository
+  (not part of this package or distributed with it, and not something a
+  `kata-dev` install ever needs). The note exists only for whoever already had
+  tasks in that format; a symbolic link preserves access to them:
   `ln -s .karpathy .kata`.
 - The CLI assumes Git is available for diff and branch detection. It continues
   with reduced task detection when branch lookup fails.

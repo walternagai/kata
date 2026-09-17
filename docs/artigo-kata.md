@@ -19,7 +19,8 @@ agente diz "pronto", o que sustenta essa afirmação?
 
 O ciclo de desenvolvimento na tradição de Andrej Karpathy ([karpathy.ai](https://karpathy.ai/))
 propõe disciplina: pensar antes de codar, código mínimo, mudanças cirúrgicas,
-verificação objetiva — uma prática que o kata herda via o agente mushin, onde o
+verificação objetiva — uma prática que o kata herda via o agente mushin
+(repositório privado do autor, não distribuído), onde o
 ciclo foi primeiro implementado. O [The Fable Method](https://github.com/Sahir619/fable-method)
 (Sahir619) propõe gates: classificar a tarefa antes de agir, evidência antes de
 ação, verificação adversarial, relatório outcome-first.
@@ -506,7 +507,8 @@ fase foi "fingida" — o kata tem.
   acusar. Falso negativo esconde fraude; falso positivo destrói a confiança no
   veredito.
 - **Compatibilidade**: o schema `.kata/<task>.yaml` é compatível com
-  `.karpathy/` do mushin (`ln -s .karpathy .kata`).
+  `.karpathy/` do mushin, repositório privado do autor não distribuído com o
+  kata (`ln -s .karpathy .kata`).
 
 ## 7. Limitações honestas
 

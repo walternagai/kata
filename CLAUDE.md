@@ -120,7 +120,8 @@ src/kata/
     exits 1, the same code as `REFUTED`, which makes a broken file look like fraud found.
 - Task files live in `.kata/<task>.yaml` at the *target* project's root (not this repo's own root,
   except when kata is being used on itself). Schema is compatible with mushin's `.karpathy/`
-  (`ln -s .karpathy .kata` to migrate).
+  (`ln -s .karpathy .kata` to migrate) — mushin is an earlier, private, non-distributed agent
+  of the author's, not part of this package.
 - `skills.py`: `PHASE_SKILLS` is the canonical list the cycle needs. `--doctor` checks each frontend's
   config dir; a **partial** install exits 1 (a missing skill makes the orchestrator improvise the phase),
   an absent one does not. A phase run without its skill is recorded in `preflight.skills_missing` and

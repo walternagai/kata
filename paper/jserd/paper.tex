@@ -1668,37 +1668,44 @@ in the skill text.
 
 This section documents how to install Kata and use its command-line
 interface, so that the demonstrations of
-Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced. The
-canonical user documentation --- README, \texttt{DOCUMENTATION.md}, and
-the installers --- is versioned with the source at
-\href{https://github.com/walternagai/kata/tree/v0.7.0}{\texttt{github.com/walternagai/kata/tree/v0.7.0}};
-the instructions below mirror that tagged release, which also contains the
+Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced. Kata is
+published on the Python Package Index (PyPI) as \texttt{kata-dev} (the
+command stays \texttt{kata}); the package version cited throughout this
+paper is \texttt{0.7.2}. The canonical user documentation --- README and
+\texttt{DOCUMENTATION.md} --- ships inside the package and is also
+versioned with the source, whose exact commits and reproduction commands
+are given in the Declarations section, together with the
 comparison and external-study harnesses and the measurement and audit
-tooling cited in Sections~\ref{sec:design} and \ref{sec:external-evaluation}. The Declarations section gives the exact commits
-and the reproduction commands.
+tooling cited in Sections~\ref{sec:design} and \ref{sec:external-evaluation}.
 
 \subsection{Installation}
 
-Kata requires Python 3.11 or newer. The package exposes a single entry
-point, \texttt{kata.cli:main}, installable in development mode with the
-lint, test, and coverage tools the CLI itself executes:
+Kata requires Python 3.11 or newer. The recommended installation path is
+the published package, isolated in its own environment with
+\texttt{pipx} or \texttt{uv} so it does not touch the current one:
+
+\begin{lstlisting}
+pipx install kata-dev
+# or: uv tool install kata-dev
+kata --install all       # opencode + claude-code (copies the bundled skills)
+kata --doctor            # checks the installation
+\end{lstlisting}
+
+Development on the source checkout instead installs the package in
+editable mode, with the \texttt{dev} extra bringing the lint, test, and
+coverage tools the CLI itself executes:
 
 \begin{lstlisting}
 pip install -e '.[dev]'
 \end{lstlisting}
 
-To run or install the CLI without touching the current environment,
-\texttt{pipx} or \texttt{uv} isolate the package in their own virtual
-environment:
+To run the CLI once without installing it permanently (CI/headless
+friendly), \texttt{pipx} or \texttt{uv} can run it directly from the
+package:
 
 \begin{lstlisting}
-# One-off run — nothing installed permanently (CI/headless friendly)
-pipx run --spec . kata --version
-uv tool run --from . kata --version
-
-# Permanent install — creates a `kata` binary on the PATH
-pipx install .
-uv tool install . --force
+pipx run kata-dev --version
+uv tool run --from kata-dev kata --version
 \end{lstlisting}
 
 The agent frontends are installed separately through symlinks. \texttt{make
@@ -2403,11 +2410,15 @@ Section~\ref{sec:field} for the comparison that sharpened Kata's design.
 \section*{Declarations}
 
 \noindent\textbf{Availability of data and materials.}
-Kata is open-source software distributed under the MIT
-License~\href{https://github.com/walternagai/kata/blob/main/LICENSE}{[MIT licensed]}.
-The source code, installers, evaluation harnesses, and raw experimental data are publicly available at
-\href{https://github.com/walternagai/kata}{\texttt{github.com/walternagai/kata}}.
-Release tag \texttt{v0.7.0} contains all artifacts cited in this paper:
+Kata is open-source software distributed under the MIT License. It is
+published on the Python Package Index as
+\href{https://pypi.org/project/kata-dev/}{\texttt{kata-dev}} (command
+\texttt{kata}); the version cited throughout this paper is \texttt{0.7.2},
+installable with \texttt{pipx install kata-dev} or \texttt{pip install
+kata-dev} (Section~\ref{sec:usage}). The source code, installers,
+evaluation harnesses, and raw experimental data are publicly available at
+\href{https://github.com/walternagai/kata}{\texttt{github.com/walternagai/kata}}, whose
+release tag \texttt{v0.7.0} contains all artifacts cited in this paper:
 the test harnesses, shared-fraction measurements
 (\texttt{scripts/build\_skills.py -{}-stats}), and archived study logs.
 The evaluated logic under \texttt{src/kata/} was unchanged between commit \texttt{230e81a}

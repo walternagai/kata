@@ -40,7 +40,7 @@ handoff: null
 ## 🔗 Refs
 - **Plan**: none
 - **Design**: none
-- **Last Verification**: none
+- **Last Verification**: /nova:check → PASS — paper/jserd/paper.tex, paper/jserd/paper.pdf | 2026-09-16T21:45:00-03:00
 
 ---
 

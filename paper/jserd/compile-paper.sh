@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
-# Compila o artigo JSERD: paper/jserd/paper.tex -> paper/jserd/paper.pdf.
+# Compila o artigo JSERD: paper.tex -> paper.pdf, nesta mesma pasta.
 #
-# Uso:
-#   bash scripts/compile-paper.sh
+# Uso (funciona de qualquer diretório, e também daqui de dentro):
+#   bash paper/jserd/compile-paper.sh
+#   cd paper/jserd && ./compile-paper.sh
+#
+# O script mora ao lado do paper.tex e resolve tudo a partir da própria
+# localização, então não depende do diretório de onde foi chamado.
 #
 # Sequência: xelatex, bibtex, e então xelatex repetido até o LaTeX parar de
 # pedir nova passada ("Rerun to get cross-references right"). O laço existe
 # porque a convergência é uma propriedade do documento, não uma constante:
-# este converge em 4 passadas (xelatex, bibtex, xelatex, xelatex, xelatex) e
-# a terceira ainda pede Rerun, porque a bibliografia desloca as referências
-# cruzadas depois que o .bbl entra. Aqui as 3 e as 4 passadas renderizam
-# idênticas (conferido a 100 dpi, 0 pixel de diferença), então rodar uma a
-# menos não corromperia este PDF — mas o número certo depende de quantas
-# referências cruzadas a última edição mexeu, e não há como saber sem olhar o
-# log. O laço decide pelo log em vez de chutar, com teto de segurança.
+# este gasta 4 passadas de xelatex (a 1ª, mais 3 depois do bibtex) e a última
+# ainda pede Rerun na saída da 3ª, porque a bibliografia desloca as
+# referências cruzadas quando o .bbl entra. Aqui as 3 e as 4 passadas
+# renderizam idênticas (conferido a 100 dpi, 0 pixel de diferença), então
+# rodar uma a menos não corromperia este PDF — mas o número certo depende de
+# quantas referências cruzadas a última edição mexeu, e não há como saber sem
+# olhar o log. O laço decide pelo log em vez de chutar, com teto de segurança.
 #
 # O veredito NÃO é o exit code do xelatex. Neste documento o xelatex sai com
 # código 1 por um erro do microtype em XeTeX (o recurso de tracking só existe
@@ -29,7 +33,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PAPER_DIR="$(dirname "$SCRIPT_DIR")/paper/jserd"
+# O script mora em paper/jserd/, ao lado do paper.tex: a pasta do paper é a
+# dele mesmo, e todo caminho abaixo sai daqui — por isso tanto faz chamar da
+# raiz do repositório, de dentro da pasta ou de qualquer outro diretório.
+PAPER_DIR="$SCRIPT_DIR"
 JOB="paper"
 LOG="$PAPER_DIR/$JOB.log"
 PDF="$PAPER_DIR/$JOB.pdf"

@@ -36,9 +36,13 @@ skills-stats:
 # LaTeX instalado. Verifica o log (erros novos, referências indefinidas,
 # convergência das passadas) em vez do exit do xelatex, que sai 1 pelo
 # microtype em XeTeX mesmo gerando o PDF completo.
+#
+# O script mora ao lado do paper.tex (paper/jserd/), não em scripts/: ele
+# resolve tudo a partir da própria localização, então funciona da raiz, de
+# dentro da pasta e de qualquer diretório.
 
 paper:
-	bash scripts/compile-paper.sh
+	bash paper/jserd/compile-paper.sh
 
 # === Desenvolvimento ===
 

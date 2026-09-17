@@ -1,4 +1,4 @@
-.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills skills-stats test lint format format-check clean
+.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills skills-stats test lint format format-check paper clean
 
 # === Instalação do agente + skills no OpenCode ===
 
@@ -30,6 +30,15 @@ check-skills:
 
 skills-stats:
 	python3 scripts/build_skills.py --stats
+
+# === Artigo JSERD ===
+# Exige TeX Live com xelatex e bibtex; o alvo não entra no CI, que não tem
+# LaTeX instalado. Verifica o log (erros novos, referências indefinidas,
+# convergência das passadas) em vez do exit do xelatex, que sai 1 pelo
+# microtype em XeTeX mesmo gerando o PDF completo.
+
+paper:
+	bash scripts/compile-paper.sh
 
 # === Desenvolvimento ===
 

@@ -131,6 +131,7 @@ eval/                             Adversarial trap scenarios
 scripts/build_skills.py           Renders phases/ and domains/ into both frontends
 scripts/install.sh                OpenCode symlink installer
 scripts/install-claude-code.sh    Claude Code symlink installer
+scripts/compile-paper.sh          Builds paper/jserd/paper.pdf (xelatex + bibtex)
 ```
 
 ### Module responsibilities

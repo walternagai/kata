@@ -322,6 +322,7 @@ make install                # instala agente + skills no OpenCode
 make uninstall               # remove symlinks do OpenCode
 make install-claude-code     # instala skills no Claude Code
 make uninstall-claude-code   # remove symlinks do Claude Code
+make paper                   # compila paper/jserd/paper.pdf (exige TeX Live)
 ```
 
 ## Compatibilidade

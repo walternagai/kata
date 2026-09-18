@@ -108,13 +108,22 @@ if grep -qE "I couldn't open|error message" <<<"$bibtex_out"; then
     fail "bibtex relatou erro (acima)"
 fi
 
-# Laço de convergência: repete enquanto o LaTeX pedir nova passada.
+# Laço de convergência: repete enquanto o LaTeX pedir nova passada OU
+# enquanto sobrar citação indefinida. As duas condições não coincidem
+# sempre: logo após o bibtex, a passada que lê o .bbl pela primeira vez
+# ainda cita "undefined" no próprio log (o \bibcite só entra no .aux ao
+# final dessa passada, para a PRÓXIMA usar) sem necessariamente disparar
+# "Rerun to get cross-references right" — esse aviso depende de \newlabel
+# ter mudado, não da bibliografia por si. Olhar só o "Rerun" já deixou o
+# laço parar cedo com citação ainda pendente; a verificação abaixo (§2,
+# "referências indefinidas") pegava o problema e reprovava a build, mas
+# sem chance de convergir sozinha.
 runs=1
 while (( runs < MAX_RUNS )); do
     runs=$((runs + 1))
     echo "▶ xelatex (passada $runs)"
     xelatex -interaction=nonstopmode "$JOB.tex" >/dev/null 2>&1 || true
-    if ! grep -q "Rerun to get cross-references right" "$LOG"; then
+    if ! grep -q "Rerun to get cross-references right" "$LOG" && ! grep -qi "undefined" "$LOG"; then
         break
     fi
 done

@@ -1,0 +1,168 @@
+\begin{thebibliography}{}
+
+\bibitem[Amodei et~al., 2016]{amodei-concrete}
+Amodei, D., Olah, C., Steinhardt, J., Christiano, P., Schulman, J., and
+  Man{\'e}, D. (2016).
+\newblock Concrete problems in ai safety.
+\newblock arXiv:1606.06565; \url{https://arxiv.org/abs/1606.06565}.
+\newblock Preprint; accessed 2026-09-11.
+
+\bibitem[Barr et~al., 2015]{barr-oracle}
+Barr, E.~T., Harman, M., McMinn, P., Shahbaz, M., and Yoo, S. (2015).
+\newblock The oracle problem in software testing: A survey.
+\newblock {\em IEEE Transactions on Software Engineering}, 41(5):507--525.
+
+\bibitem[Bouras et~al., 2026]{authority-harness}
+Bouras, D.~S., Dai, Y., and Mechtaev, S. (2026).
+\newblock Authority is not a string: A capability-scoped harness for
+  prompt-injection-resistant coding agents.
+\newblock arXiv:2609.08371; \url{https://arxiv.org/abs/2609.08371}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Chen et~al., 2018]{chen-metamorphic}
+Chen, T.~Y., Cheung, S.~C., and Yiu, S.~M. (2018).
+\newblock Metamorphic testing: A review of challenges and opportunities.
+\newblock {\em ACM Computing Surveys}, 51(1):4:1--4:27.
+
+\bibitem[Hamidi et~al., 2026]{test-criteria-llm}
+Hamidi, A., Konstantinou, M., Degiovanni, R., and Papadakis, M. (2026).
+\newblock How effective are traditional test criteria at detecting bugs in
+  large language models generated code?
+\newblock arXiv:2609.09315; \url{https://arxiv.org/abs/2609.09315}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Hartman, 2026]{consort}
+Hartman, K. (2026).
+\newblock Introducing consort: A spec-first agent framework for enforced,
+  test-driven development on live database branches.
+\newblock arXiv:2609.09671; \url{https://arxiv.org/abs/2609.09671}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Huang et~al., 2024]{selfcorrect}
+Huang, J., Chen, X., Mishra, S., Zheng, H.~S., Yu, A.~W., Song, X., and Zhou,
+  D. (2024).
+\newblock Large language models cannot self-correct reasoning yet.
+\newblock {\em International Conference on Learning Representations (ICLR)}.
+
+\bibitem[Huynh et~al., 2026]{xagent}
+Huynh, H., Thongtanunam, P., Fu, M., Le, B., and Tantithamthavorn, K. (2026).
+\newblock Xagent: execution-guided agentic ai for effective localization and
+  resolution of github issues.
+\newblock arXiv:2609.09769; \url{https://arxiv.org/abs/2609.09769}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Jimenez et~al., 2024]{swebench}
+Jimenez, C.~E., Yang, J., Wettig, A., Yao, S., Pei, K., Press, O., and
+  Narasimhan, K. (2024).
+\newblock Swe-bench: Can language models resolve real-world github issues?
+\newblock {\em International Conference on Learning Representations (ICLR)}.
+
+\bibitem[Kapoor et~al., 2024]{kapoor}
+Kapoor, S., Stroebl, B., Siegel, Z.~S., Nadgir, N., and Narayanan, A. (2024).
+\newblock Ai agents that matter.
+\newblock arXiv:2407.01502; \url{https://arxiv.org/abs/2407.01502}.
+\newblock Preprint; accessed 2026-09-11.
+
+\bibitem[Karpathy, 2026]{karpathy}
+Karpathy, A. (2026).
+\newblock From vibe coding to agentic engineering.
+\newblock Talk at Sequoia AI Ascent 2026, with Stephanie Zhan;
+  \url{https://www.youtube.com/watch?v=96jN2OCOfLs}.
+\newblock Introduces the agentic-engineering discipline (spec design, diff
+  review, tight verification loops) adapted here as the Karpathy Development
+  Cycle; accessed 2026-09-11.
+
+\bibitem[Krakovna et~al., 2020]{krakovna}
+Krakovna, V., Uesato, J., Mikulik, V., Rahtz, M., Everitt, T., Kumar, R.,
+  Kenton, Z., Leike, J., and Legg, S. (2020).
+\newblock Specification gaming: The flip side of ai ingenuity.
+\newblock DeepMind blog;
+  \url{https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/}.
+\newblock Accessed 2026-09-11.
+
+\bibitem[{LerianStudio}, 2026]{ring}
+{LerianStudio} (2026).
+\newblock Ring: Skills library for ai agents.
+\newblock GitHub repository, commit ad30421;
+  \url{https://github.com/LerianStudio/ring}.
+\newblock Accessed 2026-09-11.
+
+\bibitem[Manheim and Garrabrant, 2018]{goodhart}
+Manheim, D. and Garrabrant, S. (2018).
+\newblock Categorizing variants of goodhart's law.
+\newblock arXiv:1803.04585; \url{https://arxiv.org/abs/1803.04585}.
+\newblock Revised 2019; preprint; accessed 2026-09-11.
+
+\bibitem[Mocan et~al., 2026]{refverifier}
+Mocan, S., Angermeir, F., and Kreitz, M. (2026).
+\newblock Refverifier: Semi-automated reference claim verification for
+  scientific manuscripts.
+\newblock arXiv:2609.07652; \url{https://arxiv.org/abs/2609.07652}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Ning et~al., 2026]{discovery-certification}
+Ning, J., Zhong, S., Li, X., and Zeng, J. (2026).
+\newblock Scores alone do not prove discovery: The discovery certification
+  protocol for auditing ai research agents.
+\newblock arXiv:2609.09219; \url{https://arxiv.org/abs/2609.09219}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[{Sahir619}, 2026]{fable}
+{Sahir619} (2026).
+\newblock The fable method: The fable workflow.
+\newblock GitHub repository, commit 88b5cf3;
+  \url{https://github.com/Sahir619/fable-method}.
+\newblock Not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[{TeamSPWK}, 2026]{nova}
+{TeamSPWK} (2026).
+\newblock nova: Ai agent ops for claude code.
+\newblock GitHub repository, commit 1f8f35d;
+  \url{https://github.com/TeamSPWK/nova}.
+\newblock Accessed 2026-09-11.
+
+\bibitem[{vlad-ko}, 2026]{claudewizard}
+{vlad-ko} (2026).
+\newblock claude-wizard: Turn claude code from a fast coder into a senior
+  software architect.
+\newblock GitHub repository, commit 43756e1;
+  \url{https://github.com/vlad-ko/claude-wizard}.
+\newblock Accessed 2026-09-11.
+
+\bibitem[Wang et~al., 2026]{unreliable-progress}
+Wang, B., Wang, Y., and Wu, Y. (2026).
+\newblock The unreliable progress bar: Can llm agents reliably report task
+  progress throughout execution?
+\newblock arXiv:2609.08589; \url{https://arxiv.org/abs/2609.08589}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Wang-Lin et~al., 2026]{not-buggy}
+Wang-Lin, X., Isopoussu, A., and Mahon, L. (2026).
+\newblock If it's not buggy, don't fix it: On the dynamics of iterative
+  bug-fixing with llms.
+\newblock arXiv:2609.10123; \url{https://arxiv.org/abs/2609.10123}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Zeng et~al., 2026]{trajmark}
+Zeng, B., Gao, Z., Li, X., Feng, X., and Jiang, J. (2026).
+\newblock Trajmark: Ownership attribution and segment-level tamper localization
+  for coding-agent trajectories.
+\newblock arXiv:2609.10416; \url{https://arxiv.org/abs/2609.10416}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Zhang et~al., 2026]{double-measurement}
+Zhang, Y., Motaali, S., Dinh, V.~P., Piroutiniya, A., de~Vergara, J. E.~L.,
+  de~Pedro, L., Correia, R., Parra, I.~M., and Xie, Y. (2026).
+\newblock The double measurement confound in agent benchmarks: De-scaffolding,
+  ground-truth scoring, and reliability beyond the mean.
+\newblock arXiv:2609.09218; \url{https://arxiv.org/abs/2609.09218}.
+\newblock Preprint, not peer-reviewed; accessed 2026-09-11.
+
+\bibitem[Zhao et~al., 2026]{specbench}
+Zhao, B., Srikanth, D., Wu, Y., and Jiang, Z. (2026).
+\newblock Specbench: Measuring reward hacking in long-horizon coding agents.
+\newblock arXiv:2605.21384v2; \url{https://arxiv.org/abs/2605.21384}.
+\newblock Revised 9 September 2026; preprint, not peer-reviewed; accessed
+  2026-09-11.
+
+\end{thebibliography}

@@ -22,6 +22,7 @@ handoff: null
 | 시각 | 작업 | 결과 |
 |------|------|:----:|
 | 2026-09-14 | /nova:init → NOVA-STATE.md 자동 생성 (cold-start) | ✅ |
+| 2026-09-18 | fix(ci): eval/scenarios/*/pyproject.toml 제거, E402/format 수정 (commit 40a400c) | ✅ |
 
 ## ⚠️ Risks & Gaps
 
@@ -33,7 +34,7 @@ handoff: null
 
 | 날짜 | 커맨드 | 우회 이유 | 사후 조치 |
 |------|--------|----------|----------|
-| — | — | — | — |
+| 2026-09-18 | `git commit --emergency` (40a400c) | Evaluator PASS가 STALE 상태(4h+ 경과)라 Hard Gate 차단; make lint/format-check/check-skills/test(916)/eval/run_traps.py(23/23) 전부 수동으로 재현해 통과를 확인한 뒤 커밋 | 후속 /nova:review --fast 미실행 — 다음 세션에서 권장 |
 
 > `--emergency` 플래그 사용 또는 Evaluator 건너뛸 때 반드시 기록. 미기록 = Hard-Block.
 

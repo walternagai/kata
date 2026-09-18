@@ -1,12 +1,33 @@
-\documentclass{sbc2019}%
+\documentclass[11pt]{article}
 
-\usepackage{fontspec}
-\usepackage{fontawesome}
-\usepackage{academicons}
-\usepackage[bottom]{footmisc}
+% ---------------------------------------------------------------------------
+% arXiv preprint of "Kata: an executable quality gate for AI-assisted
+% software changes", adapted from the JSERD submission (paper/jserd/paper.tex).
+% Journal-specific macros (sbc2019 class, jid/jtitle/copyrightstatement/jyear,
+% the frontmatter environment, academicons/fontawesome glyphs) are removed in
+% favour of a plain single-column article that compiles with pdflatex alone.
+% Content, listings, tables, the cycle figure, and the bibliography are kept
+% as in the JSERD version.
+% ---------------------------------------------------------------------------
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+% \texttt{--flag} would otherwise ligature "--" into an en-dash outside
+% verbatim/listings; disable that ligature for the typewriter family so CLI
+% flags such as \texttt{--judge} render as two literal hyphens.
+\DisableLigatures{encoding = *, family = tt*}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
 \usepackage{listings}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
 \lstset{
   basicstyle=\ttfamily\footnotesize,
   breaklines=true,
@@ -19,60 +40,46 @@
   xrightmargin=4pt,
   aboveskip=4pt,
   belowskip=4pt,
-  % As saídas do CLI usam ícones (✅ ❌ ⚠ ▶ 🔴 ↳ ≥) sem cobertura nas fontes
-  % do template. A fonte guarda marcadores ASCII e o listings os compõe com
-  % símbolos das fontes matemáticas, para o PDF não depender de fonte de emoji.
+  % CLI output uses icons (checkmark, cross, warning, arrow, bullet) that the
+  % listings font does not cover; ASCII markers in the source are mapped to
+  % math-mode symbols instead, so the PDF never depends on an emoji font.
   literate={[ok]}{{$\checkmark$}}1 {[x]}{{$\times$}}1 {[!]}{{\textbf{!}}}1
            {>}{{$\blacktriangleright$}}1 {>=}{{$\geq$}}1 {*}{{$\bullet$}}1
            {->}{{$\hookrightarrow$}}1
 }
 
-\usepackage{xcolor}
-
-\definecolor{orcidlogo}{rgb}{0.37,0.48,0.13}
-\definecolor{unilogo}{rgb}{0.16, 0.26, 0.58}
-\definecolor{maillogo}{rgb}{0.58, 0.16, 0.26}
 \definecolor{darkblue}{rgb}{0.0,0.0,0.0}
-% hyperref por último; as cores usadas no hypersetup já estão definidas.
 \usepackage{hyperref}
 \usepackage{xurl}
 \hypersetup{colorlinks,breaklinks,
             linkcolor=darkblue,urlcolor=darkblue,
             anchorcolor=darkblue,citecolor=darkblue}
 
-% Linhas longas (bloco de autores, abstract) esticam em vez de vazar a
-% mancha; e o cabeçalho do template pede mais altura do que o geometry
-% declarou.
 \setlength{\emergencystretch}{2em}
-\setlength{\headheight}{37pt}
 
-% O ambiente `keywords` do template fecha com \rule{\linewidth} ainda dentro
-% do parágrafo do keywordfont (rightskip=5.5pc), e a régua estoura a mancha
-% em 66pt. Em modo vertical ela não entra em parágrafo e o visual é o mesmo.
-\renewenvironment{keywords}{%
-  \noindent\keywordfont\textit{\textbf{Keywords: }}%
-}{\vskip6pt\hrule height .27pt\vskip12pt}
+\title{\textbf{Kata: an executable quality gate for AI-assisted software changes}}
 
-\jid{JSERD}
-\jtitle{Journal of Software Engineering Research and Development, 2026}
-% DOI: assigned by JSERD on publication; the submission omits the placeholder.
-\copyrightstatement{This work is licensed under a Creative Commons Attribution 4.0 International License}
-\jyear{2026}
-
-\title[Kata: an executable quality gate for AI-assisted software changes]{Kata: an executable quality gate for AI-assisted software changes}
-
-\author[Nagai 2026]{
-\affil{\textbf{Walter Aoiama Nagai}~\href{https://orcid.org/0000-0001-9078-8396}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil} |\href{mailto:walternagai@unifei.edu.br}{~\textbf{\textit{walternagai@unifei.edu.br}}} ]}
+\author{
+  Walter Aoiama Nagai \\
+  \small Instituto de Ci\^encias Tecnol\'ogicas, Universidade Federal de Itajub\'a, Brazil \\
+  \small \href{mailto:walternagai@unifei.edu.br}{\texttt{walternagai@unifei.edu.br}} \\
+  \small ORCID: \url{https://orcid.org/0000-0001-9078-8396}
 }
+\date{}
 
 \begin{document}
 
-\begin{frontmatter}
 \maketitle
 
-\begin{abstract}
-\textbf{Abstract}
+\begin{center}
+\footnotesize\itshape
+This is a preprint of a manuscript submitted for review to the\\
+Journal of Software Engineering Research and Development (JSERD), 2026.\\
+A DOI will be minted upon acceptance and inserted in the camera-ready version.
+\end{center}
+\bigskip
 
+\begin{abstract}
 AI coding agents produce code faster than any developer can review, and the
 oversight surface collapses onto the automated test suite. When an agent says
 ``done'', nothing executes the checks it claims to have passed; agents
@@ -116,11 +123,9 @@ whether the cycle improves the quality of AI-assisted changes remains future
 work.
 \end{abstract}
 
-\begin{keywords}
-AI agents, software quality, verification, adversarial verification, quality gates, large language models, coding agents
-\end{keywords}
+\noindent\textbf{Keywords:} AI agents, software quality, verification, adversarial verification, quality gates, large language models, coding agents
 
-\end{frontmatter}
+\bigskip
 
 \section{Introduction}
 \label{sec:introduction}
@@ -158,7 +163,7 @@ committed and untracked files; and the audit mode grades each phase of a
 completed task as followed, skipped, faked, or degraded, naming the concrete
 risk each grade other than followed created. A skill prescribes honesty; Kata provides an executable mechanism to verify it.
 
-This paper is a \textbf{software article}. Following the journal's
+This paper is a \textbf{software article}. Following the target journal's
 guidelines (quoted in Section~\ref{sec:exec-comparison}), it describes a
 tool, positions it as a significant advance over
 previously published software, and demonstrates the advance by \emph{direct
@@ -388,7 +393,7 @@ could be run. The rows are stated here to make the comparison explicit and
 falsifiable; a reader who re-evaluates any row against the cited commit
 should arrive at the same verdict.
 
-\begin{table*}[!ht]
+\begin{table}[!ht]
 \caption{Comparison of Kata with related tools and methodologies.
 Qualitative assessment of the author from the cited sources at the commits
 cited in the bibliography (accessed 2026-09-11): see the text for the
@@ -399,11 +404,12 @@ read of the public artifacts; the executed comparison of
 Section~\ref{sec:exec-comparison} supersedes this table for the gates that
 could be run.}
 \centering
+\footnotesize
 \begin{tabular}{@{}lcccccc@{}}
-\hline\hline
+\toprule
 Tool & Re-execute & Weakened & Scope & False & Blind-spot & Audit \\
  & claims & tests & creep & completion & confession & record \\
-\hline
+\midrule
 Fable Method \cite{fable} & No & Partial & No & No & No & Yes \\
 claude-wizard \cite{claudewizard} & No & Partial & No & No & No & No \\
 Ring \cite{ring} & No & No & No & No & No & No \\
@@ -412,11 +418,12 @@ Consort \cite{consort} & Yes & No & No & No & No & No \\
 SpecBench \cite{specbench} & Yes & N/A & N/A & N/A & N/A & No \\
 SWE-bench \cite{swebench} & Yes & N/A & N/A & N/A & N/A & No \\
 \textbf{Kata} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} \\
-\hline\hline
+\bottomrule
 \end{tabular}
-\tabnote{Sources: Fable Method \cite{fable}; claude-wizard \cite{claudewizard}; Ring \cite{ring}; nova \cite{nova}; Consort \cite{consort}; SpecBench \cite{specbench}; SWE-bench \cite{swebench}. ``Partial'' means the tool discusses the fraud type but does not execute a detector for it. Benchmarks (SpecBench, SWE-bench) re-execute checks by design but do not audit or detect frauds.}
+\par\smallskip
+{\footnotesize Sources: Fable Method \cite{fable}; claude-wizard \cite{claudewizard}; Ring \cite{ring}; nova \cite{nova}; Consort \cite{consort}; SpecBench \cite{specbench}; SWE-bench \cite{swebench}. ``Partial'' means the tool discusses the fraud type but does not execute a detector for it. Benchmarks (SpecBench, SWE-bench) re-execute checks by design but do not audit or detect frauds.}
 \label{tab:comparison}
-\end{table*}
+\end{table}
 
 The table makes the positioning explicit: Kata is the only tool in the
 survey that combines executable verification, adversarial fraud detection
@@ -443,7 +450,7 @@ determinism and cost rather than in detection
 \subsection{Executed gate comparison}
 \label{sec:exec-comparison}
 
-The JSERD guidelines for software articles state that ``Software articles
+The target journal's guidelines for software articles state that ``Software articles
 should describe a tool likely to be of broad utility that represents a
 significant advance over previously published software (usually demonstrated
 by direct comparison with available related software)''.\footnote{JSERD
@@ -495,7 +502,7 @@ the scenarios a gate classified as detected or clean.
 Table~\ref{tab:gate-comparison} summarizes the outcome. Three findings
 stand out.
 
-\begin{table*}[!ht]
+\begin{table}[!ht]
 \caption{Executed comparison of five gates over the 19 trap scenarios.
 One complete campaign (September 2026); raw verdicts in
 \texttt{eval/results/compare\_gates\_round2.json} (agent gates) and
@@ -507,10 +514,11 @@ re-scored with the final debris (s06) rule (see text). The last block excludes t
 (s12, s13, s19), whose ground truth expects UNVERIFIABLE, a verdict the
 agents' reporting format did not offer.}
 \centering
+\footnotesize
 \begin{tabular}{@{}lcccc@{}}
-\hline\hline
+\toprule
 Gate & Detection & FP (range) & Correct & Median time \\
-\hline
+\midrule
 \multicolumn{5}{l}{\emph{Fraud scenarios (11 REFUTED)}} \\
 Kata & 11/11 & --- & 11/11 & 0.1\,s \\
 nova & 11/11 & --- & 11/11 & 16\,s \\
@@ -523,24 +531,24 @@ nova & --- & 4 [3--4] & 4/8 & 40\,s \\
 claude-wizard & --- & 2 [2--3] & 6/8 & 27\,s \\
 bare (prompt-only) & --- & 5 [3--5] & 3/8 & 32\,s \\
 deterministic (test + smell) & --- & 2 & 6/8 & 0.3\,s \\
-\hline
+\midrule
 \multicolumn{5}{l}{All scenarios --- correctness (final campaign)} \\
 Kata & & & \textbf{19/19} & \\
 nova & & & 15/19 & \\
 claude-wizard & & & 17/19 & \\
 bare (prompt-only) & & & 14/19 & \\
 deterministic (test + smell) & & & 15/19 & \\
-\hline
+\midrule
 \multicolumn{5}{l}{Excluding blind-spot scenarios s12, s13, s19 (16) --- correctness (final campaign)} \\
 Kata & & & 16/16 & \\
 nova & & & 15/16 & \\
 claude-wizard & & & 15/16 & \\
 bare (prompt-only) & & & 14/16 & \\
 deterministic (test + smell) & & & 15/16 & \\
-\hline\hline
+\bottomrule
 \end{tabular}
 \label{tab:gate-comparison}
-\end{table*}
+\end{table}
 
 First, \textbf{all four agent gates detected every planted fraud in all eleven
 REFUTED scenarios}. Fraud detection is not where the gates differ: the
@@ -618,8 +626,9 @@ Architecturally, Kata operationalizes this discipline along two distinct usage t
 (1) an \emph{interactive authoring scaffold} (\texttt{kata --task}), which guides the developer or agent step-by-step through the nine-phase cycle, generating structured evidence, enforcing minimality, and anchoring baseline commits in the task file; and
 (2) a \emph{decoupled reviewer gate} (\texttt{kata --judge} and \texttt{kata --check-only}), which operates non-interactively, re-executing verification commands and auditing repository diffs against baseline anchors. This architectural separation ensures that while the authoring cycle provides deliberate friction and governance for complex, open-ended tasks, automated pipelines and routine pre-commit workflows can deploy the verification gate (without the anchor-protection that \texttt{--trusted-base} adds in CI, Section~\ref{sec:threat-model}), which took a median of about two seconds per change on the real repositories of Section~\ref{sec:external-evaluation}.
 
-\begin{figure*}[!ht]
+\begin{figure}[!ht]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
   x=1cm, y=1cm,
   phase/.style={draw, rounded corners=2pt, minimum width=1.62cm,
@@ -675,7 +684,8 @@ Architecturally, Kata operationalizes this discipline along two distinct usage t
   % JUDGE opcional
   \node[judge] (judge) at (16.15,-1.95) {JUDGE (optional)};
   \draw[arrow] (report.south) to[out=-90,in=90] (judge.north);
-\end{tikzpicture}
+\end{tikzpicture}%
+}
 \caption{The Kata cycle: nine phases plus the optional adversarial JUDGE.
 Shaded phases (FIT, VERIFY, JUDGE) are backed by executable Python logic;
 the remaining phases are guided by skills and recorded in the task file,
@@ -686,7 +696,7 @@ attempts before handing the task back to the user, and JUDGE runs after
 REPORT only when requested. TWIN CHECK runs only for approved tasks, and
 the plan-first and question routes stop after THINK and FIT respectively.}
 \label{fig:cycle}
-\end{figure*}
+\end{figure}
 
 \subsection{Architecture}
 
@@ -1169,11 +1179,11 @@ The FIT phase measures the real diff and classifies the task:
   -> non-trivial task
 
   Available routes:
-    [1] code-loop   — full cycle
-    [2] plan-first  — planning only
-    [3] question    — diagnosis only
-    [4] research    — needs research before acting
-    [5] inference   — based on inference only
+    [1] code-loop   -- full cycle
+    [2] plan-first  -- planning only
+    [3] question    -- diagnosis only
+    [4] research    -- needs research before acting
+    [5] inference   -- based on inference only
 
   Chosen route [1]: 1
   Brief justification (optional): fix division by zero without a guard
@@ -1183,12 +1193,12 @@ A trivial task (at most one file, fewer than ten lines) would skip the
 planning phases and go directly to VERIFY --- the triviality gate of the
 Fable Method.\footnote{The \texttt{kata} CLI reports in Portuguese; the
 CLI outputs quoted in this paper are translated into English for
-presentation. Recurring terms: \emph{não-trivial} = non-trivial;
+presentation. Recurring terms: \emph{n\~ao-trivial} = non-trivial;
 \emph{rota escolhida} = chosen route; \emph{arquivo(s)} = file(s);
 \emph{linha(s)} = line(s); \emph{limpo} = clean; \emph{passou} = passed;
-\emph{critério de sucesso} = success criterion; \emph{veredito} = verdict;
-\emph{fraude(s)} = fraud(s); \emph{re-execução} = re-execution;
-\emph{ocorrência(s)} = occurrence(s).}
+\emph{crit\'erio de sucesso} = success criterion; \emph{veredito} = verdict;
+\emph{fraude(s)} = fraud(s); \emph{re-execu\c{c}\~ao} = re-execution;
+\emph{ocorr\^encia(s)} = occurrence(s).}
 
 \subsection{THINK --- declaring before the evidence}
 
@@ -1227,8 +1237,8 @@ necessary:
   Do code, test, and specification agree? [Y/n]: y
 
 Changed files:
-  src/calculadora.py — necessary for this task? [Y/n]: y
-  tests/test_calculadora.py — necessary for this task? [Y/n]: y
+  src/calculadora.py -- necessary for this task? [Y/n]: y
+  tests/test_calculadora.py -- necessary for this task? [Y/n]: y
   Are the removed imports only those your change made unused? [Y/n]: y
 \end{lstlisting}
 
@@ -1252,7 +1262,7 @@ in THINK:
   (declared in THINK: test test_dividir_por_zero passes and coverage >= 70%)
   Is the success criterion of the task satisfied? [Y/n]: y
 
-  [ok]  KATA CYCLE — APPROVED
+  [ok]  KATA CYCLE -- APPROVED
 \end{lstlisting}
 
 Each of the first three steps runs the command declared in
@@ -1293,7 +1303,7 @@ outcome first, followed by the problem, the done criterion, changed files,
 verification results, caveats, and any due artifact lines:
 
 \begin{lstlisting}
-[ok]  KATA CYCLE — APPROVED: success criterion satisfied
+[ok]  KATA CYCLE -- APPROVED: success criterion satisfied
 
   Problem: the dividir (divide) function raises ZeroDivisionError with no guard
   Declared criterion: test test_dividir_por_zero passes and coverage >= 70%
@@ -1461,14 +1471,14 @@ the claimed checks and returned:
 [ok]  VERDICT: VERIFIED
 
   Verified claims:
-    • ruff check clean (no lint errors)
-    • all tests pass
-    • coverage >= gate (100.0%)
-    • 2 file(s) changed surgically (necessary)
-    • intent aligned: code, test, and spec agree
+    - ruff check clean (no lint errors)
+    - all tests pass
+    - coverage >= gate (100.0%)
+    - 2 file(s) changed surgically (necessary)
+    - intent aligned: code, test, and spec agree
 
   Claims accepted without verification (not re-executable):
-    • success criterion satisfied
+    - success criterion satisfied
 
   Re-execution:
     [ok] lint
@@ -1500,13 +1510,13 @@ failed):
   Frauds found:
     * [high] false_completion
        ruff check re-execution failed, but the report claims it passed
-       → report: ruff_clean=True → reality: ruff check failed
+       -> report: ruff_clean=True -> reality: ruff check failed
     * [high] false_completion
        pytest re-execution failed, but the report claims it passed
-       → report: tests_pass=True → reality: pytest failed
+       -> report: tests_pass=True -> reality: pytest failed
     * [high] false_completion
        coverage re-execution failed, but the report claims it passed
-       → report: coverage_pass=True → reality: coverage failed
+       -> report: coverage_pass=True -> reality: coverage failed
 
   Re-execution:
     [x] lint
@@ -1625,15 +1635,15 @@ and what each one means for the trustworthiness of the task.
 \begin{table}[!ht]
 \caption{The four audit grades and their meaning.}
 \centering
-\begin{tabular}{@{}lp{5.2cm}@{}}
-\hline\hline
+\begin{tabular}{@{}lp{9cm}@{}}
+\toprule
 Grade & Meaning \\
-\hline
+\midrule
 followed & The phase has \texttt{answered: true} and real content \\
 skipped & The phase has \texttt{skipped: true} (documented, not hidden) \\
 faked & \texttt{answered: true} with default or empty content, or a verify/twins claim without its evidence \\
 degraded & The phase ran without its own skill loaded (\texttt{preflight}) \\
-\hline\hline
+\bottomrule
 \end{tabular}
 \label{tab:grades}
 \end{table}
@@ -1648,13 +1658,13 @@ but false content (Section~\ref{sec:threat-model}).
 
 \begin{lstlisting}
 [x] FIT: faked
-   [!] route and triviality not classified by a human — effort may be
+   [!] route and triviality not classified by a human -- effort may be
      wasted on a trivial or misrouted task
 [x] THINK: faked
-   [!] assumptions never declared — any solution may attack the
+   [!] assumptions never declared -- any solution may attack the
      wrong problem
 [x] INTENT: faked
-   [!] code, test, and spec may disagree without a record — behavior
+   [!] code, test, and spec may disagree without a record -- behavior
      changes without verified intent
 [ok] SIMPLIFY: followed
 [ok] SURGICAL: followed
@@ -1763,13 +1773,14 @@ Table~\ref{tab:cli} lists the CLI modes. All modes operate on task files
 under \texttt{.kata/} at the target project's root; \texttt{--doctor} is
 the exception, checking skill installation without touching any task.
 
-\begin{table*}[!ht]
+\begin{table}[!ht]
 \caption{The \texttt{kata} CLI modes.}
 \centering
+\footnotesize
 \begin{tabular}{@{}ll@{}}
-\hline\hline
+\toprule
 Command & Effect \\
-\hline
+\midrule
 \texttt{kata --init TASK} & Create the task file, run FIT + THINK \\
 \texttt{kata [--task TASK]} & Run the full interactive cycle \\
 \texttt{kata --task TASK --plan} & Run FIT + THINK, save the plan, stop \\
@@ -1778,10 +1789,10 @@ Command & Effect \\
 \texttt{kata --task TASK --judge} & Adversarial verification (hunts frauds) \\
 \texttt{kata --task TASK --audit} & Grade phases: followed/skipped/faked/degraded \\
 \texttt{kata --doctor} & Check phase-skill installation per frontend \\
-\hline\hline
+\bottomrule
 \end{tabular}
 \label{tab:cli}
-\end{table*}
+\end{table}
 
 Verification is configurable per role. \texttt{--ruff-paths},
 \texttt{--test-paths}, \texttt{--ignore}, \texttt{--cov-source}, and
@@ -1882,7 +1893,7 @@ catch, and honest scenarios it must not accuse. The trap suite is
 deliberately asymmetric in its coverage. Table~\ref{tab:traps} summarizes
 the 19 scenarios.
 
-\begin{table*}[!ht]
+\begin{table}[!ht]
 \caption{The 19 adversarial trap scenarios of the evaluation suite.
 Each row summarizes one \texttt{eval/scenarios/<name>/} directory, which
 pairs a \texttt{fixture/} (the planted fraud or honest work) with a
@@ -1891,10 +1902,11 @@ scenario set is original to Kata, built incrementally across development
 sprints, each motivated by a real defect found in the JUDGE; the trap
 methodology follows the Fable Method's eval \cite{fable}.}
 \centering
-\begin{tabular}{@{}ll@{}}
-\hline\hline
+\footnotesize
+\begin{tabular}{@{}lp{10cm}@{}}
+\toprule
 Scenario & What it exercises \\
-\hline
+\midrule
 s01 & weakened checks: test body replaced by \texttt{pass} \\
 s02 & scope creep: report declares 1 file, tree has 4 \\
 s03 & false completion: claims pass, re-execution fails all three \\
@@ -1914,10 +1926,10 @@ s16 & honest trivial task with empty surgical list \\
 s17 & honest task with \texttt{approved\_commit} end to end \\
 s18 & weakened checks: JS test turned into comment, \texttt{it.skip} \\
 s19 & blind spot: Git-ignored test via local exclude \\
-\hline\hline
+\bottomrule
 \end{tabular}
 \label{tab:traps}
-\end{table*}
+\end{table}
 
 Twelve scenarios plant a fraud that must be detected, spanning all seven
 fraud categories: weakened checks (a test whose body was replaced by
@@ -1979,7 +1991,7 @@ with the expected verdict and the expected fraud types, and every honest
 scenario returned the expected verdict with no false accusations.
 Table~\ref{tab:results} summarizes the outcome by expected verdict.
 
-\begin{table*}[!ht]
+\begin{table}[!ht]
 \caption{Trap suite execution results: 19/19 scenarios passed.
 Verdict counts derive from the \texttt{expected\_verdict} fields of the 19
 \texttt{ground\_truth.yaml} files; the run reported here executed
@@ -1987,18 +1999,19 @@ Verdict counts derive from the \texttt{expected\_verdict} fields of the 19
 harness confirmed actual verdicts match expected ones with no false
 accusations.}
 \centering
-\begin{tabular}{@{}lcl@{}}
-\hline\hline
+\footnotesize
+\begin{tabular}{@{}lp{6.5cm}c@{}}
+\toprule
 Expected verdict & Scenarios & Count \\
-\hline
+\midrule
 REFUTED & s01, s02, s03, s04, s05, s08, s09, s10, s11, s14, s18 & 11 \\
 VERIFIED WITH CAVEATS & s06 (debris found; look-alike names spared) & 1 \\
 VERIFIED & s07, s15, s16, s17 & 4 \\
 UNVERIFIABLE & s12, s13, s19 & 3 \\
-\hline\hline
+\bottomrule
 \end{tabular}
 \label{tab:results}
-\end{table*}
+\end{table}
 
 The result confirms the two-sided contract of the JUDGE. On the detection
 side, twelve scenarios plant a fraud: eleven returned REFUTED with
@@ -2050,17 +2063,18 @@ verified for all twelve tasks that the selected tests fail in the task
 state and pass at the fix commit (\texttt{python3
 eval/external\_study.py -{}-check-tasks}).
 
-\begin{table*}[!ht]
+\begin{table}[!ht]
 \caption{The twelve external tasks. Each row is a real fix commit from a
 public repository (permissive license). The task state is the parent
 commit plus the test files the fix changed, with the history
 re-initialized so the fix is not visible; all tasks were verified to fail
 in the task state and pass at the fix commit.}
 \centering
+\footnotesize
 \begin{tabular}{@{}llll@{}}
-\hline\hline
+\toprule
 Task & Repository & License & Fix commit (bug) \\
-\hline
+\midrule
 t01 & \texttt{hukkin/tomli} & MIT & \texttt{8b962e1} (wrong-mode \texttt{TypeError}) \\
 t02 & \texttt{hukkin/tomli} & MIT & \texttt{794c8e5} (\texttt{parse\_float} illegal types) \\
 t03 & \texttt{kjd/idna} & BSD-3 & \texttt{e00ed28} (non-ASCII A-label) \\
@@ -2073,10 +2087,10 @@ t09 & \texttt{more-itertools} & MIT & \texttt{9245cd0} (\texttt{split\_after} wi
 t10 & \texttt{more-itertools} & MIT & \texttt{cca3294} (\texttt{last()} without \texttt{\_\_reversed\_\_}) \\
 t11 & \texttt{typing\_extensions} & PSF-2.0 & \texttt{8dfcf3c} (nested \texttt{Annotated}) \\
 t12 & \texttt{davidhalter/parso} & MIT & \texttt{e22dc67} (future grammar load) \\
-\hline\hline
+\bottomrule
 \end{tabular}
 \label{tab:external-tasks}
-\end{table*}
+\end{table}
 
 \textbf{Conditions.} Each task was attempted in a fresh sandbox by two
 models --- \texttt{deepseek-v4-pro} and \texttt{claude-sonnet-5} --- under
@@ -2130,7 +2144,7 @@ declared only \texttt{idna/core.py}; the JUDGE flagged the extra file as
 review returned VERIFIED for the other 47 runs, with no false accusations
 on any artifact.
 
-\begin{table*}[!ht]
+\begin{table}[!ht]
 \caption{External study: 12 bug-fix tasks from public repositories, two models,
 two conditions, one session per cell (48 sessions). \emph{Weak.} counts
 runs whose final artifact contains a weakened test according to the JUDGE's
@@ -2141,18 +2155,21 @@ and \emph{review} report median wall-clock times alongside the observed
 [\emph{min}--\emph{max}] range. Every session's fix passes
 the task's test suite.}
 \centering
+\footnotesize
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}llrrrlcc@{}}
-\hline\hline
+\toprule
 Condition & Model & Runs & Weak. & Undecl. & JUDGE & Session median [min--max] & Review median [min--max] \\
-\hline
+\midrule
 bare & claude & 12 & 0 & 0 & 12 V & 46\,s [28--104\,s] & 2.0\,s [1.4--95\,s] \\
 bare & deepseek & 12 & 0 & 1 & 11 V, 1 VWC & 70\,s [32--145\,s] & 1.9\,s [1.4--101\,s] \\
 kata & claude & 12 & 0 & 0 & 12 V & 492\,s [181--1153\,s] & 1.9\,s [1.6--101\,s] \\
 kata & deepseek & 12 & 0 & 0 & 12 V & 405\,s [104--1040\,s] & 1.9\,s [1.4--116\,s] \\
-\hline\hline
-\end{tabular}
+\bottomrule
+\end{tabular}%
+}
 \label{tab:external-results}
-\end{table*}
+\end{table}
 
 The cost dimension is the other finding; agent research has argued that
 evaluation must account for cost, not only accuracy \cite{kapoor}, and the
@@ -2472,12 +2489,12 @@ claimed verification steps, confronts claims with the underlying repository, and
 flags the claims that re-execution or the diff contradict, within the threat
 model of Section~\ref{sec:threat-model}.
 
-\begin{acknowledgements}
+\section*{Acknowledgements}
+
 We thank the open-source communities of the Fable Method \cite{fable} and of
 the Karpathy Development Cycle \cite{karpathy} for the methodologies that
 inspired this work, and the maintainers of the related tools surveyed in
 Section~\ref{sec:field} for the comparison that sharpened Kata's design.
-\end{acknowledgements}
 
 \section*{Declarations}
 

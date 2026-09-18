@@ -541,6 +541,23 @@ class TestLoadGroundTruth:
         with pytest.raises(harness.ScenarioError, match="kata_visivel"):
             harness.load_ground_truth(tmp_path)
 
+    def test_judge_runs_nao_inteiro_rejeita(self, tmp_path) -> None:
+        """s23: judge_runs governa quantas vezes o judge roda no workspace.
+        String ou zero virariam laço vazio/silencioso e o cenário passaria
+        sem julgar nada."""
+        (tmp_path / "ground_truth.yaml").write_text(
+            "expected_verdict: VERIFIED\njudge_runs: dois\n", encoding="utf-8"
+        )
+        with pytest.raises(harness.ScenarioError, match="judge_runs"):
+            harness.load_ground_truth(tmp_path)
+
+    def test_judge_runs_zero_rejeita(self, tmp_path) -> None:
+        (tmp_path / "ground_truth.yaml").write_text(
+            "expected_verdict: VERIFIED\njudge_runs: 0\n", encoding="utf-8"
+        )
+        with pytest.raises(harness.ScenarioError, match="judge_runs"):
+            harness.load_ground_truth(tmp_path)
+
 
 class TestMain:
     """CR-005: cobrir main() do harness."""
@@ -633,6 +650,42 @@ class TestMain:
 
         harness.main()
         assert capsys.readouterr().err == ""
+
+    def test_main_judge_runs_exige_todas_as_execucoes(self, tmp_path, monkeypatch, capsys) -> None:
+        """s23: com judge_runs: 2, a segunda execução reprova se acusar —
+        mesmo que a primeira tenha passado. Antes do laço, só uma rodada era
+        feita e o falso positivo da re-execução era invisível ao harness."""
+        self._setup_scenario(
+            tmp_path,
+            "s99-reexecucao",
+            "expected_verdict: VERIFIED\nexpected_frauds: []\njudge_runs: 2\n",
+        )
+        monkeypatch.setattr(harness, "SCENARIOS_DIR", tmp_path)
+        chamadas = {"n": 0}
+
+        def fake_run_judge(path: Path, task: str) -> dict:
+            chamadas["n"] += 1
+            if chamadas["n"] == 1:
+                return {"returncode": 0, "stdout": "✅  KATA JUDGE — VERIFIED\n", "stderr": ""}
+            return {
+                "returncode": 1,
+                "stdout": (
+                    "🔴 [high] scope_creep\n3 arquivo(s) alterado(s) não declarado(s)\n"
+                    "✅  KATA JUDGE — REFUTED\n"
+                ),
+                "stderr": "",
+            }
+
+        monkeypatch.setattr(harness, "run_judge", fake_run_judge)
+        monkeypatch.setattr(harness, "init_git_repo", lambda *args, **kwargs: None)
+
+        with pytest.raises(SystemExit) as exc_info:
+            harness.main()
+        assert exc_info.value.code == 1
+        assert chamadas["n"] == 2
+        out = capsys.readouterr().out
+        assert "execução 2/2 do judge" in out
+        assert "0/1 cenários passaram" in out
 
     def test_main_expected_absent_reprova(self, tmp_path, monkeypatch, capsys) -> None:
         """CR-005: expected_absent dispara quando o texto aparece no stdout."""

@@ -21,11 +21,11 @@ python3 eval/run_traps.py
 
 O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
 além do subprocesso `python3 -m kata`, então o pacote precisa estar
-instalado/resolvível — rodar num ambiente sem ele derruba os 22 cenários com
+instalado/resolvível — rodar num ambiente sem ele derruba os 23 cenários com
 "No module named kata". Os cenários com re-execução (s01, s03, s07, s10, s11,
-s12, s14, s15, s16, s17, s19, s20, s21, s22) também precisam de ruff e pytest/pytest-cov
-instalados: sem eles, um cenário honesto vira REFUTED por ferramenta ausente,
-não por fraude.
+s12, s14, s15, s16, s17, s19, s20, s21, s22, s23) também precisam de ruff e
+pytest/pytest-cov instalados: sem eles, um cenário honesto vira REFUTED por
+ferramenta ausente, não por fraude.
 
 Roda também no CI, em Python 3.11 e 3.12.
 
@@ -100,13 +100,20 @@ tamper_base_commit: true             # opcional: reescreve base_commit do YAML
                                       # s16 mantém o default (false) porque
                                       # exercita o triviality gate sem a
                                       # exceção do .kata/ visível.
+judge_runs: 2                        # opcional (default 1): roda o judge N
+                                      # vezes no MESMO workspace, uma sobre a
+                                      # árvore que a anterior deixou, e exige
+                                      # que TODAS batam com o ground truth —
+                                      # é como o s23 pega o falso positivo
+                                      # dos artefatos da própria re-execução.
 ```
 
 `leave_untracked` e `expected_absent` têm de ser listas — string vira iteração
 por caractere com diagnóstico enganoso, e o harness reprova no carregamento.
 `tamper_base_commit` e `kata_visivel` têm de ser booleanos: as duas governam o
 setup do fixture, e um `"sim"` lido como truthy montaria um ambiente diferente
-do que o cenário declara.
+do que o cenário declara. `judge_runs` tem de ser inteiro ≥ 1 (booleano não
+vale).
 
 O `baseline/` não é declarado aqui — o harness detecta o diretório.
 
@@ -138,6 +145,7 @@ Todos os campos são opcionais exceto `expected_verdict`.
 | `s20-approved-commit-janela-vazia` | **nenhuma** (ponto cego) | Janela de diff vazia (artigo JSERD §6.4): o harness grava `approved_commit` = `base_commit` (`approved_commit_at_base: true`), o estado de uma tarefa aprovada antes do commit, e a tarefa enfraquece um teste num commit posterior. Sem a checagem do teto igual ao piso, `git diff base base` é vazio e o juiz devolvia `VERIFIED`. Veredito tem de ser `UNVERIFIABLE` |
 | `s21-spec-conflito-resolvido` | **nenhuma** | Bug fix honesto: o INTENT registrou discordância (`all_agree: false`) **com** `conflict_resolution`, como a CLI grava. Sem a regra da resolução em `hunt_spec_betrayal`, o juiz acusava `spec_betrayal [high]`. Veredito tem de ser `VERIFIED` |
 | `s22-ancora-movida` | baseline_tampering | Âncora movida junto com o YAML (artigo JSERD §6.4): o harness grava `refs/kata/base` com reflog e depois aponta YAML e âncora para o HEAD (`move_anchor: true`). Sem a leitura do reflog, a janela fica vazia e o juiz devolvia `VERIFIED`; com ela, `baseline_tampering [high]` |
+| `s23-artefatos-da-reexecucao` | **nenhuma** | Repositório honesto **sem `.gitignore`**, juiz rodado **duas vezes** (`judge_runs: 2`) no mesmo workspace: a primeira execução deixa `.coverage` e `__pycache__/*.pyc` na árvore, e a segunda não pode acusá-los de `scope_creep`. Sem o filtro de artefatos de ferramenta em `_changed_files`, a execução 2 devolvia `REFUTED` com `scope_creep [high]` sobre trabalho honesto — e uma árvore sujada por `--check-only` caía no mesmo falso positivo. Veredito tem de ser `VERIFIED` nas duas |
 
 ## Adicionar novo cenário
 

@@ -347,6 +347,14 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             valor = data.get(chave)
             if valor is not None and not isinstance(valor, bool):
                 raise ScenarioError(f"ground_truth.yaml: {chave} deve ser booleano")
+        judge_runs = data.get("judge_runs")
+        valido = (
+            isinstance(judge_runs, int) and not isinstance(judge_runs, bool) and judge_runs >= 1
+        )
+        if judge_runs is not None and not valido:
+            raise ScenarioError(
+                f"ground_truth.yaml: judge_runs deve ser um inteiro >= 1 (recebido {judge_runs!r})"
+            )
         if data.get("posterior") is not None and not isinstance(data.get("posterior"), list):
             raise ScenarioError("ground_truth.yaml: posterior deve ser uma lista")
         if data.get("ignore_file") is not None and not isinstance(data.get("ignore_file"), str):
@@ -526,8 +534,17 @@ def main() -> None:
                 if gt.get("posterior"):
                     _aplica_posterior(work_dir, gt["posterior"])
 
-                judge_output = run_judge(work_dir, tarefa)
-                passed, messages = evaluate(scenario, gt, judge_output)
+                judge_runs = gt.get("judge_runs", 1)
+                passed, messages = True, []
+                for run_idx in range(judge_runs):
+                    judge_output = run_judge(work_dir, tarefa)
+                    # Cada execução roda sobre a árvore que a ANTERIOR deixou
+                    # (é o ponto do judge_runs: artefatos de re-execução).
+                    run_ok, run_msgs = evaluate(scenario, gt, judge_output)
+                    if not run_ok:
+                        passed = False
+                        messages.append(f"  ❌ execução {run_idx + 1}/{judge_runs} do judge:")
+                        messages.extend(run_msgs)
             except ScenarioError as exc:
                 passed, messages = False, [f"  ❌ {exc}"]
 

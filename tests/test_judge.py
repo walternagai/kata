@@ -23,8 +23,10 @@ from kata.judge import (
     _fecha_docstring,
     _ignored_code_files,
     _is_test_file,
+    _is_tool_artifact,
     _normaliza_task,
     _oversized_untracked,
+    _remove_tool_artifacts,
     _resolve_commit,
     _run_git_diff,
     _unreadable_test_files,
@@ -1289,6 +1291,48 @@ class TestChangedFiles:
         assert files == []
 
     @patch("kata.judge._run")
+    def test_artefatos_de_ferramenta_saem_da_lista_de_alterados(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """O `run_all` do próprio judge (e o `--check-only`) deixa `.coverage`,
+        `*.pyc` e caches na árvore; sem filtrá-los, a execução SEGUINTE os via
+        como untracked e acusava trabalho honesto de scope_creep.
+        """
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=".coverage\nsrc/__pycache__/x.pyc\ncoverage.xml\nsrc/a.py\ntests/test_a.py\n",
+            stderr="",
+        )
+        mock_untracked.return_value = ["htmlcov/index.html", ".pytest_cache/v/cache"]
+
+        files = _changed_files()
+
+        assert files == ["src/a.py", "tests/test_a.py"]
+
+    @patch("kata.judge._run")
+    def test_config_do_projeto_nao_e_artefato(
+        self, mock_run: MagicMock, mock_untracked: MagicMock
+    ) -> None:
+        """.coveragerc é configuração do projeto, não dado de ferramenta —
+        filtrá-lo esconderia uma alteração de verdade (ex.: um `omit` novo
+        para maquiar o gate de coverage)."""
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=".coveragerc\n", stderr=""
+        )
+        assert _changed_files() == [".coveragerc"]
+        assert _is_tool_artifact(".coveragerc") is False
+
+    def test_codigo_de_verdade_sob_cache_nao_e_filtrado(self, mock_untracked: MagicMock) -> None:
+        """O filtro olha nome/extensão, não só o diretório: um `.py` de verdade
+        guardado em `__pycache__/` continua visível ao juiz — a mesma doutrina
+        do `is_kata_bookkeeping`."""
+        assert _is_tool_artifact("src/__pycache__/helper.py") is False
+        assert _remove_tool_artifacts(["src/__pycache__/helper.py"]) == [
+            "src/__pycache__/helper.py"
+        ]
+
+    @patch("kata.judge._run")
     def test_baseline_ref_retorna_none_quando_comando_falha(
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
@@ -2010,6 +2054,99 @@ class TestJudgeSeesUntrackedFiles:
 
         result = judge_task({"verify": {}}, cwd=tmp_path)
         assert any("ignorado" in spot for spot in result.blind_spots)
+
+
+class TestJudgeNaoAcusaArtefatosDaPropriaReexecucao:
+    """A execução SEGUINTE do judge não pode acusar o que a primeira deixou.
+
+    Num repositório honesto sem `.gitignore`, a re-execução do `run_all` — e o
+    `--check-only` do CI — deixam `.coverage` e `__pycache__/*.pyc` na árvore.
+    Eles apareciam como untracked e `hunt_scope_creep` acusava trabalho honesto:
+    run1 VERIFIED → run2 REFUTED com scope_creep [high].
+
+    Repo git real de propósito: o defeito é a interação com `git ls-files`,
+    e um mock é exatamente o que o esconderia.
+    """
+
+    def _tarefa(self) -> dict:
+        return {
+            "task": "t",
+            "fit": {"trivial": False},
+            "surgical": {
+                "files": [
+                    {"path": "src/calculo.py", "necessary": True},
+                    {"path": "tests/test_calculo.py", "necessary": True},
+                ]
+            },
+            "verify": {},
+        }
+
+    def _artefatos_da_reexecucao(self, repo: Path) -> None:
+        """O que o run_all deixa: coverage + bytecode caches."""
+        (repo / ".coverage").write_bytes(b"")
+        (repo / "src" / "__pycache__").mkdir(parents=True, exist_ok=True)
+        (repo / "src" / "__pycache__" / "calculo.cpython-311.pyc").write_bytes(b"\x00")
+        (repo / "tests" / "__pycache__").mkdir(parents=True, exist_ok=True)
+        (repo / "tests" / "__pycache__" / "test_calculo.cpython-311.pyc").write_bytes(b"\x00")
+
+    def test_segunda_execucao_nao_acusa_scope_creep(self, repo_git, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src").mkdir()
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "src" / "calculo.py").write_text("def somar(a, b):\n    return a + b\n")
+        (tmp_path / "tests" / "test_calculo.py").write_text(
+            "from src.calculo import somar\n\n\ndef test_somar():\n    assert somar(2, 3) == 5\n"
+        )
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "tarefa"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        task = self._tarefa()
+        task["base_commit"] = base
+        assert record_baseline_ref("t", base, cwd=tmp_path) is True
+
+        # Execução 1: honesta, nada deixado ainda.
+        primeira = judge_task(task, cwd=tmp_path)
+        assert not any(f.type == "scope_creep" for f in primeira.frauds)
+
+        # Execução 2 sobre a árvore sujada pela primeira — o defeito.
+        self._artefatos_da_reexecucao(tmp_path)
+        segunda = judge_task(task, cwd=tmp_path)
+
+        creep = [f for f in segunda.frauds if f.type == "scope_creep"]
+        assert creep == [], f"scope_creep sobre artefato da própria reexecução: {creep}"
+        assert ".coverage" not in segunda.caveats
+
+    def test_artefato_de_verdade_fora_da_lista_continua_acusado(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """Guarda contra filtrar demais: um arquivo não declarado de verdade
+        (inclusive com nome parecido com artefato) continua sendo scope_creep."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "calculo.py").write_text("x = 1\n")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "tarefa"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        task = {
+            "task": "t",
+            "base_commit": base,
+            "surgical": {"files": [{"path": "src/calculo.py", "necessary": True}]},
+            "verify": {},
+        }
+
+        (tmp_path / "extra.py").write_text("y = 1\n")
+        (tmp_path / "cobertura.md").write_text("nota\n")
+
+        resultado = judge_task(task, cwd=tmp_path)
+
+        creep = [f for f in resultado.frauds if f.type == "scope_creep"]
+        assert len(creep) == 1
+        assert "extra.py" in creep[0].evidence
+        assert "cobertura.md" in creep[0].evidence
 
 
 class TestUnreadableTestFiles:

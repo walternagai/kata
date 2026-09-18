@@ -629,6 +629,53 @@ def _sem_escrituracao(files: list[str]) -> list[str]:
     return [f for f in files if not is_kata_bookkeeping(f)]
 
 
+# Nomes de arquivo que são dados de ferramenta, nunca trabalho da tarefa. O
+# `_ignored_code_files` (lado dos ignorados) e o `eval/external_study.py`
+# (`_clean_tool_caches`) já conheciam esta classe; o lado dos ALTERADOS não, e
+# é ele que o judge acusa.
+_TOOL_ARTIFACT_NAMES = frozenset({".coverage", "coverage.xml"})
+
+# Diretórios cujo conteúdo inteiro é gerado por ferramenta. `__pycache__` NÃO
+# entra: lá o filtro é pela extensão, para um `.py` de verdade guardado ali
+# não ficar invisível — a mesma doutrina do `is_kata_bookkeeping` (filtra o
+# dado da ferramenta, não o diretório).
+_TOOL_ARTIFACT_DIRS = frozenset({".mypy_cache", ".pytest_cache", ".ruff_cache", "htmlcov"})
+_TOOL_ARTIFACT_SUFFIXES = frozenset({".pyc", ".pyo"})
+
+
+def _is_tool_artifact(filepath: str) -> bool:
+    """O arquivo é dado que uma ferramenta de verificação deixou na árvore?
+
+    O `run_all` que o próprio judge dispara — e o `--check-only` do CI —
+    deixam `.coverage`, `*.pyc` e caches na árvore. Num repositório sem
+    `.gitignore` para eles, a execução SEGUINTE os vê como untracked e
+    `hunt_scope_creep` acusava trabalho honesto: run1 VERIFIED → run2 REFUTED
+    com scope_creep [high], e uma árvore sujada por `--check-only` já caía em
+    WITH CAVEATS na run 1.
+
+    O filtro é por nome de artefato, nunca por sufixo genérico:
+    `.coveragerc` é configuração do projeto e NÃO é filtrado, e um
+    `src/__pycache__/helper.py` — código que alguém guardou ali — também não
+    (só `.pyc`/`.pyo` saem de `__pycache__`).
+    """
+    path = Path(filepath)
+    nome = path.name
+    if nome in _TOOL_ARTIFACT_NAMES:
+        return True
+    # `.coverage.<host>` é dado do coverage; `.coveragerc` é config do projeto
+    # e o `startswith` com ponto final não o alcança.
+    if nome.startswith(".coverage."):
+        return True
+    if path.suffix.lower() in _TOOL_ARTIFACT_SUFFIXES:
+        return True
+    return bool(_TOOL_ARTIFACT_DIRS.intersection(path.parts))
+
+
+def _remove_tool_artifacts(files: list[str]) -> list[str]:
+    """Remove artefatos de ferramenta (coverage, caches, bytecode) da lista."""
+    return [f for f in files if not _is_tool_artifact(f)]
+
+
 def _oversized_untracked(files: list[str], cwd: Path | None = None) -> list[str]:
     """Arquivos untracked grandes demais para inspecionar (viram caveat)."""
     base = cwd or Path.cwd()
@@ -746,9 +793,11 @@ def _changed_files(
                 except OSError:
                     return []
 
-    tracked = _sem_escrituracao([f for f in result.stdout.strip().split("\n") if f.strip()])
+    tracked = _sem_escrituracao(
+        _remove_tool_artifacts([f for f in result.stdout.strip().split("\n") if f.strip()])
+    )
     seen = set(tracked)
-    novos = _sem_escrituracao(untracked_files(cwd=cwd))
+    novos = _sem_escrituracao(_remove_tool_artifacts(untracked_files(cwd=cwd)))
     return tracked + [f for f in novos if f not in seen]
 
 

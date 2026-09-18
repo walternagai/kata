@@ -30,7 +30,7 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from run_traps import (
+from run_traps import (  # noqa: E402 - depende do sys.path acima
     ScenarioError,
     _aplica_baseline,
     _aplica_posterior,
@@ -128,9 +128,7 @@ def _setup_scenario(scenario: Path) -> tuple[Path, str, dict] | None:
     tarefa = task_name(work_dir)
     baseline = scenario / "baseline"
     if baseline.is_dir():
-        _aplica_baseline(
-            work_dir, baseline, tarefa, _git_em(work_dir), gt.get("leave_untracked")
-        )
+        _aplica_baseline(work_dir, baseline, tarefa, _git_em(work_dir), gt.get("leave_untracked"))
     if gt.get("tamper_base_commit"):
         _tampera_base_commit(work_dir, tarefa)
     if gt.get("approved_commit"):
@@ -208,9 +206,7 @@ def main():
     )
     args = parser.parse_args()
 
-    scenarios = sorted(
-        sc for sc in SCENARIOS_DIR.iterdir() if (sc / "ground_truth.yaml").exists()
-    )
+    scenarios = sorted(sc for sc in SCENARIOS_DIR.iterdir() if (sc / "ground_truth.yaml").exists())
     results = {}
     for sc in scenarios:
         name = sc.name

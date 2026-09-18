@@ -1,1 +1,1 @@
-ESCALA = 'C'
+ESCALA = "C"

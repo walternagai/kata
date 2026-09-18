@@ -64,6 +64,7 @@ Analise o diff procurando por:
 class ResponseFactory:
     def create(self, type: str) -> Response: ...
 
+
 # ✅ Good: função simples
 def make_response(data: dict) -> Response: ...
 ```
@@ -72,6 +73,7 @@ def make_response(data: dict) -> Response: ...
 ```python
 # ❌ Bad: 3 parâmetros opcionais que ninguém pediu
 def process(data, batch_size=100, timeout=30, retries=3): ...
+
 
 # ✅ Good: só o que foi pedido
 def process(data): ...
@@ -84,8 +86,10 @@ class BaseStorage(ABC):
     @abstractmethod
     def save(self, key, value): ...
 
+
 class SQLiteStorage(BaseStorage):
     def save(self, key, value): ...
+
 
 # ✅ Good: classe concreta
 class SQLiteStorage:
@@ -96,6 +100,7 @@ class SQLiteStorage:
 ```python
 # ❌ Bad: genérico para "futuros tipos"
 def handle(data: dict[str, Any]) -> Any: ...
+
 
 # ✅ Good: específico
 def handle(data: UserInput) -> Result: ...

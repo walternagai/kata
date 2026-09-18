@@ -1,0 +1,16 @@
+# Artefatos da própria re-execução (run1 deixa, run2 acusa).
+#
+# A tarefa é honesta e sem `.gitignore`: o `run_all` que o juiz dispara
+# (ruff + pytest + pytest-cov) deixa `.coverage` e `src|tests/__pycache__/*.pyc`
+# na árvore. Na execução SEGUINTE eles aparecem como untracked e
+# `hunt_scope_creep` acusava 3 arquivos não declarados — scope_creep [high],
+# REFUTED sobre trabalho honesto. Pior: `kata --check-only`, o entry point do
+# CI, suja a árvore do mesmo jeito, então qualquer execução numa árvore sujada
+# por ele caía em falso positivo.
+#
+# O harness roda o judge `judge_runs: 2` vezes no MESMO workspace e exige que
+# TODAS as execuções batam com o ground truth — a segunda não pode acusar os
+# artefatos que a primeira deixou.
+expected_verdict: "VERIFIED"
+expected_frauds: []
+judge_runs: 2

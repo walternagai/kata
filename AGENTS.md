@@ -158,7 +158,16 @@ imediatamente na instalação, sem reinstalar. Use `make reinstall` /
 Para quem **não** tem o checkout (instalado via `pipx install kata-dev`), o
 mesmo efeito vem de `kata --install opencode|claude-code|all`, que **copia** o
 gerado embarcado em `src/kata/assets/` — sem symlink e sem repo. O `--doctor`
-diagnostica os dois casos; `--uninstall` remove só o que o `--install` criou.
+diagnostica os dois casos (e nomeia o modo: link, cópia ou misto); `--uninstall`
+remove só o que o `--install` criou.
+
+Os dois modos convivem: `kata --install` **adota** o symlink que o instalador
+shell criou — se o alvo tem o mesmo conteúdo do asset, o link vira cópia sem
+`--force` e sem `.bak`. Link para skill editada no checkout não é adotado (é do
+dev, não nosso) e o doctor mostra esse estado como misto, com quais skills são
+link e quais são cópia. Um `.bak` de symlink nosso, deixado por `--force` de
+versão antiga, é removido pelo `--uninstall`; `.bak` de conteúdo do usuário
+nunca é.
 
 Ambos respeitam `OPENCODE_CONFIG_DIR` / `CLAUDE_CONFIG_DIR` quando definidos.
 Há instaladores PowerShell equivalentes (`scripts/*.ps1`) com `-Copy` para

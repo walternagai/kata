@@ -84,14 +84,36 @@ class InstallStatus:
         config_dir: Diretório inspecionado.
         instaladas: Skills encontradas.
         faltando: Skills esperadas que não estão lá.
+        links: Skills instaladas como symlink (fluxo dev: `make install`).
+        copias: Skills instaladas como cópia (fluxo wheel: `kata --install`).
     """
 
     frontend: str
     config_dir: Path
     instaladas: list[str] = field(default_factory=list)
     faltando: list[str] = field(default_factory=list)
+    links: list[str] = field(default_factory=list)
+    copias: list[str] = field(default_factory=list)
     agente_esperado: bool = False
     agente_instalado: bool = True
+
+    @property
+    def modo(self) -> str:
+        """Como as skills instaladas estão no disco: link, copia, misto, ausente.
+
+        Os dois modos são válidos — link é o fluxo de desenvolvimento (editar
+        o repo reflete sem reinstalar), cópia é o do wheel. O que o doctor
+        precisa nomear é o **misto**, que é ambíguo: metade reflete o repo e
+        metade não, e quem depura uma skill que não atualiza perde tempo até
+        descobrir qual é qual.
+        """
+        if not self.instaladas:
+            return "ausente"
+        if not self.links:
+            return "copia"
+        if not self.copias:
+            return "link"
+        return "misto"
 
     @property
     def ausente(self) -> bool:
@@ -129,11 +151,15 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
     raiz = frontend.config_dir() / "skills"
     instaladas: list[str] = []
     faltando: list[str] = []
+    links: list[str] = []
+    copias: list[str] = []
     for nome in frontend.esperadas():
         # Symlink quebrado não conta como instalado: `exists()` segue o link,
         # que é o que o host também vai fazer ao tentar carregar a skill.
-        if (raiz / nome).exists():
+        alvo = raiz / nome
+        if alvo.exists():
             instaladas.append(nome)
+            (links if alvo.is_symlink() else copias).append(nome)
         else:
             faltando.append(nome)
     agente_esperado = not frontend.orquestrador_e_skill
@@ -143,6 +169,8 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
         config_dir=frontend.config_dir(),
         instaladas=instaladas,
         faltando=faltando,
+        links=links,
+        copias=copias,
         agente_esperado=agente_esperado,
         agente_instalado=agente_instalado,
     )

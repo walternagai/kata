@@ -143,6 +143,72 @@ class TestDoctor:
         assert faltando["opencode"] == []
 
 
+class TestModoDeInstalacao:
+    """O doctor nomeia COMO as skills estão instaladas: link, cópia ou misto.
+
+    Os dois modos são válidos — link é o fluxo dev, cópia é o do wheel. O que
+    precisa de nome é o misto: metade reflete o repo e metade não, e sem isso
+    escrito o sintoma ("esta skill não atualiza") começa o diagnóstico do zero.
+    """
+
+    def test_tudo_copia_reporta_copia(self, oc, tmp_path) -> None:
+        _instala(tmp_path, PHASE_SKILLS)
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        e = check_frontend(oc)
+        assert e.modo == "copia"
+        assert e.copias == list(PHASE_SKILLS)
+        assert e.links == []
+
+    def test_tudo_link_reporta_link(self, oc, tmp_path) -> None:
+        skills = tmp_path / "skills"
+        skills.mkdir(parents=True)
+        for nome in PHASE_SKILLS:
+            alvo = tmp_path / "fontes" / nome
+            alvo.mkdir(parents=True)
+            (alvo / "SKILL.md").write_text("skill", encoding="utf-8")
+            (skills / nome).symlink_to(alvo, target_is_directory=True)
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        e = check_frontend(oc)
+        assert e.modo == "link"
+        assert e.links == list(PHASE_SKILLS)
+        assert e.copias == []
+
+    def test_metade_link_metade_copia_reporta_misto(self, oc, tmp_path) -> None:
+        metade = list(PHASE_SKILLS)[: len(PHASE_SKILLS) // 2]
+        _instala(tmp_path, [s for s in PHASE_SKILLS if s not in metade])
+        skills = tmp_path / "skills"
+        for nome in metade:
+            alvo = tmp_path / "fontes" / nome
+            alvo.mkdir(parents=True)
+            (alvo / "SKILL.md").write_text("skill", encoding="utf-8")
+            (skills / nome).symlink_to(alvo, target_is_directory=True)
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+
+        e = check_frontend(oc)
+
+        assert e.modo == "misto"
+        assert e.completo is True, "misto é ambíguo, não incompleto"
+        assert sorted(e.links) == sorted(metade)
+        assert len(e.copias) == len(PHASE_SKILLS) - len(metade)
+
+    def test_nada_instalado_reporta_ausente(self, oc) -> None:
+        assert check_frontend(oc).modo == "ausente"
+
+    def test_symlink_quebrado_nao_entra_na_contagem_de_link(self, oc, tmp_path) -> None:
+        """Link quebrado já não conta como instalado; não pode contar como modo
+        link tampouco, senão um frontend ausente reportaria `link`."""
+        _instala(tmp_path, PHASE_SKILLS)
+        alvo = tmp_path / "skills" / "kata-fit"
+        alvo.rmdir()
+        alvo.symlink_to(tmp_path / "nao-existe")
+        e = check_frontend(oc)
+        assert "kata-fit" not in e.links
+        assert e.modo == "copia"
+
+
 class TestSecurity:
     def test_symlink_para_fora_do_repo_nao_conta_como_instalado(self, oc, tmp_path) -> None:
         """CR-012: symlink quebrado ou apontando para fora do config_dir não

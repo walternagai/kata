@@ -7,6 +7,7 @@ embarcado em `src/kata/assets/`. Cada teste usa um CONFIG_DIR temporário.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -111,6 +112,16 @@ def test_uninstall_remove_so_o_que_criou(tmp_path, monkeypatch) -> None:
     assert not (tmp_path / "agent" / "kata.md").exists()
 
 
+def test_uninstall_em_frontend_nunca_instalado_nao_quebra(tmp_path, monkeypatch) -> None:
+    """Sem skills/ e sem agent/ não há o que varrer — e nada pode explodir."""
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+
+    report = bundled.uninstall_frontend("opencode")
+
+    assert report.ok
+    assert report.removidas == []
+
+
 def test_run_install_all_e_uninstall(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
@@ -128,3 +139,142 @@ def test_run_install_all_e_uninstall(tmp_path, monkeypatch) -> None:
 def test_frontend_desconhecido_e_erro() -> None:
     with pytest.raises(ValueError, match="frontend desconhecido"):
         bundled.install_frontend("cursor")
+
+
+def _link_para_o_asset(destino: Path, rel: str) -> None:
+    """Cria um symlink como o `make install` cria: apontando para o asset."""
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.symlink_to(bundled.bundled_root() / rel, target_is_directory=True)
+
+
+class TestAdotaLinkDoInstaladorShell:
+    """`kata --install` adota o symlink que o próprio projeto criou.
+
+    Sem isto, migrar do fluxo dev (`make install`) para o do wheel deixava
+    instalação MISTA: o link era recusado ("não foi criado pelo Kata", exit 1)
+    e as demais skills entravam como cópia. O link é nosso quando o alvo tem
+    o mesmo conteúdo do embarcado — o mesmo critério do agente.
+    """
+
+    def test_adota_link_de_skill_sem_force(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        _link_para_o_asset(tmp_path / "skills" / "kata-fit", "opencode/skills/kata-fit")
+
+        report = bundled.install_frontend("opencode")
+
+        assert report.ok, report.recusadas or report.erros
+        assert not report.backups, "link adotado não vira .bak"
+        destino = tmp_path / "skills" / "kata-fit"
+        assert not destino.is_symlink()
+        assert (destino / "SKILL.md").is_file()
+        assert (destino / bundled.MARKER).is_file()
+
+    def test_adota_link_do_agente_sem_force(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        _link_para_o_asset(tmp_path / "agent" / "kata.md", "opencode/agent/kata.md")
+
+        report = bundled.install_frontend("opencode")
+
+        assert report.ok, report.recusadas or report.erros
+        assert not (tmp_path / "agent" / "kata.md").is_symlink()
+        assert (tmp_path / "agent" / bundled.AGENT_MARKER).is_file()
+
+    def test_nao_adota_link_de_terceiro(self, tmp_path, monkeypatch) -> None:
+        """Link para conteúdo DIFERENTE é do usuário — recusa, não adoção."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        externo = tmp_path / "externo" / "kata-fit"
+        externo.mkdir(parents=True)
+        (externo / "SKILL.md").write_text("skill de outra origem", encoding="utf-8")
+        alvo = tmp_path / "skills" / "kata-fit"
+        alvo.parent.mkdir(parents=True)
+        alvo.symlink_to(externo, target_is_directory=True)
+
+        report = bundled.install_frontend("opencode")
+
+        assert not report.ok
+        assert alvo.is_symlink()
+        assert (alvo / "SKILL.md").read_text(encoding="utf-8") == "skill de outra origem"
+
+    def test_links_do_checkout_editado_nao_sao_adotados(self, tmp_path, monkeypatch) -> None:
+        """Edição local no checkout diverge do asset: não é nosso, é do dev."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        clone = tmp_path / "checkout" / "kata-fit"
+        shutil.copytree(bundled.bundled_root() / "opencode/skills/kata-fit", clone)
+        with (clone / "SKILL.md").open("a", encoding="utf-8") as f:
+            f.write("\nedição local do dev\n")
+        alvo = tmp_path / "skills" / "kata-fit"
+        alvo.parent.mkdir(parents=True)
+        alvo.symlink_to(clone, target_is_directory=True)
+
+        report = bundled.install_frontend("opencode")
+
+        assert not report.ok
+        assert alvo.is_symlink()
+
+
+class TestUninstallLimpaBakDeLink:
+    """O `--force` antigo (única via de migrar link) deixava `kata-*.bak` que
+    era symlink para o checkout, e o uninstall não o removia — ficava para
+    sempre. Só o `.bak` de link NOSSO é removido; o do usuário é preservado.
+    """
+
+    def test_remove_bak_que_e_link_nosso(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        assert bundled.install_frontend("opencode").ok
+        _link_para_o_asset(tmp_path / "skills" / "kata-fit.bak", "opencode/skills/kata-fit")
+
+        report = bundled.uninstall_frontend("opencode")
+
+        assert not (tmp_path / "skills" / "kata-fit.bak").is_symlink()
+        assert "kata-fit.bak" in report.removidas
+
+    def test_preserva_bak_de_conteudo_do_usuario(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        assert bundled.install_frontend("opencode").ok
+        bak = tmp_path / "skills" / "kata-fit.bak"
+        bak.mkdir(parents=True)
+        (bak / "NOTAS.md").write_text("ajuste do usuário", encoding="utf-8")
+
+        bundled.uninstall_frontend("opencode")
+
+        assert (bak / "NOTAS.md").read_text(encoding="utf-8") == "ajuste do usuário"
+
+    def test_remove_bak_de_link_do_agente(self, tmp_path, monkeypatch) -> None:
+        """O `--force` também fazia `.bak` do arquivo do agente — mesmo caso."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        assert bundled.install_frontend("opencode").ok
+        bak = tmp_path / "agent" / "kata.md.bak"
+        bak.symlink_to(bundled.bundled_root() / "opencode/agent/kata.md")
+
+        report = bundled.uninstall_frontend("opencode")
+
+        assert not bak.is_symlink()
+        assert "kata.md.bak" in report.removidas
+
+    def test_preserva_bak_de_terceiro(self, tmp_path, monkeypatch) -> None:
+        """Link para conteúdo que não é o nosso: preservado."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        assert bundled.install_frontend("opencode").ok
+        externo = tmp_path / "externo"
+        externo.mkdir()
+        (externo / "SKILL.md").write_text("de outra origem", encoding="utf-8")
+        bak = tmp_path / "skills" / "kata-fit.bak"
+        bak.symlink_to(externo, target_is_directory=True)
+
+        bundled.uninstall_frontend("opencode")
+
+        assert bak.is_symlink()
+
+    def test_bak_apontando_para_tipo_diferente_e_preservado(self, tmp_path, monkeypatch) -> None:
+        """Link para ARQUIVO onde a origem é diretório de skill não casa."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        assert bundled.install_frontend("opencode").ok
+        arquivo = tmp_path / "externo.md"
+        arquivo.write_text("conteúdo de arquivo", encoding="utf-8")
+        bak = tmp_path / "skills" / "kata-fit.bak"
+        bak.symlink_to(arquivo)
+
+        report = bundled.uninstall_frontend("opencode")
+
+        assert bak.is_symlink()
+        assert "kata-fit.bak" not in report.removidas

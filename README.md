@@ -125,6 +125,13 @@ diferentes. `kata --install` copia as skills do wheel e funciona sem clonar
 o repositório; `make install` / `make install-claude-code` (symlinks para o
 checkout) continuam como fluxo de desenvolvimento local.
 
+Os dois modos convivem, e `kata --install` migra o fluxo dev para o de
+cópia quando pedido: symlinks do Kata são **adotados** — substituídos pela
+cópia, sem `--force` e sem deixar `.bak`. Se um link aponta para uma skill
+editada localmente (conteúdo diferente do empacotado), ele não é adotado:
+`kata --doctor` mostra o estado como `MISTO` e nomeia quais são link e quais
+são cópia.
+
 ### O que o projeto alvo precisa
 
 O kata é aplicado a um projeto (não a este repositório). Para o `--check-only`
@@ -198,7 +205,7 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes) |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
-| `--doctor` | `False` | Confere as skills de fase por frontend; domain adapters ausentes só avisam |
+| `--doctor` | `False` | Confere as skills de fase por frontend (e mostra o modo: link, cópia ou misto); domain adapters ausentes só avisam |
 | `--install` | (nenhum) | Copia as skills empacotadas: `opencode`, `claude-code` ou `all` (sem clone do repo) |
 | `--uninstall` | (nenhum) | Remove as skills do `--install` (só o que o Kata criou) |
 | `--force` | `False` | Só com `--install`: guarda personalização existente em `.bak` e substitui |

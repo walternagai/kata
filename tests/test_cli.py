@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -3591,6 +3592,62 @@ class TestDoctor:
                 cli.main()
 
         assert not (tmp_path / ".kata").exists()
+
+    def test_doctor_nomeia_o_modo_misto(self, tmp_path, monkeypatch, capsys) -> None:
+        """Misto: metade link, metade cópia — ambíguo, e o doctor diz quais são.
+
+        Antes, este estado saía como "Instalação completa" sem detalhe: quem
+        depurava uma skill que não atualizava começava o diagnóstico do zero.
+        """
+        from kata.skills import PHASE_SKILLS
+
+        oc_dir = tmp_path / "oc"
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(oc_dir))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(oc_dir, PHASE_SKILLS)
+        (oc_dir / "agent").mkdir(parents=True)
+        (oc_dir / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        fonte = tmp_path / "fonte"
+        fonte.mkdir()
+        (fonte / "SKILL.md").write_text("skill", encoding="utf-8")
+        link = oc_dir / "skills" / "kata-fit"
+        shutil.rmtree(link)
+        link.symlink_to(fonte, target_is_directory=True)
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0, "misto não reprova: tudo está instalado"
+        assert "MISTO" in out
+        assert "kata-fit" in out
+        assert "kata --install" in out
+
+    def test_doctor_nomeia_o_modo_link(self, tmp_path, monkeypatch, capsys) -> None:
+        """O fluxo dev (symlinks) é válido e o doctor o identifica como tal."""
+        from kata.skills import PHASE_SKILLS
+
+        oc_dir = tmp_path / "oc"
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(oc_dir))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        skills = oc_dir / "skills"
+        skills.mkdir(parents=True)
+        for nome in PHASE_SKILLS:
+            alvo = tmp_path / "fontes" / nome
+            alvo.mkdir(parents=True)
+            (alvo / "SKILL.md").write_text("skill", encoding="utf-8")
+            (skills / nome).symlink_to(alvo, target_is_directory=True)
+        (oc_dir / "agent").mkdir()
+        (oc_dir / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0
+        assert "link (fluxo dev" in out
 
 
 class TestAuditPreflight:

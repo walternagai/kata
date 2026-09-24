@@ -267,6 +267,13 @@ Because the installer creates symlinks, edits to files under `opencode/` are
 visible without reinstalling. Use `make reinstall` after adding new installable
 agent or skill entries.
 
+To switch from the symlink flow to copies — keeping the same checkout — run
+`kata --install opencode`: it adopts the symlinks the installer created
+(content-identical to the bundled assets) and replaces them with copies.
+Going back to symlinks is one-way in the other direction: `make install`
+refuses the copies (`--install`'s own guard, mirrored), so run `kata
+--uninstall opencode` first and then `make install`.
+
 ### Claude Code skills
 
 Install the `kata` skill, its 10 phase skills, and the 4 domain adapters
@@ -313,7 +320,7 @@ reports a summary at the end.
 | `kata --report --task TASK` | Regenerate the outcome-first report |
 | `kata --judge --task TASK` | Run adversarial verification |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
-| `kata --doctor` | Check whether the phase skills are installed in each frontend (missing domain adapters are optional warnings) |
+| `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters are optional warnings |
 | `kata --install FRONTEND` | Copy the bundled skills (`opencode`, `claude-code` or `all`) without a checkout of this repository |
 | `kata --uninstall FRONTEND` | Remove what `--install` created (only what Kata itself wrote) |
 | `kata --force` | With `--install`: back up existing customization to `.bak` and replace it |
@@ -539,6 +546,24 @@ present under `$OPENCODE_CONFIG_DIR/skills` and `$CLAUDE_CONFIG_DIR/skills`
 (defaulting to `~/.config/opencode` and `~/.claude`). A broken symlink does
 not count as installed, because `exists()` follows the link and so does the
 host when it tries to load the skill.
+
+It also names the **mode** of each install: `link` (the dev flow — `make
+install`, symlinks into the checkout), `copy` (`kata --install`, or
+`-Copy` / the wheel), or mixed. Both single modes are valid; the mixed one
+is what deserves a name, because half the skills reflect the checkout and
+half do not, and the symptom — a skill that "does not update" — otherwise
+starts its diagnosis from scratch. The doctor lists which skills are links
+and which are copies, and points at `kata --install`. Mixed does **not**
+fail the exit code: everything is installed, it is ambiguity rather than
+breakage.
+
+`kata --install` **adopts** a symlink the project itself created: if the
+link target's content matches the bundled asset, it is replaced by the copy
+without `--force` and without leaving a `.bak`. A link whose content differs
+(an edited skill in the checkout) is not adopted — that is the developer's,
+and it is refused as before. The same content-based rule applies to the
+agent file, and `--uninstall` removes a `.bak` only when it is a symlink to
+Kata's own content, never a `.bak` of the user's.
 
 **A partial install is what fails, not an absent one.** Exit code `1` is
 reserved for a frontend that has some skills but not all: someone who never

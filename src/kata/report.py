@@ -283,11 +283,29 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
     ciclo inteiro e perde uma fase sem ser avisado — o orquestrador tenta
     carregar a que falta, falha, e o modelo improvisa a fase a partir do
     nome dela.
+
+    O **modo** (link, cópia ou misto) é informativo, nunca reprova: os dois
+    são válidos. O misto é o que merece nome, porque metade reflete o repo e
+    metade não — o sintoma é uma skill que "não atualiza", e sem o modo
+    escrito o diagnóstico começa do zero.
     """
+    _MODO_LABEL = {
+        "link": "link (fluxo dev — edita o repo e reflete)",
+        "copia": "cópia (kata --install)",
+        "misto": "MISTO — parte link, parte cópia",
+    }
     parciais = 0
     for e in estados:
+        modo = _MODO_LABEL.get(e.modo, "")
         if e.completo:
-            print(f"  ✅ {e.frontend}: {len(e.instaladas)} skill(s) em {e.config_dir}")
+            detalhe = f" [{modo}]" if modo else ""
+            print(f"  ✅ {e.frontend}: {len(e.instaladas)} skill(s) em {e.config_dir}{detalhe}")
+            if e.modo == "misto":
+                print(f"     {len(e.links)} link(s) e {len(e.copias)} cópia(s):")
+                print(f"     · link:  {', '.join(e.links)}")
+                print(f"     · cópia: {', '.join(e.copias)}")
+                print("     Rode `kata --install <frontend>` para migrar os links")
+                print("     para cópia (links do Kata são adotados, sem --force).")
         elif e.ausente:
             print(f"  •  {e.frontend}: não instalado ({e.config_dir})")
         else:
@@ -297,6 +315,8 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
             if e.agente_esperado and not e.agente_instalado:
                 faltando.append("agent/kata.md")
             print(f"     {len(e.instaladas)} instalada(s), faltando: {', '.join(faltando)}")
+            if modo:
+                print(f"     modo: {modo}")
     print()
 
     # Domain skills são opcionais: avisar, mas não reprovar.

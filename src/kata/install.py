@@ -74,6 +74,32 @@ def _e_nosso_skill(destino: Path) -> bool:
     return (destino / MARKER).is_file()
 
 
+def _e_link_nosso(destino: Path, origem: Path) -> bool:
+    """True quando o destino é symlink cujo alvo tem o MESMO conteúdo do embarcado.
+
+    É o estado que os instaladores shell deixam (`make install` /
+    `make install-claude-code`): symlinks para o checkout. Sem isto,
+    `kata --install` recusava o link criado pelo próprio projeto e a migração
+    para cópia deixava instalação mista (13 cópias + 1 link, exit 1).
+
+    Um link assim não guarda conteúdo do usuário — adotá-lo e substituí-lo
+    pela cópia não perde nada. É o mesmo critério por conteúdo que
+    `_e_nosso_agent` já usa: funciona sem o checkout, onde comparar caminhos
+    com a fonte não seria possível. Vale para diretório de skill (compara
+    `SKILL.md`) e para o arquivo do agente (compara o arquivo).
+    """
+    if not destino.is_symlink() or not destino.exists():
+        return False
+    alvo = destino.resolve()
+    if alvo.is_dir() != origem.is_dir():
+        return False
+    if alvo.is_dir():
+        a, b = alvo / "SKILL.md", origem / "SKILL.md"
+    else:
+        a, b = alvo, origem
+    return a.is_file() and b.is_file() and a.read_bytes() == b.read_bytes()
+
+
 def _e_nosso_agent(marcador: Path, destino: Path, origem: Path) -> bool:
     if marcador.is_file():
         return True
@@ -113,7 +139,7 @@ def install_frontend(nome: str, force: bool = False) -> InstallReport:
     for origem in sorted(p for p in skills_src.iterdir() if p.is_dir()):
         destino = skills_dir / origem.name
         if destino.is_symlink() or destino.exists():
-            if _e_nosso_skill(destino):
+            if _e_nosso_skill(destino) or _e_link_nosso(destino, origem):
                 if destino.is_symlink():
                     destino.unlink()
                 else:
@@ -154,24 +180,45 @@ def install_frontend(nome: str, force: bool = False) -> InstallReport:
     return report
 
 
+def _limpar_bak_de_link(dir_pai: Path, origem: Path, report: InstallReport) -> None:
+    """Remove `<nome>.bak` que seja symlink NOSSO, deixado por `--force` antigo.
+
+    Quando o `--force` era a única via para migrar um link dos instaladores
+    shell, o original ia para `.bak` — que continuava sendo um symlink para o
+    checkout. O uninstall não o removia (só apaga diretórios com marcador), e
+    ele ficava para sempre.
+
+    Só remove symlink cujo alvo tem o mesmo conteúdo do embarcado. Um `.bak`
+    de conteúdo real do usuário — diretório ou arquivo — é preservado.
+    """
+    if not dir_pai.is_dir():
+        return
+    for bak in sorted(dir_pai.glob("*.bak")):
+        nome_original = bak.name.removesuffix(".bak")
+        if _e_link_nosso(bak, origem / nome_original):
+            bak.unlink()
+            report.removidas.append(bak.name)
+
+
 def uninstall_frontend(nome: str) -> InstallReport:
     """Remove só o que o install copiou; personalização do usuário fica."""
     frontend = _frontend(nome)
     report = InstallReport(frontend=nome)
     config = frontend.config_dir()
     skills_dir = config / "skills"
+    skills_src, agent_src = _origens(frontend)
 
     if skills_dir.is_dir():
         for filho in sorted(skills_dir.iterdir()):
             if filho.is_dir() and _e_nosso_skill(filho):
                 shutil.rmtree(filho)
                 report.removidas.append(filho.name)
+        _limpar_bak_de_link(skills_dir, skills_src, report)
 
     if frontend.nome == "opencode":
         agent_dir = config / "agent"
         destino_agent = agent_dir / "kata.md"
         marcador = agent_dir / AGENT_MARKER
-        skills_src, agent_src = _origens(frontend)
         origem_agent = agent_src / "kata.md" if agent_src else None
         if marcador.is_file() or (
             origem_agent is not None
@@ -183,6 +230,8 @@ def uninstall_frontend(nome: str) -> InstallReport:
                 report.removidas.append("agent/kata.md")
             if marcador.is_file():
                 marcador.unlink()
+        if agent_src is not None:
+            _limpar_bak_de_link(agent_dir, agent_src, report)
 
     return report
 

@@ -84,6 +84,59 @@ def test_todo_destino_existe(frontend: str) -> None:
         assert destino.is_file(), f"{destino} não foi gerado"
 
 
+class TestEspelhoDeSubagente:
+    """`opencode/agents/` é escrito à mão, mas precisa viajar no wheel.
+
+    Sem o espelho, `kata --install` (a rota do `pipx install kata-dev`)
+    entregava uma fase JUDGE que manda chamar o `kata-advisor` num frontend
+    onde o wheel nunca o colocou.
+    """
+
+    def _prepara(self, tmp_path, monkeypatch):
+        import build_skills as bs
+
+        monkeypatch.setattr(bs, "REPO", tmp_path)
+        fonte = tmp_path / "phases"
+        fonte.mkdir()
+        (fonte / "kata-fit.md").write_text("fonte\n", encoding="utf-8")
+        monkeypatch.setattr(bs, "FONTE", fonte)
+        dominios = tmp_path / "domains"
+        dominios.mkdir()
+        monkeypatch.setattr(bs, "DOMINIOS", dominios)
+        agentes = tmp_path / "opencode" / "agents"
+        agentes.mkdir(parents=True)
+        return bs, agentes
+
+    def test_espelha_o_subagente_em_assets(self, tmp_path, monkeypatch) -> None:
+        bs, agentes = self._prepara(tmp_path, monkeypatch)
+        (agentes / "kata-advisor.md").write_text("revisor\n", encoding="utf-8")
+
+        bs.build(check=False)
+
+        espelho = tmp_path / "src/kata/assets/opencode/agents/kata-advisor.md"
+        assert espelho.read_text(encoding="utf-8") == "revisor\n"
+
+    def test_divergencia_do_espelho_reprova_no_check(self, tmp_path, monkeypatch) -> None:
+        bs, agentes = self._prepara(tmp_path, monkeypatch)
+        (agentes / "kata-advisor.md").write_text("novo\n", encoding="utf-8")
+        espelho = tmp_path / "src/kata/assets/opencode/agents/kata-advisor.md"
+        espelho.parent.mkdir(parents=True)
+        espelho.write_text("velho\n", encoding="utf-8")
+
+        assert bs.build(check=True) > 0
+
+    def test_espelho_sem_fonte_e_orfaoo(self, tmp_path, monkeypatch) -> None:
+        bs, agentes = self._prepara(tmp_path, monkeypatch)
+        espelho = tmp_path / "src/kata/assets/opencode/agents/kata-velho.md"
+        espelho.parent.mkdir(parents=True)
+        espelho.write_text("orfao\n", encoding="utf-8")
+
+        assert bs.build(check=True) > 0, "órfão deveria ser denunciado no --check"
+
+        bs.build(check=False)
+        assert not espelho.exists(), "órfão deveria ter sido removido pelo build"
+
+
 def test_uma_fonte_por_skill_instalavel() -> None:
     """Toda skill instalada tem fonte, e toda fonte vira skill instalada.
 

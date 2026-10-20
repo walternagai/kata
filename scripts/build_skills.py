@@ -331,6 +331,22 @@ def _destino_dirs(frontend: str) -> list[Path]:
     return [raiz, _assets_root() / raiz.relative_to(REPO)]
 
 
+# Subagentes escritos à mão, fora de phases/: não são fases nem domínios, então
+# não passam por render. Mesmo assim precisam viajar no wheel — sem o espelho,
+# `kata --install` distribuía uma fase JUDGE que manda chamar `kata-advisor`
+# num frontend onde o wheel nunca o colocou.
+AGENTES_DIR = "opencode/agents"
+
+
+def _espelhar_agentes() -> list[tuple[Path, Path]]:
+    """Pares (fonte em opencode/agents/, espelho em assets) dos subagentes."""
+    origem_dir = REPO / AGENTES_DIR
+    if not origem_dir.is_dir():
+        return []
+    destino_dir = _assets_root() / AGENTES_DIR
+    return [(p, destino_dir / p.name) for p in sorted(origem_dir.glob("*.md"))]
+
+
 def _fontes() -> list[Path]:
     if not FONTE.is_dir():
         raise SystemExit(f"fonte não encontrada: {FONTE}")
@@ -418,6 +434,33 @@ def build(check: bool = False) -> int:
                     continue
                 filho.unlink() if not any(filho.iterdir()) else destino.unlink()
                 print(f"  🗑  {rel} (órfão — fonte removida)")
+
+    # Subagentes à mão (opencode/agents/*.md): cópia idêntica no wheel.
+    for fonte, destino in _espelhar_agentes():
+        esperado = fonte.read_bytes()
+        atual = destino.read_bytes() if destino.is_file() else None
+        if atual == esperado:
+            continue
+        if check:
+            divergentes.append(str(destino.relative_to(REPO)))
+            continue
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(esperado)
+        print(f"  ✅ {destino.relative_to(REPO)}")
+
+    # Espelho órfão: asset de subagente cuja fonte saiu de opencode/agents/.
+    espelho_dir = _assets_root() / AGENTES_DIR
+    if espelho_dir.is_dir():
+        vivos = {destino.name for _, destino in _espelhar_agentes()}
+        for filho in sorted(espelho_dir.glob("*.md")):
+            if filho.name in vivos:
+                continue
+            rel = str(filho.relative_to(REPO))
+            if check:
+                divergentes.append(f"{rel} (órfão — sem fonte em {AGENTES_DIR}/)")
+                continue
+            filho.unlink()
+            print(f"  🗑  {rel} (órfão — fonte removida)")
 
     if check and divergentes:
         print("Arquivos gerados divergem da fonte em phases/:")

@@ -3547,6 +3547,51 @@ class TestDoctor:
         assert exc.value.code == 0
         assert "Instalação completa" in capsys.readouterr().out
 
+    def test_advisor_ausente_avisa_sem_reprovar(self, tmp_path, monkeypatch, capsys) -> None:
+        """Subagente faltando é aviso: o JUDGE degrada para o Estágio 1.
+
+        Reprovar aqui equipararia uma capacidade extra ausente a uma fase
+        faltando — que é o que de fato quebra o ciclo.
+        """
+        from kata.skills import ORCHESTRATOR_SKILL, PHASE_SKILLS
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(tmp_path / "oc", PHASE_SKILLS)
+        (tmp_path / "oc" / "agent").mkdir(parents=True)
+        (tmp_path / "oc" / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        self._instala(tmp_path / "cc", [*PHASE_SKILLS, ORCHESTRATOR_SKILL])
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0
+        assert "kata-advisor.md" in out
+        assert "Estágio 1" in out
+        assert "PARCIAL" not in out
+
+    def test_advisor_instalado_nao_gera_aviso(self, tmp_path, monkeypatch, capsys) -> None:
+        from kata.skills import ORCHESTRATOR_SKILL, PHASE_SKILLS
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(tmp_path / "oc", PHASE_SKILLS)
+        (tmp_path / "oc" / "agent").mkdir(parents=True)
+        (tmp_path / "oc" / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        (tmp_path / "oc" / "agents").mkdir(parents=True)
+        (tmp_path / "oc" / "agents" / "kata-advisor.md").write_text("sub", encoding="utf-8")
+        self._instala(tmp_path / "cc", [*PHASE_SKILLS, ORCHESTRATOR_SKILL])
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0
+        assert "kata-advisor.md" not in out
+
     def test_instalacao_parcial_reprova_e_nomeia_o_que_falta(
         self, tmp_path, monkeypatch, capsys
     ) -> None:

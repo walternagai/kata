@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Instala o agente @kata e as skills de fase (9 fases + JUDGE + QUESTION) no OpenCode via symlinks.
+# Instala o agente @kata, o subagente kata-advisor e as skills de fase
+# (9 fases + JUDGE + QUESTION) no OpenCode via symlinks.
 #
 # Uso:
 #   bash scripts/install.sh             # instalar
 #   bash scripts/install.sh --uninstall # remover
 #   powershell -ExecutionPolicy Bypass -File scripts/install.ps1 # Windows
 #
-# Os symlinks são criados em ~/.config/opencode/agent/ e ~/.config/opencode/skills/
+# Os symlinks são criados em ~/.config/opencode/agent/ (orquestrador),
+# ~/.config/opencode/agents/ (subagentes) e ~/.config/opencode/skills/
 # apontando para os arquivos neste repositório. Isso permite que mudanças
 # no repositório sejam refletidas automaticamente sem reinstalação.
 
@@ -17,6 +19,12 @@ KATA_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 
 AGENT_FILE="kata.md"
+# Subagentes: a lista também vem do filesystem, pelo mesmo motivo das skills.
+SUBAGENTS=()
+for _arq in "$KATA_DIR/opencode/agents"/*.md; do
+    [[ -f "$_arq" ]] || continue
+    SUBAGENTS+=("$(basename "$_arq")")
+done
 # A lista vem do filesystem. Mantê-la escrita à mão aqui significava que
 # criar uma skill exigia lembrar de editar 4 instaladores; nada verificava.
 SKILLS=()
@@ -74,6 +82,10 @@ check_targets() {
     local problema=0
     local fontes=("$KATA_DIR/opencode/agent/$AGENT_FILE")
     local alvos=("$CONFIG_DIR/agent/$AGENT_FILE")
+    for sub in "${SUBAGENTS[@]}"; do
+        fontes+=("$KATA_DIR/opencode/agents/$sub")
+        alvos+=("$CONFIG_DIR/agents/$sub")
+    done
     for skill in "${SKILLS[@]}"; do
         fontes+=("$KATA_DIR/opencode/skills/$skill")
         alvos+=("$CONFIG_DIR/skills/$skill")
@@ -96,12 +108,18 @@ check_targets() {
 install() {
     echo "Instalando kata em $CONFIG_DIR..."
 
-    mkdir -p "$CONFIG_DIR/agent" "$CONFIG_DIR/skills"
+    mkdir -p "$CONFIG_DIR/agent" "$CONFIG_DIR/agents" "$CONFIG_DIR/skills"
     check_targets
 
     # Agente
     ln -sf "$KATA_DIR/opencode/agent/$AGENT_FILE" "$CONFIG_DIR/agent/$AGENT_FILE"
     echo "  ✅ agent/$AGENT_FILE → $KATA_DIR/opencode/agent/$AGENT_FILE"
+
+    # Subagentes
+    for sub in "${SUBAGENTS[@]}"; do
+        ln -sf "$KATA_DIR/opencode/agents/$sub" "$CONFIG_DIR/agents/$sub"
+        echo "  ✅ agents/$sub → $KATA_DIR/opencode/agents/$sub"
+    done
 
     # Skills
     for skill in "${SKILLS[@]}"; do
@@ -139,6 +157,16 @@ uninstall() {
         fi
     done
 
+    # Subagentes
+    for sub in "${SUBAGENTS[@]}"; do
+        if is_our_link "$CONFIG_DIR/agents/$sub" "$KATA_DIR/opencode/agents/$sub"; then
+            rm "$CONFIG_DIR/agents/$sub"
+            echo "  ✅ removido agents/$sub"
+        elif [[ -e "$CONFIG_DIR/agents/$sub" ]]; then
+            echo "  ⚠  agents/$sub não é symlink — não foi criado por nós (pulando)"
+        fi
+    done
+
     # K-22: symlinks órfãos — skills renomeadas/removidas do repo não estão
     # mais em SKILLS (que vem do filesystem atual), então o laço acima não as
     # encontra. Varre tudo cujo alvo resolva para DENTRO do catálogo do kata
@@ -153,6 +181,19 @@ uninstall() {
             if [[ -n "$alvo_real" && -n "$catalogo_real" && "$alvo_real" == "$catalogo_real"/* ]]; then
                 rm "$orfao"
                 echo "  ✅ removido symlink órfão skills/$(basename "$orfao")"
+            fi
+        done
+    fi
+
+    # Mesmo raciocínio para subagentes removidos de opencode/agents/.
+    if [[ -d "$CONFIG_DIR/agents" ]]; then
+        catalogo_real="$(canonicalize "$KATA_DIR/opencode/agents")"
+        for orfao in "$CONFIG_DIR"/agents/*.md; do
+            [[ -L "$orfao" ]] || continue
+            alvo_real="$(canonicalize "$orfao")"
+            if [[ -n "$alvo_real" && -n "$catalogo_real" && "$alvo_real" == "$catalogo_real"/* ]]; then
+                rm "$orfao"
+                echo "  ✅ removido symlink órfão agents/$(basename "$orfao")"
             fi
         done
     fi

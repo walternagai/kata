@@ -29,33 +29,40 @@ def test_assets_embarcados_espelham_o_repo() -> None:
         "opencode/skills/kata-fit/SKILL.md",
         "claude-code/skills/kata-fit/SKILL.md",
         "opencode/agent/kata.md",
+        "opencode/agents/kata-advisor.md",
         "claude-code/skills/kata/SKILL.md",
     ):
         assert (bundled.bundled_root() / rel).is_file(), f"asset ausente: {rel}"
         assert (bundled.bundled_root() / rel).read_bytes() == (REPO / rel).read_bytes()
 
 
-def test_install_opencode_copia_skills_e_agente(tmp_path, monkeypatch) -> None:
+def test_install_opencode_copia_skills_agente_e_subagente(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
     report = bundled.install_frontend("opencode")
 
     assert report.ok, report.recusadas or report.erros
-    assert sorted(report.instaladas) == sorted([*_skills_embarcadas("opencode"), "agent/kata.md"])
+    assert sorted(report.instaladas) == sorted(
+        [*_skills_embarcadas("opencode"), "agent/kata.md", "agents/kata-advisor.md"]
+    )
     for nome in _skills_embarcadas("opencode"):
         destino = tmp_path / "skills" / nome
         assert (destino / "SKILL.md").is_file()
         assert (destino / bundled.MARKER).is_file()
     assert (tmp_path / "agent" / "kata.md").is_file()
     assert (tmp_path / "agent" / bundled.AGENT_MARKER).is_file()
+    assert (tmp_path / "agents" / "kata-advisor.md").is_file()
+    assert (tmp_path / "agents" / bundled.ADVISOR_MARKER).is_file()
 
 
-def test_install_claude_code_nao_tem_agente(tmp_path, monkeypatch) -> None:
+def test_install_claude_code_nao_tem_agente_nem_subagente(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
     report = bundled.install_frontend("claude-code")
 
     assert report.ok, report.recusadas or report.erros
     assert "agent/kata.md" not in report.instaladas
+    assert "agents/kata-advisor.md" not in report.instaladas
     assert not (tmp_path / "agent").exists()
+    assert not (tmp_path / "agents").exists()
 
 
 def test_install_e_idempotente(tmp_path, monkeypatch) -> None:
@@ -110,6 +117,8 @@ def test_uninstall_remove_so_o_que_criou(tmp_path, monkeypatch) -> None:
     assert (estranho / "SKILL.md").read_text(encoding="utf-8") == "do usuário"
     assert not (tmp_path / "skills" / "kata-fit").exists()
     assert not (tmp_path / "agent" / "kata.md").exists()
+    assert not (tmp_path / "agents" / "kata-advisor.md").exists()
+    assert not (tmp_path / "agents" / bundled.ADVISOR_MARKER).exists()
 
 
 def test_uninstall_em_frontend_nunca_instalado_nao_quebra(tmp_path, monkeypatch) -> None:
@@ -210,6 +219,73 @@ class TestAdotaLinkDoInstaladorShell:
 
         assert not report.ok
         assert alvo.is_symlink()
+
+    def test_adota_link_do_subagente_sem_force(self, tmp_path, monkeypatch) -> None:
+        """`make install` linka agents/kata-advisor.md; o --install o adota."""
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        alvo = tmp_path / "agents" / "kata-advisor.md"
+        alvo.parent.mkdir(parents=True)
+        alvo.symlink_to(bundled.bundled_root() / "opencode/agents/kata-advisor.md")
+
+        report = bundled.install_frontend("opencode")
+
+        assert report.ok, report.recusadas or report.erros
+        assert not report.backups, "link adotado não vira .bak"
+        assert not alvo.is_symlink()
+        assert (tmp_path / "agents" / bundled.ADVISOR_MARKER).is_file()
+
+
+class TestSubagenteAdvisor:
+    """O subagente é opcional: a recusa dele não pode derrubar o resto.
+
+    Sem o agente orquestrador o ciclo não existe, então a recusa dele
+    interrompe. Sem o `kata-advisor` o JUDGE degrada para o Estágio 1, que
+    continua válido — interromper a instalação por causa dele trocaria uma
+    degradação honesta por um frontend quebrado.
+    """
+
+    def test_recusa_do_advisor_nao_interrompe_as_skills(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        alvo = tmp_path / "agents" / "kata-advisor.md"
+        alvo.parent.mkdir(parents=True)
+        alvo.write_text("meu revisor", encoding="utf-8")
+
+        report = bundled.install_frontend("opencode")
+
+        assert not report.ok  # a recusa é reportada, exit 1
+        assert alvo.read_text(encoding="utf-8") == "meu revisor"
+        assert not (tmp_path / "agents" / bundled.ADVISOR_MARKER).exists()
+        # o resto entrou mesmo assim
+        assert (tmp_path / "agent" / "kata.md").is_file()
+        assert (tmp_path / "skills" / "kata-fit" / "SKILL.md").is_file()
+
+    def test_force_guarda_backup_do_advisor(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        alvo = tmp_path / "agents" / "kata-advisor.md"
+        alvo.parent.mkdir(parents=True)
+        alvo.write_text("meu revisor", encoding="utf-8")
+
+        report = bundled.install_frontend("opencode", force=True)
+
+        assert report.ok, report.recusadas or report.erros
+        assert report.backups == [str(tmp_path / "agents" / "kata-advisor.md.bak")]
+        assert (tmp_path / "agents" / "kata-advisor.md.bak").read_text(
+            encoding="utf-8"
+        ) == "meu revisor"
+        assert (tmp_path / "agents" / bundled.ADVISOR_MARKER).is_file()
+
+    def test_uninstall_preserva_advisor_de_terceiro(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+        assert bundled.install_frontend("opencode").ok
+        (tmp_path / "agents" / bundled.ADVISOR_MARKER).unlink()
+        alvo = tmp_path / "agents" / "kata-advisor.md"
+        alvo.write_text("revisor do usuário", encoding="utf-8")
+
+        report = bundled.uninstall_frontend("opencode")
+
+        assert report.ok
+        assert alvo.read_text(encoding="utf-8") == "revisor do usuário"
+        assert "agents/kata-advisor.md" not in report.removidas
 
 
 class TestUninstallLimpaBakDeLink:

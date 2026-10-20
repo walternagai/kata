@@ -29,6 +29,12 @@ $configRoot = if ($env:OPENCODE_CONFIG_DIR) {
 
 $agentSource = Join-Path $kataRoot "opencode/agent/kata.md"
 $agentTarget = Join-Path $configRoot "agent/kata.md"
+$subagentsRoot = Join-Path $kataRoot "opencode/agents"
+$subagents = @()
+if (Test-Path -LiteralPath $subagentsRoot) {
+    $subagents = Get-ChildItem -File -Path $subagentsRoot -Filter *.md |
+        Select-Object -ExpandProperty Name | Sort-Object
+}
 # A lista vem do filesystem — ver comentário equivalente nos scripts .sh.
 $skillsRoot = Join-Path $kataRoot "opencode/skills"
 $skills = Get-ChildItem -Directory -Path $skillsRoot | Select-Object -ExpandProperty Name | Sort-Object
@@ -138,6 +144,9 @@ function Install-Entry([string]$Source, [string]$Target, [bool]$IsDirectory) {
 if ($Uninstall) {
     Write-Host "Removendo kata de $configRoot..."
     Remove-ManagedPath $agentTarget $agentSource
+    foreach ($sub in $subagents) {
+        Remove-ManagedPath (Join-Path $configRoot "agents/$sub") (Join-Path $subagentsRoot $sub)
+    }
     foreach ($skill in $skills) {
         Remove-ManagedPath (Join-Path $configRoot "skills/$skill") (Join-Path $kataRoot "opencode/skills/$skill")
         # Órfão de instalações antigas: link aninhado dentro de diretório
@@ -160,6 +169,9 @@ if (-not (Test-Path -LiteralPath $agentSource -PathType Leaf)) {
 # antes de conferir TODOS os destinos — sem isto, um destino bloqueado no
 # meio deixava o agente instalado e as skills parciais (R10-32).
 $destinos = @(@($agentTarget, $agentSource))
+foreach ($sub in $subagents) {
+    $destinos += , @((Join-Path $configRoot "agents/$sub"), (Join-Path $subagentsRoot $sub))
+}
 foreach ($skill in $skills) {
     $destinos += , @((Join-Path $configRoot "skills/$skill"), (Join-Path $kataRoot "opencode/skills/$skill"))
 }
@@ -170,10 +182,18 @@ foreach ($par in $destinos) {
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $configRoot "agent") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $configRoot "agents") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $configRoot "skills") | Out-Null
 
 $agentMode = Install-Entry $agentSource $agentTarget $false
 Write-Host "agent/kata.md instalado como $agentMode."
+
+foreach ($sub in $subagents) {
+    $source = Join-Path $subagentsRoot $sub
+    $target = Join-Path $configRoot "agents/$sub"
+    $mode = Install-Entry $source $target $false
+    Write-Host "agents/$sub instalado como $mode."
+}
 
 foreach ($skill in $skills) {
     $source = Join-Path $kataRoot "opencode/skills/$skill"

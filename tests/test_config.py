@@ -14,9 +14,11 @@ import pytest
 from kata.config import (
     DEFAULT_COVERAGE_PATTERN,
     DEFAULT_GATE,
+    AdvisorConfig,
     ConfigError,
     VerifyConfig,
     config_path,
+    load_advisor_config,
     load_verify_config,
 )
 
@@ -221,3 +223,67 @@ class TestSemPyYAML:
         monkeypatch.setattr("kata.config._HAS_YAML", False)
         _escreve(tmp_path, json.dumps({"verify": {"lint": "go vet ./..."}}))
         assert load_verify_config(cwd=tmp_path).lint == ["go", "vet", "./..."]
+
+
+class TestAdvisorConfig:
+    """Testes de configuração do subagente advisor em .kata/config.yaml."""
+
+    def test_sem_arquivo_devolve_defaults(self, tmp_path) -> None:
+        cfg = load_advisor_config(cwd=tmp_path)
+        assert cfg == AdvisorConfig()
+        assert cfg.enabled is True
+        assert cfg.model is None
+        assert cfg.effort is None
+        assert cfg.skip_trivial is True
+
+    def test_sem_secao_advisor_devolve_defaults(self, tmp_path) -> None:
+        _escreve(tmp_path, "verify:\n  gate: 80\n")
+        cfg = load_advisor_config(cwd=tmp_path)
+        assert cfg == AdvisorConfig()
+
+    def test_advisor_completo_declarado(self, tmp_path) -> None:
+        _escreve(
+            tmp_path,
+            "advisor:\n"
+            "  enabled: true\n"
+            "  model: anthropic/claude-opus-4#high\n"
+            "  effort: high\n"
+            "  skip_trivial: false\n",
+        )
+        cfg = load_advisor_config(cwd=tmp_path)
+        assert cfg.enabled is True
+        assert cfg.model == "anthropic/claude-opus-4#high"
+        assert cfg.effort == "high"
+        assert cfg.skip_trivial is False
+
+    def test_advisor_enabled_strings_auto_always_never(self, tmp_path) -> None:
+        _escreve(tmp_path, "advisor:\n  enabled: auto\n")
+        assert load_advisor_config(cwd=tmp_path).enabled is True
+
+        _escreve(tmp_path, "advisor:\n  enabled: never\n")
+        assert load_advisor_config(cwd=tmp_path).enabled is False
+
+    def test_advisor_nao_mapa_vira_config_error(self, tmp_path) -> None:
+        _escreve(tmp_path, "advisor: 'simples string'\n")
+        with pytest.raises(ConfigError, match="`advisor` deve ser um mapa"):
+            load_advisor_config(cwd=tmp_path)
+
+    def test_advisor_enabled_invalido_vira_config_error(self, tmp_path) -> None:
+        _escreve(tmp_path, "advisor:\n  enabled: 123\n")
+        with pytest.raises(ConfigError, match="`advisor.enabled` deve ser booleano"):
+            load_advisor_config(cwd=tmp_path)
+
+    def test_advisor_model_invalido_vira_config_error(self, tmp_path) -> None:
+        _escreve(tmp_path, "advisor:\n  model: 999\n")
+        with pytest.raises(ConfigError, match="`advisor.model` deve ser string"):
+            load_advisor_config(cwd=tmp_path)
+
+    def test_advisor_effort_invalido_vira_config_error(self, tmp_path) -> None:
+        _escreve(tmp_path, "advisor:\n  effort: [lista]\n")
+        with pytest.raises(ConfigError, match="`advisor.effort` deve ser string"):
+            load_advisor_config(cwd=tmp_path)
+
+    def test_advisor_skip_trivial_invalido_vira_config_error(self, tmp_path) -> None:
+        _escreve(tmp_path, "advisor:\n  skip_trivial: 'nao'\n")
+        with pytest.raises(ConfigError, match="`advisor.skip_trivial` deve ser booleano"):
+            load_advisor_config(cwd=tmp_path)

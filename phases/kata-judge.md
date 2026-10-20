@@ -140,6 +140,54 @@ apenas não teve como olhar. Quem quiser barrar no CI lê o veredito.
 ❌  KATA JUDGE — REFUTED
 ```
 
+## Verificação em Dois Estágios
+
+A verificação adversarial do Kata opera em dois estágios complementares:
+
+### Estágio 1: Verificação Mecânica (Determinística)
+
+Executa o CLI Python (`python -m kata --task <name> --judge` via {{RUN}}).
+Ele re-executa linters e testes, varre o diff e a AST contra as 7 fraudes
+sintáticas e confessa pontos cegos. Se o veredito mecânico for REFUTED ou
+houver falha de execução, o ciclo para imediatamente — a tarefa é reprovada
+sem necessidade de revisão semântica adicional.
+
+### Estágio 2: Verificação Semântica Adversarial (Advisor)
+
+Quando o Estágio 1 é aprovado e a tarefa não é trivial (`fit.trivial == false`):
+O Advisor entra como "Hostile Reviewer" com capacidade cognitiva superior ou
+nível de thinking elevado para caçar o que regex e linters não alcançam:
+- Testes tautológicos ou superficiais que passam nos checks mas não testam a regra real;
+- Desvios sutis de especificação ou intenção do usuário;
+- Complexidade acidental que violou o minimalismo (YAGNI);
+- Edge cases e riscos de concorrência ou quebra de contratos.
+
+**Configuração (.kata/config.yaml):**
+Se o projeto declarar a seção `advisor:`, suas diretrizes são obedecidas:
+
+```yaml
+advisor:
+  enabled: true                        # true | false | auto | never
+  model: "provider/model#variant"      # modelo frontier opcional (ex.: claude-opus, gemini-2.5-pro#thinking)
+  effort: "high"                       # nível de thinking / effort
+  skip_trivial: true                   # bypass automático se fit.trivial == true
+```
+
+<!--only:opencode-->
+**No OpenCode:**
+Acione o subagente `kata-advisor` (armazenado em `.opencode/agents/kata-advisor.md`
+ou `~/.config/opencode/agents/kata-advisor.md`). Se `advisor.model` estiver
+configurado em `.kata/config.yaml`, passe-o explicitamente no parâmetro `model`
+da ferramenta `subagent`. O subagente opera em modo *read-only* (`edit: deny`,
+`shell: deny`) e retorna seu veredito semântico (VERIFIED / CAVEATS / REFUTED).
+<!--/only-->
+<!--only:claude-code-->
+**No Claude Code:**
+Acione o comando `/advisor <modelo>` (ex.: `/advisor opus`) ou eleve `/effort`
+para high/max e execute a checagem com o checklist do Hostile Reviewer sobre o
+diff e a especificação.
+<!--/only-->
+
 ## Registro no YAML
 
 O CLI Python não persiste o resultado do judge de volta no arquivo de

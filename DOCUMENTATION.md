@@ -49,10 +49,13 @@ root.
 Two frontends share the same Python backend and cycle logic:
 
 - **OpenCode**: a single `@kata` agent (`opencode/agent/kata.md`) that
-  orchestrates the cycle, backed by 10 phase-specific skills.
+  orchestrates the cycle, backed by 10 phase-specific skills and by the
+  `kata-advisor` subagent (`opencode/agents/kata-advisor.md`), the Hostile
+  Reviewer that performs Stage 2 of the JUDGE.
 - **Claude Code**: a `kata` skill (`claude-code/skills/kata/SKILL.md`) that
   plays the same orchestration role, backed by the same 10 phase-specific
-  skills ported to Claude Code's tool set. See
+  skills ported to Claude Code's tool set. Stage 2 uses the native
+  `/advisor` command instead of a bundled subagent. See
   [Claude Code integration](#claude-code-integration).
 
 Only the orchestration/interaction layer differs between the two — the
@@ -99,11 +102,13 @@ src/kata/
 ├── cli.py       CLI, task persistence, and cycle orchestration
 ├── report.py    Report/audit/doctor I/O (`_step_report`, `_print_judge_verdict`, `_audit_task`)
 ├── config.py    `.kata/config.yaml` — the target project's own check commands
+│                and the advisor settings (`model`, `effort`, `skip_trivial`)
 ├── skills.py    Which phase skills the cycle needs, and whether they are installed
-├── install.py   `kata --install` / `--uninstall`: copies the bundled skills
+├── install.py   `kata --install` / `--uninstall`: copies the bundled skills,
+│                the orchestrator agent and the kata-advisor subagent
 ├── fit.py       Diff measurement and triviality gate
 ├── verify.py    Lint, test, coverage, and pattern search
-├── judge.py     Adversarial verification and fraud detection
+├── judge.py     Adversarial verification and fraud detection (JUDGE Stage 1)
 ├── __init__.py  Package version
 ├── __main__.py python -m kata entry point
 └── assets/      GENERATED (make build-skills): the skills bundled in the wheel
@@ -116,8 +121,12 @@ domains/                          SINGLE SOURCE for the domain adapters
 ├── TEMPLATE.md                   Adapter schema (renders no skill)
 └── kata-<domain>.md              One adapter per file (4 shipped)
 
-opencode/                         GENERATED — do not edit by hand
+opencode/                         GENERATED from phases/ — do not edit by hand,
+│                                 except agents/ (see below)
 ├── agent/kata.md                 OpenCode @kata agent definition
+├── agents/kata-advisor.md        HOSTILE REVIEWER — hand-written source (not
+│                                 rendered from phases/). The build only mirrors
+│                                 it into src/kata/assets/ so the wheel ships it
 └── skills/kata-*/SKILL.md        The 10 phase skills + the 4 domain adapters
 
 claude-code/                      GENERATED — do not edit by hand
@@ -320,8 +329,8 @@ reports a summary at the end.
 | `kata --report --task TASK` | Regenerate the outcome-first report |
 | `kata --judge --task TASK` | Run adversarial verification |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
-| `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters are optional warnings |
-| `kata --install FRONTEND` | Copy the bundled skills (`opencode`, `claude-code` or `all`) without a checkout of this repository |
+| `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters and the optional `kata-advisor` subagent are warnings, not failures |
+| `kata --install FRONTEND` | Copy the bundled skills, the orchestrator agent and the `kata-advisor` subagent (`opencode`, `claude-code` or `all`) without a checkout of this repository |
 | `kata --uninstall FRONTEND` | Remove what `--install` created (only what Kata itself wrote) |
 | `kata --force` | With `--install`: back up existing customization to `.bak` and replace it |
 | `kata --version` | Print the package version |
@@ -371,13 +380,23 @@ verify:
   coverage: npx vitest run --coverage
   coverage_pattern: 'All files\s+\|\s+([\d.]+)'
   gate: 80
+
+advisor:
+  enabled: true
+  model: anthropic/claude-opus-4#high
+  effort: high
+  skip_trivial: true
 ```
 
 | Key | Meaning |
 |---|---|
-| `lint` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list |
-| `coverage_pattern` | Regex whose first group is the coverage percentage. Default reads the `TOTAL` line pytest-cov prints |
-| `gate` | Minimum coverage percentage. A `--gate` flag overrides it |
+| `verify.lint` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list |
+| `verify.coverage_pattern` | Regex whose first group is the coverage percentage. Default reads the `TOTAL` line pytest-cov prints |
+| `verify.gate` | Minimum coverage percentage. A `--gate` flag overrides it |
+| `advisor.enabled` | Whether semantic adversarial review is active (`true`, `false`, `auto`, `never`). Default `true` |
+| `advisor.model` | Model identifier for the advisor subagent (e.g., `anthropic/claude-opus-4#high`, `google/gemini-2.5-pro#thinking`) |
+| `advisor.effort` | Thinking / reasoning effort level (`low`, `medium`, `high`, `max`) |
+| `advisor.skip_trivial` | Bypass advisor review on trivial tasks (`fit.trivial=true`). Default `true` |
 
 Every key is optional. A role that is not declared falls back to the Python
 default for that role (`ruff` / `pytest` / `pytest-cov`) and keeps obeying the
@@ -577,6 +596,13 @@ reported as a hint (installable with `make reinstall` /
 `make reinstall-claude-code`, or `kata --install`) because a `coding` task
 does not need one.
 
+The `kata-advisor` subagent is optional in the same way: on a frontend that
+has the phase skills but not the subagent, `--doctor` prints a hint and still
+exits `0`. Without it the JUDGE degrades to Stage 1 (the mechanical,
+deterministic check) — which remains valid — and only the semantic review of
+Stage 2 is lost. Claude Code never expects it: the advisor there is the native
+`/advisor`.
+
 When a skill fails to load mid-cycle, the orchestrator is instructed not to
 improvise: it falls back to a per-phase minimum contract documented in the
 orchestrator itself, records the skill name in `preflight.skills_missing`,
@@ -632,6 +658,24 @@ The success criterion is not: it is a subjective confirmation the user gives
 during VERIFY, and no command reproduces it. It is listed separately as
 accepted without verification, and it adds a caveat. Presenting it as
 verified would be exactly the fraud the judge exists to hunt.
+
+#### Two-stage adversarial verification (Advisor)
+
+The JUDGE phase supports two complementary stages:
+
+1. **Stage 1: Mechanical verification (Deterministic)**: The offline Python CLI (`kata --judge`)
+   re-executes linters and tests, scans the Git diff and AST against the 7 structural frauds,
+   and confesses observable blind spots. If Stage 1 fails or is REFUTED, the cycle stops immediately.
+2. **Stage 2: Semantic verification (Advisor / Hostile Reviewer)**: When Stage 1 passes and the
+   task is not trivial (`fit.trivial=false`), a model with higher reasoning capacity or elevated
+   thinking (`effort: high|max`) acts as a Hostile Reviewer to hunt semantic flaws that linters
+   and regex cannot catch (tautological tests, specification drift, accidental complexity/YAGNI,
+   and unhandled edge cases).
+   - In **OpenCode**: Triggered via the `kata-advisor` subagent (`.opencode/agents/kata-advisor.md`
+     or `~/.config/opencode/agents/kata-advisor.md`) with read-only permissions (`edit: deny`, `shell: deny`).
+   - In **Claude Code**: Triggered via `/advisor <model>` or by raising `/effort` to high/max.
+   - **Configuration (`.kata/config.yaml`)**:
+     Configured under the `advisor:` block (`model`, `effort`, `skip_trivial`, `enabled`).
 
 ## Task files
 

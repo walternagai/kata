@@ -1554,8 +1554,8 @@ def main() -> None:
         default=None,
         choices=[*FRONTENDS_VALIDOS, "all"],
         help=(
-            "Instala as skills empacotadas (copia, sem exigir clone do repo). "
-            "FRONTEND: opencode, claude-code ou all"
+            "Instala as skills empacotadas, o agente e o subagente advisor "
+            "(copia, sem exigir clone do repo). FRONTEND: opencode, claude-code ou all"
         ),
     )
     parser.add_argument(

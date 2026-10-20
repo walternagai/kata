@@ -170,3 +170,37 @@ def test_agent_file_is_not_overwritten(tmp_path) -> None:
 
     assert result.returncode != 0
     assert (agent / "kata.md").read_text(encoding="utf-8") == "meu agente"
+
+
+def test_install_sh_linka_o_subagente_advisor(tmp_path) -> None:
+    """O subagente que a fase JUDGE carrega precisa existir no frontend.
+
+    Sem ele o `kata-judge` manda chamar um agente que não está instalado.
+    """
+    result = _run("scripts/install.sh", "OPENCODE_CONFIG_DIR", tmp_path)
+    assert result.returncode == 0, result.stderr
+
+    alvo = tmp_path / "agents" / "kata-advisor.md"
+    assert alvo.is_symlink()
+    assert alvo.resolve() == (REPO / "opencode/agents/kata-advisor.md").resolve()
+
+
+def test_uninstall_sh_remove_o_subagente_advisor(tmp_path) -> None:
+    _run("scripts/install.sh", "OPENCODE_CONFIG_DIR", tmp_path)
+    result = _run("scripts/install.sh", "OPENCODE_CONFIG_DIR", tmp_path, "--uninstall")
+
+    assert result.returncode == 0, result.stderr
+    assert not (tmp_path / "agents" / "kata-advisor.md").is_symlink()
+
+
+def test_uninstall_sh_preserva_subagente_de_terceiro(tmp_path) -> None:
+    agents = tmp_path / "agents"
+    agents.mkdir(parents=True)
+    externo = tmp_path / "externo.md"
+    externo.write_text("revisor do usuário", encoding="utf-8")
+    (agents / "kata-advisor.md").symlink_to(externo)
+
+    result = _run("scripts/install.sh", "OPENCODE_CONFIG_DIR", tmp_path, "--uninstall")
+
+    assert result.returncode == 0, result.stderr
+    assert (agents / "kata-advisor.md").is_symlink()

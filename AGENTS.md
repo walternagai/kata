@@ -34,8 +34,9 @@ tests/          testes pytest (test_cli.py, test_config.py, test_fit.py,
                 run_traps.py; test_skills_build.py — gerados vs. phases/ fonte
                 única; test_schema_contract.py — schema documentado no
                 DOCUMENTATION.md contra o código e o template do --init)
-opencode/       definição do agente e skills para o OpenCode
-  agent/kata.md          prompt do agente @kata
+opencode/       definição do agente, subagente e skills para o OpenCode
+  agent/kata.md          prompt do agente orquestrador @kata
+  agents/kata-advisor.md subagente de revisão adversarial semântica (Hostile Reviewer)
   skills/kata-*/SKILL.md 14 skills (10 de fase + 4 domain adapters; TWIN CHECK
                          vive no orquestrador)
 claude-code/    skills para o Claude Code
@@ -65,6 +66,12 @@ que num subagente isolado que só reporta um resumo no fim.
 `opencode/` e `claude-code/` são **gerados** por `scripts/build_skills.py` —
 não os edite à mão; `make build-skills` os regrava e
 `tests/test_skills_build.py` reprova se ficarem desatualizados.
+
+Exceção declarada: `opencode/agents/kata-advisor.md` é escrito à mão (não é
+fase nem domínio, então não passa por render). O build não o reescreve — só
+**espelha** o arquivo em `src/kata/assets/opencode/agents/`, porque sem isso o
+wheel sairia com uma fase JUDGE que manda chamar um subagente que o wheel não
+traz. Editar a fonte é correto; editar o espelho em `assets/`, não.
 
 Antes disto a fase vivia em duplicata mantida por disciplina manual, e a
 disciplina falhou: 395 linhas divergentes, parte delas melhoria aplicada num
@@ -102,9 +109,11 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
 
 - `fit.py` é a lógica do fit gate (diff_stats, is_trivial) modularizada para
   testes independentes.
+- `config.py` é a leitura de `.kata/config.yaml` (`load_verify_config`, `load_advisor_config`)
+  para comandos do projeto e diretrizes do advisor (modelo/effort/skip_trivial).
 - `verify.py` é a lógica de verificação (ruff/pytest/coverage via
   `--cov-fail-under`) modularizada para testes independentes.
-- `judge.py` é a lógica adversarial que verifica fraudes e inconsistências.
+- `judge.py` é a lógica adversarial que verifica fraudes e inconsistências (Estágio 1 do JUDGE).
 - `skills.py` é o preflight: a lista canônica de skills que o ciclo precisa e
   a checagem de instalação por frontend (`kata --doctor`). Instalação parcial
   reprova; ausente não. Uma fase rodada sem a skill dela vai para
@@ -112,8 +121,12 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
 - `install.py` é o `kata --install` / `--uninstall` / `--force`: copia as
   skills empacotadas de `src/kata/assets/` para o config dir do frontend, sem
   exigir clone do repo (quem instalou via `pipx install kata-dev` não tem
-  checkout). A prova de "criado pelo Kata" é o marcador `.kata-managed`;
-  conteúdo do usuário é preservado ou vai para `.bak` com `--force`.
+  checkout). No OpenCode copia também o agente orquestrador (`agent/kata.md`)
+  e o subagente `agents/kata-advisor.md`; a recusa do advisor é reportada mas
+  não interrompe o resto (sem ele o JUDGE cai no Estágio 1, que continua
+  válido), enquanto a recusa do orquestrador interrompe. A prova de "criado
+  pelo Kata" é o marcador `.kata-managed`; conteúdo do usuário é preservado
+  ou vai para `.bak` com `--force`.
 - O CLI (`cli.py`) orquestra as 9 fases + audit + judge opcional e chama
   `fit.py`, `verify.py`, `judge.py`; o I/O de relatório/auditoria
   (`_step_report`, `_print_judge_verdict`, `_audit_task`, `_print_doctor`) vive

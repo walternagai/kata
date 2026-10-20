@@ -61,6 +61,20 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class AdvisorConfig:
+    """Configuração do subagente advisor declarada em .kata/config.yaml.
+
+    Permite que o projeto especifique o modelo mais robusto ou nível de
+    thinking para a revisão adversarial semântica (Estágio 2 do JUDGE).
+    """
+
+    enabled: bool = True
+    model: str | None = None
+    effort: str | None = None
+    skip_trivial: bool = True
+
+
+@dataclass(frozen=True)
 class VerifyConfig:
     """Comandos de verificação declarados pelo projeto alvo.
 
@@ -120,11 +134,11 @@ def config_path(cwd: Path | None = None) -> Path | None:
     return None
 
 
-def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
-    """Lê `.kata/config.yaml`. Sem arquivo, devolve os defaults Python."""
+def _load_raw_config(cwd: Path | None = None) -> tuple[Path | None, dict[str, Any] | None]:
+    """Lê o arquivo de config existente (.kata/config.yaml / json) e retorna (caminho, dados)."""
     caminho = config_path(cwd)
     if caminho is None:
-        return VerifyConfig()
+        return None, None
 
     texto = ""
     try:
@@ -141,9 +155,17 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
         raise ConfigError(f"{caminho}: não foi possível ler ({exc})") from exc
 
     if dados is None:
-        return VerifyConfig()
+        return caminho, None
     if not isinstance(dados, dict):
         raise ConfigError(f"{caminho}: esperava um mapa no topo")
+    return caminho, dados
+
+
+def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
+    """Lê `.kata/config.yaml`. Sem arquivo, devolve os defaults Python."""
+    caminho, dados = _load_raw_config(cwd)
+    if caminho is None or dados is None:
+        return VerifyConfig()
 
     verify = dados.get("verify")
     if verify is None:
@@ -179,4 +201,51 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
         coverage=_parse_command(verify.get("coverage"), "coverage"),
         coverage_pattern=pattern,
         gate=float(gate) if gate is not None else None,
+    )
+
+
+def load_advisor_config(cwd: Path | None = None) -> AdvisorConfig:
+    """Lê a seção `advisor` de `.kata/config.yaml`. Sem arquivo ou seção, devolve defaults."""
+    caminho, dados = _load_raw_config(cwd)
+    if caminho is None or dados is None:
+        return AdvisorConfig()
+
+    advisor = dados.get("advisor")
+    if advisor is None:
+        return AdvisorConfig()
+    if not isinstance(advisor, dict):
+        raise ConfigError(f"{caminho}: `advisor` deve ser um mapa")
+
+    enabled = advisor.get("enabled", True)
+    if isinstance(enabled, str):
+        if enabled.lower() in ("true", "auto", "always"):
+            enabled = True
+        elif enabled.lower() in ("false", "never"):
+            enabled = False
+        else:
+            raise ConfigError(
+                f"{caminho}: `advisor.enabled` deve ser booleano ou auto/always/never"
+            )
+    elif not isinstance(enabled, bool):
+        raise ConfigError(f"{caminho}: `advisor.enabled` deve ser booleano")
+
+    model = advisor.get("model")
+    if model is not None and not isinstance(model, str):
+        raise ConfigError(f"{caminho}: `advisor.model` deve ser string")
+    if isinstance(model, str) and not model.strip():
+        model = None
+
+    effort = advisor.get("effort")
+    if effort is not None and not isinstance(effort, str):
+        raise ConfigError(f"{caminho}: `advisor.effort` deve ser string")
+
+    skip_trivial = advisor.get("skip_trivial", True)
+    if not isinstance(skip_trivial, bool):
+        raise ConfigError(f"{caminho}: `advisor.skip_trivial` deve ser booleano")
+
+    return AdvisorConfig(
+        enabled=enabled,
+        model=model,
+        effort=effort,
+        skip_trivial=skip_trivial,
     )

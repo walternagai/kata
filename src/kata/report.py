@@ -332,6 +332,20 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
         print("     (ou `make reinstall` / `make reinstall-claude-code` no checkout).")
         print()
 
+    # Subagente opcional (advisor): avisar, nunca reprovar. Sem ele o JUDGE
+    # roda só o Estágio 1, o mecânico — a revisão semântica é o extra.
+    advisor_warnings = 0
+    for e in estados:
+        if e.ausente or not e.subagentes_faltando:
+            continue
+        advisor_warnings += 1
+        print(f"  ℹ️  {e.frontend}: subagente opcional faltando: {', '.join(e.subagentes_faltando)}")
+    if advisor_warnings:
+        print("     Sem ele o JUDGE roda só a verificação mecânica (Estágio 1);")
+        print("     a revisão semântica adversarial do Estágio 2 fica indisponível.")
+        print("     Instale com `kata --install all`.")
+        print()
+
     if parciais:
         print(f"  ⚠  {parciais} frontend(s) com instalação parcial.")
         print("     O ciclo vai tentar carregar a skill que falta, não conseguir,")

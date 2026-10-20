@@ -14,10 +14,12 @@ Two frontends share one Python backend, and both are **generated from a single s
 `phases/`** (11 files: 10 phases + the orchestrator), plus optional domain adapters from `domains/`
 (four shipped: `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs`):
 - **OpenCode**: `@kata` agent (`opencode/agent/kata.md`) backed by 10 phase skills + the
-  4 domain adapters (`opencode/skills/kata-*/`).
+  4 domain adapters (`opencode/skills/kata-*/`), plus the `kata-advisor` subagent
+  (`opencode/agents/kata-advisor.md`) for Stage 2 semantic adversarial review.
 - **Claude Code**: `kata` orchestrator skill (`claude-code/skills/kata/SKILL.md`) backed by the same
-  10 phase skills + the 4 domain adapters (`claude-code/skills/kata-*/`). No subagent — the cycle
-  is interactive (asks a question at nearly every phase), so it runs in the main conversation.
+  10 phase skills + the 4 domain adapters (`claude-code/skills/kata-*/`). Uses `/advisor` or
+  `/effort` for Stage 2 semantic review. No orchestrator subagent — the cycle is interactive
+  (asks a question at nearly every phase), so it runs in the main conversation.
 
 Only the orchestration layer differs between frontends; Ruff/pytest/coverage/judge logic always runs
 through the `kata` Python package (`src/kata/`).
@@ -73,7 +75,7 @@ see [`DOCUMENTATION.md`](DOCUMENTATION.md#cli) for its modes (`--init`, `--plan`
 ```
 src/kata/
 ├── cli.py       CLI, task persistence (.kata/*.yaml), cycle orchestration, reports
-├── config.py    .kata/config.yaml — the target project's own lint/test/coverage commands
+├── config.py    .kata/config.yaml — project check commands (verify) and advisor settings (advisor)
 ├── skills.py    PHASE_SKILLS + per-frontend install check (the --doctor preflight)
 ├── install.py   kata --install / --uninstall / --force: copies the skills bundled in
 │                src/kata/assets/ (no checkout needed — pipx install kata-dev has none)
@@ -91,7 +93,8 @@ src/kata/
   commits. `is_trivial()` is true for at most 1 changed file and <10 changed
   lines — this is the triviality gate that lets a task skip straight to VERIFY.
 - `config.py`: reads `.kata/config.yaml` in the *target* project — `verify.lint` / `verify.test` /
-  `verify.coverage` (string or list), plus `coverage_pattern` and `gate`. A declared role is run
+  `verify.coverage` (string or list), `coverage_pattern`, `gate`, and `advisor` configuration
+  (`advisor.enabled`, `advisor.model`, `advisor.effort`, `advisor.skip_trivial`). A declared role is run
   verbatim; an omitted one falls back to the Python default. Invalid config raises `ConfigError` and
   the CLI exits 1 rather than silently checking something the project never asked for.
 - `verify.py`: independent functions per role; `run_all()` runs lint + test, then coverage only if
@@ -99,10 +102,11 @@ src/kata/
   judges it by exit code; `run_command_coverage()` extracts the percentage and applies the gate here,
   because `--cov-fail-under` does not exist outside Python. Tests mock `kata.verify._run` (the
   subprocess wrapper) — never invoke real ruff/pytest inside the unit suite.
-- `judge.py`: treats a task's `.kata/<task>.yaml` as a set of claims, diffs them against Git reality,
-  re-runs claimed checks, and hunts seven fraud categories: weakened checks, false completion, scope
-  creep, unauthorized action, spec betrayal, debris, and baseline tampering (the YAML's `base_commit`
-  diverging from the Git anchor recorded at task start, or the anchor moved after creation). Weakening patterns are per-language
+- `judge.py`: Stage 1 of adversarial verification. Treats a task's `.kata/<task>.yaml` as a set of claims,
+  diffs them against Git reality, re-runs claimed checks, and hunts seven fraud categories: weakened checks,
+  false completion, scope creep, unauthorized action, spec betrayal, debris, and baseline tampering.
+  When Stage 1 passes on a non-trivial task, Stage 2 (Hostile Reviewer / Advisor) performs semantic review
+  via `kata-advisor` (OpenCode) or `/advisor` (Claude Code).
   (`_LANGUAGES`: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift); a test in an unlisted language becomes a
   declared blind spot instead of silence. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
   (medium/low findings only), `UNVERIFIABLE` (no fraud, but nothing could be
@@ -128,8 +132,11 @@ src/kata/
   graded `degraded` by `--audit`.
 - `install.py`: `kata --install opencode|claude-code|all` copies the generated tree bundled in
   `src/kata/assets/` into the frontend config dir — the route for `pipx install kata-dev`, which has no
-  checkout to symlink to. `.kata-managed` markers prove Kata created a directory; user content is kept
-  or moved to `.bak` under `--force`, and `--uninstall` removes only what Kata wrote.
+  checkout to symlink to. On OpenCode it also copies the orchestrator (`agent/kata.md`) and the
+  `kata-advisor` subagent (`agents/kata-advisor.md`); an advisor refusal is reported but does not
+  abort the rest (JUDGE degrades to Stage 1), while an orchestrator refusal does. `.kata-managed`
+  markers prove Kata created a directory or file; user content is kept or moved to `.bak` under
+  `--force`, and `--uninstall` removes only what Kata wrote.
 - Exit codes: `0` pass, `1` cycle/report/judge failure, audit fakes/skips/degraded, or a partial install
   found by `--doctor`; `2` invalid CLI args (argparse).
 
@@ -138,6 +145,11 @@ src/kata/
 **Edit `phases/kata-<phase>.md` — never the files under `opencode/` or `claude-code/`.** Those are
 generated by `scripts/build_skills.py`; run `make build-skills` and commit the result.
 `tests/test_skills_build.py` fails if they drift.
+
+The one hand-written exception is `opencode/agents/kata-advisor.md`: it is neither a phase nor a
+domain, so it is not rendered. `make build-skills` only **mirrors** it into
+`src/kata/assets/opencode/agents/` — without that mirror the wheel would ship a JUDGE phase that
+tells the model to call a subagent the wheel never installs.
 
 In the source, `{{RUN}}` / `{{READ}}` / `{{ASK}}` / `{{LOAD_PHASE}}` … expand to how the host names
 each **role** in `REQUIRED_ROLES` (an undeclared variable is a build error). Conditional content uses

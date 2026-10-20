@@ -107,6 +107,44 @@ class TestCheckFrontend:
         assert e.completo is False
 
 
+class TestSubagenteOpcional:
+    """O `kata-advisor` faltando é aviso, nunca reprovação.
+
+    Sem ele o JUDGE roda só o Estágio 1 (mecânico), que continua válido. Se
+    a ausência contasse como `parcial`, o doctor reprovaria uma instalação
+    que funciona — e o `--doctor` existe para nomear o que quebra de fato.
+    """
+
+    def test_advisor_esperado_so_no_opencode(self) -> None:
+        assert FRONTENDS[0].subagentes == ("kata-advisor.md",)
+        assert FRONTENDS[1].subagentes == ()
+
+    def test_advisor_faltando_e_avisado_sem_reprovar(self, oc, tmp_path) -> None:
+        _instala(tmp_path, PHASE_SKILLS)
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+
+        e = check_frontend(oc)
+
+        assert e.completo is True
+        assert e.parcial is False
+        assert e.subagentes_faltando == ["kata-advisor.md"]
+
+    def test_advisor_instalado_limpa_o_aviso(self, oc, tmp_path) -> None:
+        _instala(tmp_path, PHASE_SKILLS)
+        (tmp_path / "agent").mkdir()
+        (tmp_path / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "kata-advisor.md").write_text("sub", encoding="utf-8")
+
+        assert check_frontend(oc).subagentes_faltando == []
+
+    def test_claude_code_nao_tem_subagente_esperado(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+        _instala(tmp_path, FRONTENDS[1].esperadas())
+        assert check_frontend(FRONTENDS[1]).subagentes_faltando == []
+
+
 class TestDoctor:
     def test_cobre_todos_os_frontends(self, tmp_path, monkeypatch) -> None:
         monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))

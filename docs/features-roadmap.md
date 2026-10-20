@@ -27,6 +27,8 @@ agente OpenCode + skills Claude Code.
 | `approved_commit` limita o diff do JUDGE ao fim da tarefa (R14) | `judge.py`/`cli.py` | ✅ |
 | AUDIT — graduação de fases followed/skipped/faked | `cli.py` `_audit_task` | ✅ |
 | Config por projeto `.kata/config.yaml` (lint/test/coverage verbatim) | `config.py` | ✅ |
+| Config do advisor em `.kata/config.yaml` (`model`, `effort`, `skip_trivial`) | `config.py` `load_advisor_config` | ✅ |
+| Verificação adversarial em 2 estágios (mecânica + semântica) | `judge.py` / `phases/kata-judge.md` | ✅ |
 | Schema versionado da task (`schema_version: 1`) | `cli.py` `SCHEMA_VERSION` | ✅ |
 | Detecção de domínio + adapter `kata-devops` | `domains.py`/`domains/kata-devops.md` | ✅ |
 | Doctor: checa instalação das skills de fase | `skills.py` | ✅ |
@@ -36,6 +38,7 @@ agente OpenCode + skills Claude Code.
 | Frontend | Onde | Estado |
 |---|---|---|
 | Agente `@kata` OpenCode | `opencode/agent/kata.md` + 11 skills `opencode/skills/` | ✅ |
+| Subagente `kata-advisor` OpenCode (Hostile Reviewer) | `opencode/agents/kata-advisor.md` | ✅ |
 | Skill `kata` Claude Code | `claude-code/skills/` (12 skills) | ✅ |
 | Fonte única das fases | `phases/kata-*.md` (11 arquivos) | ✅ |
 | Build de skills (`build-skills`/`check-skills`) | `scripts/build_skills.py` | ✅ |
@@ -56,6 +59,7 @@ agente OpenCode + skills Claude Code.
 | `pip install -e '.[dev]'` | README/DOCUMENTATION | ✅ |
 | `pipx run --spec .` / `uv tool run --from .` (uso pontual) | README/DOCUMENTATION (R12 docs) | ✅ |
 | `pipx install .` / `uv tool install .` (permanente) | README/DOCUMENTATION | ✅ |
+| `kata --install` empacota skills + agente + subagente `kata-advisor` | `install.py` / `src/kata/assets/` | ✅ |
 
 ## 3. Pendências registradas (roadmap)
 

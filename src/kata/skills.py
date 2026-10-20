@@ -56,6 +56,10 @@ class Frontend:
     # O orquestrador do Claude Code é uma skill como as outras; o do OpenCode
     # é um agente, e mora em outro diretório.
     orquestrador_e_skill: bool
+    # Subagentes opcionais instalados ao lado das skills, por nome de arquivo
+    # em `agents/`. Vazio no Claude Code, onde o revisor adversarial é o
+    # `/advisor` nativo — não há arquivo nosso para instalar.
+    subagentes: tuple[str, ...] = ()
 
     def config_dir(self) -> Path:
         return Path(os.environ.get(self.env_var) or Path.home() / self.default)
@@ -70,7 +74,13 @@ class Frontend:
 
 
 FRONTENDS: tuple[Frontend, ...] = (
-    Frontend("opencode", "OPENCODE_CONFIG_DIR", ".config/opencode", False),
+    Frontend(
+        "opencode",
+        "OPENCODE_CONFIG_DIR",
+        ".config/opencode",
+        False,
+        subagentes=("kata-advisor.md",),
+    ),
     Frontend("claude-code", "CLAUDE_CONFIG_DIR", ".claude", True),
 )
 
@@ -96,6 +106,8 @@ class InstallStatus:
     copias: list[str] = field(default_factory=list)
     agente_esperado: bool = False
     agente_instalado: bool = True
+    subagentes_esperados: tuple[str, ...] = ()
+    subagentes_faltando: list[str] = field(default_factory=list)
 
     @property
     def modo(self) -> str:
@@ -163,7 +175,14 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
         else:
             faltando.append(nome)
     agente_esperado = not frontend.orquestrador_e_skill
-    agente_instalado = (raiz.parent / "agent" / "kata.md").is_file() if agente_esperado else True
+    raiz_config = raiz.parent
+    agente_instalado = (raiz_config / "agent" / "kata.md").is_file() if agente_esperado else True
+    # Subagente faltando é aviso, nunca reprovação: sem ele o JUDGE cai no
+    # Estágio 1 (mecânico), que continua válido — a revisão semântica é o
+    # extra. Por isso não entra em `faltando`/`parcial`.
+    subagentes_faltando = [
+        nome for nome in frontend.subagentes if not (raiz_config / "agents" / nome).is_file()
+    ]
     return InstallStatus(
         frontend=frontend.nome,
         config_dir=frontend.config_dir(),
@@ -173,6 +192,8 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
         copias=copias,
         agente_esperado=agente_esperado,
         agente_instalado=agente_instalado,
+        subagentes_esperados=frontend.subagentes,
+        subagentes_faltando=subagentes_faltando,
     )
 
 

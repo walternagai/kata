@@ -42,7 +42,8 @@ make install
 # Reinicie o OpenCode
 ```
 
-Após reiniciar, use `@kata` no OpenCode para iniciar o ciclo.
+Após reiniciar, use `@kata` no OpenCode para iniciar o ciclo. O subagente
+`kata-advisor` (Hostile Reviewer) é disponibilizado para revisão adversarial semântica.
 
 No Windows PowerShell, use o instalador nativo:
 
@@ -190,8 +191,10 @@ kata --plan --task minha-tarefa # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
 kata --task minha-tarefa --report  # Relatório outcome-first
 kata --doctor                      # As skills de fase estão instaladas?
-                                   # (parcial sai 1; domain adapters ausentes só avisam)
-kata --install all [--force]       # Instala skills empacotadas (opencode, claude-code ou all)
+                                   # (parcial sai 1; domain adapters ausentes e o
+                                   # subagente kata-advisor ausente só avisam)
+kata --install all [--force]       # Instala skills + agente + subagente advisor
+                                   # (opencode, claude-code ou all)
 kata --uninstall all               # Remove só o que o --install criou
 kata --task minha-tarefa --audit   # Gradua fases (followed/skipped/faked/degraded)
 kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
@@ -205,8 +208,8 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes) |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
-| `--doctor` | `False` | Confere as skills de fase por frontend (e mostra o modo: link, cópia ou misto); domain adapters ausentes só avisam |
-| `--install` | (nenhum) | Copia as skills empacotadas: `opencode`, `claude-code` ou `all` (sem clone do repo) |
+| `--doctor` | `False` | Confere as skills de fase por frontend (e mostra o modo: link, cópia ou misto); domain adapters e o subagente `kata-advisor` ausentes só avisam |
+| `--install` | (nenhum) | Copia as skills empacotadas, o agente orquestrador e o subagente advisor: `opencode`, `claude-code` ou `all` (sem clone do repo) |
 | `--uninstall` | (nenhum) | Remove as skills do `--install` (só o que o Kata criou) |
 | `--force` | `False` | Só com `--install`: guarda personalização existente em `.bak` e substitui |
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
@@ -230,8 +233,14 @@ verify:
   lint: npx eslint src tests
   test: npx vitest run
   coverage: npx vitest run --coverage
-  coverage_pattern: 'All files\\s+\\|\\s+([\\d.]+)'
+  coverage_pattern: 'All files\s+\|\s+([\d.]+)'
   gate: 80
+
+advisor:
+  enabled: true                        # ativa revisão adversarial semântica (Estágio 2)
+  model: anthropic/claude-opus-4#high  # modelo frontier opcional
+  effort: high                         # nível de thinking
+  skip_trivial: true                   # bypass automático se fit.trivial == true
 ```
 
 Cada papel aceita string ou lista, e todo papel é opcional: o que for
@@ -296,13 +305,21 @@ Relatório outcome-first documentando o que foi feito, com caveats honestos.
 de cada skip/fake. Equivalente ao `/fable-method audit`.
 
 ### JUDGE (opcional)
-Verificação adversarial — re-executa as verificações afirmadas, confronta o
-diff com o relatório e caça fraudes em 7 categorias (weakened checks, false
-completion, scope creep, unauthorized action, spec betrayal, debris, baseline
-tampering).
-É a última fase, aplicada apenas quando solicitada após o REPORT.
+Verificação adversarial em dois estágios complementares:
 
-Se o juiz não encontrar fraude mas também não tiver tido como observar — nada
+1. **Estágio 1: Verificação Mecânica (Determinística)**: O CLI Python (`kata --judge`)
+   re-executa as verificações afirmadas, confronta o diff com o relatório e caça fraudes em 7
+   categorias (weakened checks, false completion, scope creep, unauthorized action, spec betrayal,
+   debris, baseline tampering). Se reprovado ou com falha, o ciclo para imediatamente.
+2. **Estágio 2: Verificação Semântica Adversarial (Advisor)**: Se o Estágio 1 for aprovado e a tarefa
+   não for trivial (`fit.trivial == false`), um modelo mais robusto ou com thinking elevado atua como
+   Hostile Reviewer para caçar fraudes conceituais (testes tautológicos, desvios sutis de especificação,
+   complexidade YAGNI e edge cases).
+   - No **OpenCode**: subagente `kata-advisor` (`mode: subagent`, somente leitura);
+   - No **Claude Code**: comando `/advisor` ou `/effort high|max`;
+   - Configurado via `.kata/config.yaml` (`advisor:`).
+
+Se o juiz mecânico não encontrar fraude mas também não tiver tido como observar — nada
 re-executado (o caso de todo toolchain que não é Python), ou teste numa
 linguagem cujos padrões ele não lê — o veredito é **UNVERIFIABLE**, não
 VERIFIED, e os pontos cegos vêm listados. "Não consegui olhar" não é

@@ -1,6 +1,8 @@
 # Features do Kata — inventário e roadmap
 
-> Derivado do código real no HEAD `fa1a0a2` (v0.6.0), 2026-08-24.
+> Inventário revisado sobre a **v0.7.4** (2026-10). As contagens de cenários e
+> de extensões de linguagem são conferidas por `tests/test_docs_eval.py`; o
+> commit exato de cada afirmação fica no histórico do Git.
 > Fontes: `src/kata/*.py`, `phases/`, `eval/scenarios/`, `domains/`, `scripts/`.
 
 ## 1. O que o kata é hoje
@@ -22,8 +24,8 @@ agente OpenCode + skills Claude Code.
 | FIT gate + triviality gate | `fit.py` (lógica), `cli.py` (fluxo) | ✅ |
 | Verificação ruff/pytest/coverage com gate (default 70%) e `--cov-fail-under` | `verify.py` | ✅ |
 | Múltiplos sources de coverage via `--cov-source` | `verify.py`/`cli.py` (R12-02) | ✅ |
-| JUическое adversarial: 7 fraudes, pontos cegos, vereditos VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED | `judge.py` | ✅ |
-| Sondas de linguagem (10 linguagens, 15 extensões: Python, JS, TS, Go, Ruby, Rust, Java, Kotlin, C#, PHP, Swift) | `judge.py` `_LANGUAGES` | ✅ |
+| JUDGE adversarial: 7 fraudes, pontos cegos, vereditos VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED | `judge.py` | ✅ |
+| Sondas de linguagem (9 famílias de sondas, 15 extensões: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift) | `judge.py` `_LANGUAGES` | ✅ |
 | `approved_commit` limita o diff do JUDGE ao fim da tarefa (R14) | `judge.py`/`cli.py` | ✅ |
 | AUDIT — graduação de fases followed/skipped/faked | `cli.py` `_audit_task` | ✅ |
 | Config por projeto `.kata/config.yaml` (lint/test/coverage verbatim) | `config.py` | ✅ |
@@ -49,7 +51,7 @@ agente OpenCode + skills Claude Code.
 | Feature | Onde | Estado |
 |---|---|---|
 | Harness de traps | `eval/run_traps.py` | ✅ |
-| 19 cenários de trap (s01–s19) | `eval/scenarios/` | ✅ |
+| 23 cenários de trap (s01–s23) | `eval/scenarios/` | ✅ |
 | Guarda de contagem de cenários em docs | `tests/test_docs_eval.py` (R12-04) | ✅ |
 
 ### 2.4 Instalação

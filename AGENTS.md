@@ -153,6 +153,9 @@ make uninstall-claude-code   # remove os symlinks
 
 Rodar um único teste: `python3 -m pytest tests/test_verify.py::TestRunRuff -v`
 
+Release: [`RELEASING.md`](RELEASING.md) — bump nos dois arquivos, `make package`,
+tag anotada, `twine` (não `uv publish`) e a verificação de sha256 em venv limpo.
+
 Ordem recomendada: `make lint && make test` (e `make format-check` antes de
 commitar — o CI reprova drift de formatação que o `ruff check` não vê).
 

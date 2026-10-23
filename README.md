@@ -339,15 +339,20 @@ O kata usa `.kata/` na raiz do projeto. Cada tarefa é um arquivo YAML:
 
 ```bash
 make build-skills          # gera opencode/, claude-code/ e src/kata/assets/ de phases/+domains/
+make check-skills          # falha se o gerado estiver desatualizado
 make test                  # pytest + coverage
+make package               # constrói o wheel/sdist e confere contra src/kata/assets/
 make lint                  # ruff check
 make format                # ruff format
+make format-check          # reprova drift de formatação (o lint não vê)
 make install                # instala agente + skills no OpenCode
 make uninstall               # remove symlinks do OpenCode
 make install-claude-code     # instala skills no Claude Code
 make uninstall-claude-code   # remove symlinks do Claude Code
 make paper                   # compila paper/jserd/paper.pdf (exige TeX Live)
 ```
+
+Para publicar uma versão no PyPI, siga [`RELEASING.md`](RELEASING.md).
 
 ## Compatibilidade
 

@@ -46,6 +46,9 @@ make package                  # build the wheel/sdist and check the contents aga
 python3 -m pytest tests/test_verify.py::TestRunRuff -v      # a single class
 python3 -m pytest tests/test_judge.py -k escrituracao -v    # by name fragment
 
+# Releasing: RELEASING.md — bump both version files, `make package`, annotated tag,
+# `twine` (not `uv publish`), then verify sha256 in a clean venv.
+
 make install                  # symlink @kata agent + skills into ~/.config/opencode/
 make uninstall
 make reinstall                # after adding NEW skill/agent files (edits alone don't need this)

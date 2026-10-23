@@ -547,13 +547,13 @@ compara e recusa. O resto é conversa.
 
 - [Kata — repositório](https://github.com/walternagai/kata): código-fonte,
   CLI, agentes e skills.
-- [`DOCUMENTATION.md`](DOCUMENTATION.md): referência técnica completa — schema
+- [`DOCUMENTATION.md`](../DOCUMENTATION.md): referência técnica completa — schema
   do task file, contrato dos frontends, vereditos do JUDGE, pontos cegos.
-- [`COMPETITIVE.md`](COMPETITIVE.md): análise comparativa com projetos
+- [`COMPETITIVE.md`](../COMPETITIVE.md): análise comparativa com projetos
   similares (fable-method, claude-wizard, ring, nova, pre-commit-review).
-- [`eval/README.md`](eval/README.md): schema dos cenários de trap e a regra de
+- [`eval/README.md`](../eval/README.md): schema dos cenários de trap e a regra de
   que um cenário novo deve reprovar quando o defeito volta.
-- [`AGENTS.md`](AGENTS.md): instruções de desenvolvimento — fonte única das
+- [`AGENTS.md`](../AGENTS.md): instruções de desenvolvimento — fonte única das
   fases, convenções de código, cobertura de testes.
 
 ### Metodologias que inspiraram o kata

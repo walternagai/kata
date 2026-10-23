@@ -18,6 +18,7 @@ REPO = Path(__file__).resolve().parent.parent
 SCENARIOS = REPO / "eval" / "scenarios"
 README = REPO / "eval" / "README.md"
 DOCS = REPO / "DOCUMENTATION.md"
+ROADMAP = REPO / "docs" / "features-roadmap.md"
 
 
 def _cenarios() -> list[str]:
@@ -138,3 +139,57 @@ class TestEvalDocsRefletemCenarios:
         assert citados == assertados, (
             f"eval/README.md lista re-execução {citados} e os fixtures reais são {assertados}"
         )
+
+
+class TestRoadmapNaoEnvelhece:
+    """`docs/features-roadmap.md` também afirma números — e ninguém conferia.
+
+    Ele dizia "19 cenários (s01–s19)" com 23 no disco e "10 linguagens" com 9
+    famílias de sondas, e o guarda de eval/README + DOCUMENTATION não olhava
+    para lá (revisão completa 2026-10, B1).
+    """
+
+    def test_conta_os_cenarios(self) -> None:
+        texto = ROADMAP.read_text(encoding="utf-8")
+        n = len(_cenarios())
+        assert f"{n} cenários de trap" in texto, (
+            f"docs/features-roadmap.md não cita '{n} cenários de trap' — "
+            f"existem {n} diretórios em eval/scenarios/"
+        )
+        ultimo = _cenarios()[-1].split("-")[0]
+        assert f"s01–{ultimo}" in texto or f"s01-{ultimo}" in texto, (
+            f"a faixa citada no roadmap não termina em {ultimo}"
+        )
+
+    def test_conta_as_extensoes_de_linguagem(self) -> None:
+        """O número de extensões é o que o judge conhece, não o que a doc lembra."""
+        from kata.judge import _LANGUAGES
+
+        texto = ROADMAP.read_text(encoding="utf-8")
+        assert f"{len(_LANGUAGES)} extensões" in texto, (
+            f"docs/features-roadmap.md não cita '{len(_LANGUAGES)} extensões' — "
+            f"_LANGUAGES cobre {len(_LANGUAGES)}"
+        )
+
+
+class TestMarkdownNaoTemLixo:
+    def test_nenhum_markdown_tem_caractere_cirilico(self) -> None:
+        """Texto corrompido por encoding já passou: "JUическое" no roadmap.
+
+        Cirílico não tem uso legítimo nas docs deste repo (PT-BR e inglês),
+        então a presença é sempre corrupção. Fixtures de eval ficam de fora:
+        são projetos deliberadamente quebrados.
+        """
+        import re as _re
+
+        cirilico = _re.compile(r"[\u0400-\u04FF]")
+        sujos: list[str] = []
+        for md in REPO.rglob("*.md"):
+            if "scenarios" in md.parts or ".git" in md.parts:
+                continue
+            texto = md.read_text(encoding="utf-8", errors="replace")
+            m = cirilico.search(texto)
+            if m:
+                linha = texto[: m.start()].count("\n") + 1
+                sujos.append(f"{md.relative_to(REPO)}:{linha}")
+        assert not sujos, f"caractere cirílico (corrupção?) em: {', '.join(sujos)}"

@@ -205,7 +205,7 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | Flag | Default | Descrição |
 |------|---------|-----------|
 | `--plan` | `False` | Modo planejamento: FIT + THINK, não modifica código |
-| `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes) |
+| `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes); exige tarefa com `status: approved` |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
 | `--doctor` | `False` | Confere as skills de fase por frontend (e mostra o modo: link, cópia ou misto); domain adapters e o subagente `kata-advisor` ausentes só avisam |

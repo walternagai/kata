@@ -369,6 +369,11 @@ def search_pattern(
             "!venv",
             "--glob",
             "!node_modules",
+            # `--` antes do padrão: sem ele, procurar por um flag (ex.:
+            # `--force`, `-1`) faz o rg tratar o padrão como opção e falhar
+            # com "unrecognized flag". O TWIN CHECK busca exatamente esse tipo
+            # de padrão (revisão completa 2026-10, M3).
+            "--",
             pattern,
             *paths,
         ]
@@ -384,6 +389,7 @@ def search_pattern(
             "--exclude-dir=.venv",
             "--exclude-dir=venv",
             "--exclude-dir=node_modules",
+            "--",
             pattern,
             *paths,
         ]

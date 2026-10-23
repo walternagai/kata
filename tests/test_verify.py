@@ -377,6 +377,45 @@ class TestSearchPattern:
 
     @patch("kata.verify._run")
     @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
+    def test_padrao_com_dash_e_passado_apos_separador(
+        self,
+        mock_which: MagicMock,
+        mock_run: MagicMock,
+    ) -> None:
+        """M3: `--force`/`-1` são padrões legítimos no TWIN CHECK.
+
+        Sem `--` antes do padrão, o rg lê o padrão como opção e falha com
+        "unrecognized flag", deixando a fase inutilizável para esse caso.
+        """
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr=""
+        )
+
+        search_pattern("--force")
+
+        chamado = mock_run.call_args[0][0]
+        assert "--" in chamado
+        assert chamado[chamado.index("--") + 1] == "--force"
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value=None)
+    def test_grep_tambem_recebe_o_separador(
+        self,
+        mock_which: MagicMock,
+        mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr=""
+        )
+
+        search_pattern("-1")
+
+        chamado = mock_run.call_args[0][0]
+        assert chamado[0] == "grep"
+        assert chamado[chamado.index("--") + 1] == "-1"
+
+    @patch("kata.verify._run")
+    @patch("kata.verify.shutil.which", return_value="/usr/bin/rg")
     def test_search_with_rg_finds_matches(
         self,
         mock_which: MagicMock,

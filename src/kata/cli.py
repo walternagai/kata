@@ -296,9 +296,20 @@ def _detect_task_from_branch() -> str | None:
 
 
 def _pick_task() -> str:
-    """Escolhe a tarefa interativamente (branch, menu existente, ou nova)."""
+    """Escolhe a tarefa interativamente (branch, menu existente, ou nova).
+
+    Sem terminal não há como perguntar: inventar um nome faz duas execuções
+    compartilharem o mesmo registro de fases — a segunda herda o que a primeira
+    gravou (revisão completa 2026-10, M4). Exige `--task` e sai 2, o mesmo
+    código que o argparse usa para argumento inválido.
+    """
     if not sys.stdin.isatty():
-        return "untitled"
+        print(
+            "❌ sem terminal, informe a tarefa: `kata --task <nome>`.\n"
+            "   Sem isso o kata usaria um registro compartilhado e duas execuções\n"
+            "   passariam a herdar as fases uma da outra."
+        )
+        sys.exit(2)
     branch_task = _detect_task_from_branch()
     existing = sorted(p.stem for p in _kata_dir().glob(f"*{_ext()}") if p.stem != "config")
     if branch_task and branch_task in existing:
@@ -504,7 +515,10 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
         data["fit"] = {
             "trivial": False,
             "route": "code-loop",
-            "reason": "non-interactive mode",
+            # pt-BR e com o significado certo: a razão não é "modo
+            # não-interativo", é que ninguém classificou. `skipped`/`answered`
+            # dizem o resto (revisão completa 2026-10, M5).
+            "reason": "rota não classificada — modo não-interativo",
             "answered": False,
             "skipped": True,
         }
@@ -543,8 +557,19 @@ def _step_fit(task: str, data: dict[str, Any]) -> dict[str, Any]:
         "4": "research",
         "5": "inference",
     }
-    route = route_map.get(choice, "code-loop")
-    reason = _ask_text("  Justificativa breve (opcional): ")
+    # B7 (revisão completa 2026-10): entrada fora de 1-5 caía calada em
+    # code-loop — o ciclo mais caro, escolhido por engano de digitação. Uma
+    # segunda chance; persistindo, registra `inference` (baixa confiança), que
+    # é o que de fato aconteceu.
+    if choice not in route_map:
+        print(f"  ↳ rota '{choice}' não reconhecida — use 1 a 5")
+        choice = _ask_text("  Rota escolhida [1]: ") or "1"
+    if choice in route_map:
+        route = route_map[choice]
+        reason = _ask_text("  Justificativa breve (opcional): ")
+    else:
+        route = "inference"
+        reason = f"rota '{choice}' não reconhecida — registrada como inferência de baixa confiança"
 
     # `answered` fecha o guard no topo desta função: sem gravá-la, FIT
     # repergunta a cada retomada da tarefa. think e intent já gravavam a sua.
@@ -1727,6 +1752,16 @@ def main() -> None:
         if path is None:
             sys.exit(1)
         data = _load_task_or_exit(path)
+        # M1 (revisão completa 2026-10): a skill já exigia `status: approved`;
+        # o CLI julgava qualquer coisa e emitia veredito para tarefa em
+        # andamento, o que dá a um `--judge` de CI a aparência de auditoria de
+        # trabalho concluído. A guarda mora aqui porque o CLI é a interface
+        # usada por script.
+        status = str(data.get("status", "") or "sem status")
+        if status != "approved":
+            print(f"❌ JUDGE julga só tarefa concluída: '{task}' está '{status}'.")
+            print("   Conclua o ciclo (VERIFY) ou use --report / --audit para o estado atual.")
+            sys.exit(1)
         if args.trusted_base and _resolve_trusted_base(args.trusted_base) is None:
             # Cair de volta na janela do YAML seria julgar exatamente o que
             # a base confiável existe para não confiar.

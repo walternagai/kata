@@ -327,7 +327,7 @@ reports a summary at the end.
 | `kata --plan [--task TASK]` | Run FIT and THINK, save the plan, and stop |
 | `kata --check-only` | Run Ruff, pytest, and coverage without task interaction |
 | `kata --report --task TASK` | Regenerate the outcome-first report |
-| `kata --judge --task TASK` | Run adversarial verification |
+| `kata --judge --task TASK` | Run adversarial verification (requires `status: approved`) |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
 | `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters and the optional `kata-advisor` subagent are warnings, not failures |
 | `kata --install FRONTEND` | Copy the bundled skills, the orchestrator agent and the `kata-advisor` subagent (`opencode`, `claude-code` or `all`) without a checkout of this repository |
@@ -1104,7 +1104,13 @@ source that had quietly coupled itself to a real frontend would fail there.
 - The CLI assumes Git is available for diff and branch detection. It continues
   with reduced task detection when branch lookup fails.
 - In non-interactive mode, FIT, THINK, SIMPLIFY, INTENT, and SURGICAL use
-  defaults; `--check-only` is the intended CI entry point.
+  defaults; `--check-only` is the intended CI entry point. Because there is no
+  way to ask, a mode that needs a task **requires `--task`** and exits `2`
+  without it — inventing a name made two runs share one task file and inherit
+  each other's phases.
+- `--judge` refuses a task whose `status` is not `approved` (exit `1`, naming
+  the status). Judging work in progress produced a verdict that looked like an
+  audit of finished work, which is the opposite of what the phase promises.
 - Coverage percentage extraction expects a standard pytest-cov `TOTAL` line.
   If it cannot parse that line, the check **fails** — "could not measure" is
   not "measured and passed", and reporting `0.0` as approved produced YAML

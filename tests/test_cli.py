@@ -1204,13 +1204,20 @@ class TestCwdHelper:
 
 
 class TestPickTask:
-    """Testa _pick_task em modo não-interativo."""
+    """Testa _pick_task: menu interativo e recusa em modo não-interativo."""
 
     @patch("kata.cli.sys.stdin")
-    def test_pick_task_non_tty(self, mock_stdin) -> None:
+    def test_pick_task_non_tty_exige_task(self, mock_stdin, capsys) -> None:
+        """M4 (revisão completa 2026-10): sem terminal não há como perguntar.
+
+        Inventar `untitled` fazia duas execuções compartilharem o mesmo
+        registro de fases, herdando o que a anterior gravou.
+        """
         mock_stdin.isatty.return_value = False
-        result = cli._pick_task()
-        assert result == "untitled"
+        with pytest.raises(SystemExit) as exc:
+            cli._pick_task()
+        assert exc.value.code == 2
+        assert "--task" in capsys.readouterr().out
 
     @patch("kata.cli.input", return_value="nova-tarefa")
     @patch("kata.cli._detect_task_from_branch", return_value=None)
@@ -1850,7 +1857,7 @@ class TestStepFit:
         result = cli._step_fit("task", data)
         assert result["fit"]["trivial"] is False
         assert result["fit"]["route"] == "code-loop"
-        assert result["fit"]["reason"] == "non-interactive mode"
+        assert result["fit"]["reason"] == "rota não classificada — modo não-interativo"
 
     def test_step_fit_already_answered(self, capsys) -> None:
         data: dict = {"fit": {"answered": True, "trivial": True}}
@@ -1904,6 +1911,39 @@ class TestStepFit:
         result = cli._step_fit("task", {})
         assert result["fit"]["trivial"] is False
         assert "gates completos" in capsys.readouterr().out
+
+    @patch("kata.cli.diff_stats")
+    @patch("kata.cli.input")
+    @patch("kata.cli.sys.stdin")
+    def test_rota_invalida_repergunta_e_aceita_a_segunda(
+        self, mock_stdin, mock_input, mock_diff_stats
+    ) -> None:
+        """B7: digitar '9' não pode cair calado em code-loop."""
+        mock_stdin.isatty.return_value = True
+        mock_diff_stats.return_value = ([], 0)
+        mock_input.side_effect = ["s", "9", "3", "diagnóstico"]
+
+        result = cli._step_fit("task", {})
+
+        assert result["fit"]["route"] == "question"
+        assert result["fit"]["reason"] == "diagnóstico"
+
+    @patch("kata.cli.diff_stats")
+    @patch("kata.cli.input")
+    @patch("kata.cli.sys.stdin")
+    def test_rota_invalida_duas_vezes_vira_inference(
+        self, mock_stdin, mock_input, mock_diff_stats, capsys
+    ) -> None:
+        """Persistindo o erro, registra o que de fato houve: inferência."""
+        mock_stdin.isatty.return_value = True
+        mock_diff_stats.return_value = ([], 0)
+        mock_input.side_effect = ["s", "9", "abc"]
+
+        result = cli._step_fit("task", {})
+
+        assert result["fit"]["route"] == "inference"
+        assert "não reconhecida" in result["fit"]["reason"]
+        assert "não reconhecida" in capsys.readouterr().out
 
 
 class TestMainPlanMode:
@@ -2245,6 +2285,33 @@ class TestPickTaskInteractiveMenu:
 class TestMainJudge:
     """Testa o modo --judge (adversarial verification)."""
 
+    @patch("kata.cli.judge_task")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_recusa_task_nao_aprovada(
+        self, mock_kata_dir, mock_path, mock_deserialize, mock_judge, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """M1: a skill manda julgar só `approved`; o CLI não verificava e
+        emitia veredito para tarefa em andamento, dando a um `--judge` de CI
+        a aparência de auditoria de trabalho concluído."""
+        monkeypatch.chdir(tmp_path)
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "t.yaml"
+        task_file.write_text("task: t\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {"task": "t", "status": "draft"}
+
+        with patch("sys.argv", ["kata", "--task", "t", "--judge"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 1
+        mock_judge.assert_not_called()
+        assert "só tarefa concluída" in capsys.readouterr().out
+
     def test_resolve_trusted_base_exige_merge_base_com_o_head(self, repo_git, monkeypatch) -> None:
         """A ref resolver não basta: quem define o piso é o merge-base. Num
         clone raso, ou numa história sem ancestral comum, o merge-base falha e
@@ -2286,7 +2353,7 @@ class TestMainJudge:
         task_file = kata_dir / "t.yaml"
         task_file.write_text("task: t\n", encoding="utf-8")
         mock_path.return_value = task_file
-        mock_deserialize.return_value = {"task": "t"}
+        mock_deserialize.return_value = {"task": "t", "status": "approved"}
 
         with patch("kata.cli._resolve_trusted_base", return_value=None):
             with patch("sys.argv", ["kata", "--task", "t", "--judge", "--trusted-base", "x"]):
@@ -2311,7 +2378,7 @@ class TestMainJudge:
         task_file = kata_dir / "t.yaml"
         task_file.write_text("task: t\n", encoding="utf-8")
         mock_path.return_value = task_file
-        mock_deserialize.return_value = {"task": "t"}
+        mock_deserialize.return_value = {"task": "t", "status": "approved"}
         mock_judge.return_value = JudgeResult(verdict="VERIFIED")
 
         with patch("kata.cli._resolve_trusted_base", return_value="abc123"):

@@ -1,4 +1,4 @@
-.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills skills-stats test lint format format-check paper clean
+.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills skills-stats test package lint format format-check paper clean
 
 # === Instalação do agente + skills no OpenCode ===
 
@@ -48,6 +48,15 @@ paper:
 
 test:
 	python3 -m pytest tests/ -v --cov --cov-report=term-missing
+
+# Constrói e confere o artefato que vai para o PyPI. Os testes leem a árvore de
+# fontes; sem este alvo, um package-data quebrado só aparecia no release.
+# Requer `build` e `twine` (o CI instala; local: pip install build twine).
+package:
+	rm -rf build dist/*.whl dist/*.tar.gz
+	python3 -m build
+	python3 -m twine check dist/*
+	python3 scripts/check_package.py
 
 lint:
 	python3 -m ruff check src/ tests/ eval/ scripts/

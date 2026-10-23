@@ -41,6 +41,7 @@ make lint                     # ruff check src/ tests/ eval/ scripts/
 make format                   # ruff format src/ tests/ eval/ scripts/
 make format-check             # CI runs this; `ruff check` does not catch format drift
 make test                     # pytest tests/ -v --cov=kata --cov=build_skills --cov=run_traps (gate 70%)
+make package                  # build the wheel/sdist and check the contents against src/kata/assets/
 
 python3 -m pytest tests/test_verify.py::TestRunRuff -v      # a single class
 python3 -m pytest tests/test_judge.py -k escrituracao -v    # by name fragment
@@ -54,10 +55,13 @@ make uninstall-claude-code
 python3 -m kata --doctor      # are the phase skills installed? (partial install exits 1;
                               # missing domain adapters are optional warnings)
 python3 eval/run_traps.py     # adversarial JUDGE trap scenarios (eval/scenarios/)
+python3 scripts/check_package.py  # wheel contents vs src/kata/assets/ (used by `make package`)
 ```
 
 CI (`.github/workflows/ci.yml`, Python 3.11 + 3.12) runs `make lint`, `make format-check`,
-`make check-skills`, `make test` and the trap runner — all five must pass. The traps are the
+`make check-skills`, `make test`, the trap runner and `make package` (which builds the wheel and
+checks its contents against `src/kata/assets/` — without it a broken `package-data` only showed up
+on release day) — all six must pass. The traps are the
 one gate `make test` does not cover: `run_traps.py` shells out to `python3 -m kata` with
 `cwd` set to a temp fixture, so a *relative* `PYTHONPATH=src` silently stops resolving there
 and all scenarios fail with "No module named kata". Install the package instead.

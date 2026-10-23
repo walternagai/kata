@@ -50,11 +50,18 @@ markers = [
 ]
 
 [tool.coverage.run]
-# Paths explícitos em vez de nomes de módulo top-level: build_skills e
-# run_traps vivem em scripts/ e eval/ (não são pacotes), e o nome de módulo
-# só resolve quando o pytest roda da raiz do repo. Com paths, o coverage
-# funciona de qualquer CWD (CR-006/S4).
-source = ["src/kata", "scripts/build_skills.py", "eval/run_traps.py"]
+# `include`, e não `source`: `source` só aceita diretório ou nome de módulo —
+# um arquivo ali é tratado como módulo, falha ao "importar" e é descartado com
+# um warning que ninguém lê. Era o que acontecia desde o CR-006/S4: os dois
+# scripts eram declarados e sumiam do relatório, deixando 482 statements fora
+# do denominador (revisão completa de 2026-10, achado A1). Com `include` os
+# arquivos entram por caminho e o gate mede o que promete medir.
+include = [
+    "src/kata/*",
+    "scripts/build_skills.py",
+    "scripts/check_package.py",
+    "eval/run_traps.py",
+]
 omit = [
     "tests/*",
     "*/__main__.py",

@@ -48,6 +48,7 @@ domains/        adapters de domínio opcionais, fonte única como phases/
                 kata-data-analysis.md, kata-research.md e kata-docs.md são os
                 adapters — gerados como skills e opcionais no --doctor)
 eval/           cenários de trap adversarial (python3 eval/run_traps.py)
+scripts/check_package.py          confere o wheel publicado contra src/kata/assets/
 scripts/install.sh                instala via symlinks em ~/.config/opencode/
 scripts/install-claude-code.sh    instala via symlinks em ~/.claude/
 ```
@@ -139,6 +140,7 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
 make build-skills  # gera opencode/ e claude-code/ a partir de phases/
 make check-skills  # falha se o gerado estiver desatualizado
 make test      # pytest + coverage (gate 70%)
+make package   # constrói o wheel/sdist e confere o conteúdo contra src/kata/assets/
 make lint      # ruff check src/ tests/ eval/ scripts/
 make format    # ruff format src/ tests/ eval/ scripts/
 make format-check  # ruff format --check — o lint não vê drift de formatação
@@ -155,7 +157,9 @@ Ordem recomendada: `make lint && make test` (e `make format-check` antes de
 commitar — o CI reprova drift de formatação que o `ruff check` não vê).
 
 `.github/workflows/ci.yml` roda `make lint`, `make format-check`,
-`make check-skills`, `make test` e `python3 eval/run_traps.py`, em Python
+`make check-skills`, `make test`, `python3 eval/run_traps.py` e `make package`
+(o wheel é construído e conferido contra `src/kata/assets/`; sem esse job, um
+`package-data` quebrado só aparecia no dia do release), em Python
 3.11 e 3.12, a cada push na `main` e em todo PR. O CI chama o Makefile de
 propósito: o que é verificado local e o que é verificado remoto não devem
 poder divergir.

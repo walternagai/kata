@@ -60,6 +60,26 @@ jobs:
       - name: Adversarial eval traps
         run: python3 eval/run_traps.py
 
+  # A2 (revisão completa 2026-10): nada aqui construía o wheel, então um
+  # package-data quebrado passava verde e só aparecia no dia do release — foi
+  # assim que o asset do kata-advisor ficou fora da v0.7.3. `make package`
+  # constrói, valida o wheel e confere o conteúdo contra src/kata/assets/.
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Instala build e twine
+        run: pip install build twine
+
+      - name: Constrói e confere o artefato
+        run: make package
+
   # K-21: os instaladores PowerShell nunca foram executados — o CI só rodava
   # ubuntu e os .ps1 admitiam "não foi executado" no cabeçalho. Este job
   # espelha o que test_install.py faz para os .sh, em ambiente real: instala
@@ -77,6 +97,10 @@ jobs:
           $env:OPENCODE_CONFIG_DIR = "$env:RUNNER_TEMP/opencode-config"
           .\scripts\install.ps1 -Copy
           if (-not (Test-Path "$env:OPENCODE_CONFIG_DIR/agent/kata.md")) { throw "agente não instalado" }
+          # M2 (revisão completa 2026-10): o subagente é o artefato que a fase
+          # JUDGE carrega; sem esta linha, uma regressão em agents/ no .ps1
+          # passava verde porque só o .sh tem teste em tests/.
+          if (-not (Test-Path "$env:OPENCODE_CONFIG_DIR/agents/kata-advisor.md")) { throw "subagente não instalado" }
           $skills = Get-ChildItem -Directory "$env:OPENCODE_CONFIG_DIR/skills"
           if ($skills.Count -lt 10) { throw "skills insuficientes: $($skills.Count)" }
 
@@ -86,6 +110,7 @@ jobs:
           $env:OPENCODE_CONFIG_DIR = "$env:RUNNER_TEMP/opencode-config"
           .\scripts\install.ps1 -Uninstall
           if (Test-Path "$env:OPENCODE_CONFIG_DIR/agent/kata.md") { throw "agente não removido" }
+          if (Test-Path "$env:OPENCODE_CONFIG_DIR/agents/kata-advisor.md") { throw "subagente não removido" }
 
       - name: Instala skills do Claude Code (-Copy)
         shell: pwsh

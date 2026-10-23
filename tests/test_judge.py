@@ -1210,11 +1210,11 @@ class TestRunGitDiff:
         assert mock_run.call_args_list[1][0][0] == ["git", "diff", "HEAD"]
 
 
-@patch("kata.judge.untracked_files", return_value=[])
+@patch("kata.verify.untracked_files", return_value=[])
 class TestChangedFiles:
     """Testa o helper _changed_files."""
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_unstaged_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
@@ -1225,7 +1225,7 @@ class TestChangedFiles:
         files = _changed_files()
         assert files == ["a.py", "b.py"]
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="no HEAD"),
@@ -1235,7 +1235,7 @@ class TestChangedFiles:
         files = _changed_files()
         assert files == ["staged.py"]
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_no_changes(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="", stderr=""
@@ -1243,7 +1243,7 @@ class TestChangedFiles:
         files = _changed_files()
         assert files == []
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_base_commit_used_when_it_resolves(
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
@@ -1255,7 +1255,7 @@ class TestChangedFiles:
         assert files == ["committed.py"]
         assert mock_run.call_args_list[1][0][0] == ["git", "diff", "--name-only", "deadbeef"]
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_base_commit_falls_back_when_it_does_not_resolve(
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
@@ -1266,7 +1266,7 @@ class TestChangedFiles:
         files = _changed_files(base_commit="deadbeef")
         assert files == ["local.py"]
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_oserror_on_git_diff_returns_empty(
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
@@ -1275,7 +1275,7 @@ class TestChangedFiles:
         files = _changed_files()
         assert files == []
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_oserror_on_cached_fallback_returns_empty(
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
@@ -1290,7 +1290,7 @@ class TestChangedFiles:
         files = _changed_files()
         assert files == []
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_artefatos_de_ferramenta_saem_da_lista_de_alterados(
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:
@@ -1310,7 +1310,7 @@ class TestChangedFiles:
 
         assert files == ["src/a.py", "tests/test_a.py"]
 
-    @patch("kata.judge._run")
+    @patch("kata.verify._run")
     def test_config_do_projeto_nao_e_artefato(
         self, mock_run: MagicMock, mock_untracked: MagicMock
     ) -> None:

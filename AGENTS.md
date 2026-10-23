@@ -113,7 +113,12 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
 - `config.py` é a leitura de `.kata/config.yaml` (`load_verify_config`, `load_advisor_config`)
   para comandos do projeto e diretrizes do advisor (modelo/effort/skip_trivial).
 - `verify.py` é a lógica de verificação (ruff/pytest/coverage via
-  `--cov-fail-under`) modularizada para testes independentes.
+  `--cov-fail-under`) modularizada para testes independentes, e abriga as
+  consultas ao git compartilhadas: `untracked_files` e `changed_files` (janela
+  `base..approved_commit`, com os filtros de escrituração do kata e de artefato
+  de ferramenta). O CLI e o JUDGE leem a mesma lista — antes eram duas
+  implementações, e uma tarefa retomada depois do commit era declarada numa
+  janela e auditada em outra (revisão completa 2026-10, B5).
 - `judge.py` é a lógica adversarial que verifica fraudes e inconsistências (Estágio 1 do JUDGE).
 - `skills.py` é o preflight: a lista canônica de skills que o ciclo precisa e
   a checagem de instalação por frontend (`kata --doctor`). Instalação parcial

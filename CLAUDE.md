@@ -87,7 +87,8 @@ src/kata/
 ├── install.py   kata --install / --uninstall / --force: copies the skills bundled in
 │                src/kata/assets/ (no checkout needed — pipx install kata-dev has none)
 ├── fit.py       diff_stats() / is_trivial() — the fit gate
-├── verify.py    run_ruff / run_pytest / run_coverage / run_command / search_pattern / run_all()
+├── verify.py    run_ruff / run_pytest / run_coverage / run_command / search_pattern / run_all(),
+│                plus the shared git queries: untracked_files / changed_files
 ├── judge.py     collect_claims() + the fraud hunters (six hunt_*() plus
 │                baseline tampering inside judge_task()) + judge_task()
 ├── __init__.py  package version
@@ -107,7 +108,10 @@ src/kata/
 - `verify.py`: independent functions per role; `run_all()` runs lint + test, then coverage only if
   the test step passed (short-circuits on failure). `run_command()` executes a declared command and
   judges it by exit code; `run_command_coverage()` extracts the percentage and applies the gate here,
-  because `--cov-fail-under` does not exist outside Python. Tests mock `kata.verify._run` (the
+  because `--cov-fail-under` does not exist outside Python. It also hosts the shared git queries —
+  `untracked_files()` and `changed_files()` — so the CLI (SURGICAL's file list) and the judge
+  (scope creep) read **one** window, `base_commit..approved_commit`, instead of two that diverged
+  when a task was resumed after its commit (2026-10 review, B5). Tests mock `kata.verify._run` (the
   subprocess wrapper) — never invoke real ruff/pytest inside the unit suite.
 - `judge.py`: Stage 1 of adversarial verification. Treats a task's `.kata/<task>.yaml` as a set of claims,
   diffs them against Git reality, re-runs claimed checks, and hunts seven fraud categories: weakened checks,

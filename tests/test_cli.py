@@ -514,7 +514,7 @@ class TestStepSimplify:
         assert result["simplify"]["no_single_use_abstractions"] is False
 
 
-@patch("kata.cli.untracked_files", return_value=[])
+@patch("kata.verify.untracked_files", return_value=[])
 class TestStepSurgical:
     """Testa _step_surgical em modos interativo e não-interativo."""
 
@@ -542,7 +542,7 @@ class TestStepSurgical:
         assert "já respondido" in capsys.readouterr().out
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run_git")
+    @patch("kata.verify._run")
     @patch("kata.cli.sys.stdin")
     def test_step_surgical_interactive_with_files(
         self, mock_stdin, mock_run, mock_confirm, mock_untracked
@@ -559,13 +559,14 @@ class TestStepSurgical:
         assert result["surgical"]["files"][0]["necessary"] is True
 
     @patch("kata.cli._confirm")
-    @patch("kata.cli._run_git")
+    @patch("kata.verify._run")
     @patch("kata.cli.sys.stdin")
     def test_step_surgical_no_diff_uses_staged(
         self, mock_stdin, mock_run, mock_confirm, mock_untracked
     ) -> None:
         mock_stdin.isatty.return_value = True
         mock_run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="sem HEAD"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="baz.py\n", stderr=""),
         ]
@@ -1303,6 +1304,29 @@ class TestJsonFallback:
         assert cli._ext() == ".json"
 
 
+class TestChangedPathsDelegaAoVerify:
+    """B5: o CLI não tem implementação própria da lista de arquivos.
+
+    Duas implementações (árvore de trabalho no CLI, `base..approved_commit` no
+    judge) faziam uma tarefa retomada depois do commit ser declarada numa
+    janela e auditada em outra.
+    """
+
+    @patch("kata.cli.changed_files", return_value=["so-um.py"])
+    def test_changed_paths_chama_verify(self, mock_changed) -> None:
+        assert cli._changed_paths() == ["so-um.py"]
+        mock_changed.assert_called_once_with()
+
+    def test_mesma_janela_que_o_judge(self, repo_git, tmp_path, monkeypatch) -> None:
+        from kata.judge import _changed_files
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "README.md").write_text("modificado\n", encoding="utf-8")
+        (tmp_path / "novo.py").write_text("x = 1\n", encoding="utf-8")
+
+        assert sorted(cli._changed_paths()) == sorted(_changed_files())
+
+
 class TestChangedPathsSeesUntracked:
     """Repo git de verdade: o defeito era o comando que nunca era chamado."""
 
@@ -1418,11 +1442,11 @@ class TestRunHelper:
         assert call_kwargs.get("cwd") == custom_cwd
 
 
-@patch("kata.cli.untracked_files", return_value=[])
+@patch("kata.verify.untracked_files", return_value=[])
 class TestStepSurgicalNoFiles:
     """Testa _step_surgical sem arquivos alterados."""
 
-    @patch("kata.cli._run_git")
+    @patch("kata.verify._run")
     @patch("kata.cli.sys.stdin")
     def test_surgical_no_files_no_staged(self, mock_stdin, mock_run, mock_untracked) -> None:
         mock_stdin.isatty.return_value = True
@@ -2898,7 +2922,7 @@ class TestFormatLines:
         assert "occurrence(s)" not in line
 
 
-@patch("kata.cli.untracked_files", return_value=[])
+@patch("kata.verify.untracked_files", return_value=[])
 class TestDetectScratch:
     """Testa _detect_scratch_files.
 
@@ -2913,7 +2937,7 @@ class TestDetectScratch:
         mock_run.return_value.stdout = ""
         assert cli._detect_scratch_files() == []
 
-    @patch("kata.cli._run_git")
+    @patch("kata.verify._run")
     def test_scratch_file_detected(self, mock_run, mock_untracked) -> None:
         mock_run.return_value.stdout = "file.tmp\nscratch/data.txt\n"
         files = cli._detect_scratch_files()
@@ -2934,7 +2958,7 @@ class TestDetectScratch:
         )
         assert cli._detect_scratch_files() == []
 
-    @patch("kata.cli._run_git")
+    @patch("kata.verify._run")
     def test_real_debris_still_detected_alongside_temp_substrings(
         self, mock_run, mock_untracked
     ) -> None:

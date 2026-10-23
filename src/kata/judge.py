@@ -24,7 +24,22 @@ from pathlib import Path
 from typing import Any
 
 from kata.config import VerifyConfig
-from kata.verify import VerifyResult, _run, is_inspectable, run_all, untracked_files
+from kata.verify import (
+    VerifyResult,
+    _is_tool_artifact,  # noqa: F401
+    # Re-exportados para os testes e para quem importa de `kata.judge`: os
+    # filtros nasceram aqui e passaram a morar em verify.py quando o SURGICAL
+    # e o JUDGE começaram a usar a mesma lista de arquivos (B5). Não são
+    # usados neste módulo além do re-export.
+    _remove_tool_artifacts,  # noqa: F401
+    _run,
+    _sem_escrituracao,
+    changed_files,
+    is_inspectable,
+    is_kata_bookkeeping,  # noqa: F401
+    run_all,
+    untracked_files,
+)
 
 # ── sondas por linguagem ──────────────────────────────────────────────────
 
@@ -599,83 +614,6 @@ def _base_commit_is_ancestor_of(ancestor: str, descendant: str, cwd: Path | None
     return result.returncode == 0
 
 
-def is_kata_bookkeeping(filepath: str) -> bool:
-    """O arquivo é escrituração da própria ferramenta, não trabalho da tarefa.
-
-    `.kata/<task>.yaml` é criado pelo kata, não pelo autor da tarefa. Ele é
-    untracked em qualquer projeto que não tenha ignorado `.kata/` — e nada no
-    kata pede isso: `--init` não mexe no .gitignore e nenhum doc instrui a
-    ignorá-lo. Sem este filtro, o judge conta o arquivo da própria tarefa como
-    "arquivo alterado não declarado" e acusa trabalho honesto de scope creep;
-    acima de 2 arquivos a severidade vira alta e o veredito, REFUTED (R11-3).
-
-    Duas coisas esconderam isso por dez rodadas, e as duas são ambiente: este
-    repositório tem `/.kata/` no .gitignore, então o kata sobre si mesmo nunca
-    via; e o harness de traps escreve `.kata/` no .git/info/exclude de todo
-    fixture, o que torna a classe inalcançável até pelo s07-honest-work.
-
-    Filtra a escrituração, não o diretório: `.kata/config.yaml` também é
-    ferramenta, mas um arquivo de código que alguém guarde sob `.kata/` não
-    tem por que ficar invisível ao juiz.
-    """
-    partes = Path(filepath).parts
-    if ".kata" not in partes:
-        return False
-    return Path(filepath).suffix.lower() in {".yaml", ".yml", ".json"}
-
-
-def _sem_escrituracao(files: list[str]) -> list[str]:
-    """Remove a escrituração do kata de uma lista de arquivos."""
-    return [f for f in files if not is_kata_bookkeeping(f)]
-
-
-# Nomes de arquivo que são dados de ferramenta, nunca trabalho da tarefa. O
-# `_ignored_code_files` (lado dos ignorados) e o `eval/external_study.py`
-# (`_clean_tool_caches`) já conheciam esta classe; o lado dos ALTERADOS não, e
-# é ele que o judge acusa.
-_TOOL_ARTIFACT_NAMES = frozenset({".coverage", "coverage.xml"})
-
-# Diretórios cujo conteúdo inteiro é gerado por ferramenta. `__pycache__` NÃO
-# entra: lá o filtro é pela extensão, para um `.py` de verdade guardado ali
-# não ficar invisível — a mesma doutrina do `is_kata_bookkeeping` (filtra o
-# dado da ferramenta, não o diretório).
-_TOOL_ARTIFACT_DIRS = frozenset({".mypy_cache", ".pytest_cache", ".ruff_cache", "htmlcov"})
-_TOOL_ARTIFACT_SUFFIXES = frozenset({".pyc", ".pyo"})
-
-
-def _is_tool_artifact(filepath: str) -> bool:
-    """O arquivo é dado que uma ferramenta de verificação deixou na árvore?
-
-    O `run_all` que o próprio judge dispara — e o `--check-only` do CI —
-    deixam `.coverage`, `*.pyc` e caches na árvore. Num repositório sem
-    `.gitignore` para eles, a execução SEGUINTE os vê como untracked e
-    `hunt_scope_creep` acusava trabalho honesto: run1 VERIFIED → run2 REFUTED
-    com scope_creep [high], e uma árvore sujada por `--check-only` já caía em
-    WITH CAVEATS na run 1.
-
-    O filtro é por nome de artefato, nunca por sufixo genérico:
-    `.coveragerc` é configuração do projeto e NÃO é filtrado, e um
-    `src/__pycache__/helper.py` — código que alguém guardou ali — também não
-    (só `.pyc`/`.pyo` saem de `__pycache__`).
-    """
-    path = Path(filepath)
-    nome = path.name
-    if nome in _TOOL_ARTIFACT_NAMES:
-        return True
-    # `.coverage.<host>` é dado do coverage; `.coveragerc` é config do projeto
-    # e o `startswith` com ponto final não o alcança.
-    if nome.startswith(".coverage."):
-        return True
-    if path.suffix.lower() in _TOOL_ARTIFACT_SUFFIXES:
-        return True
-    return bool(_TOOL_ARTIFACT_DIRS.intersection(path.parts))
-
-
-def _remove_tool_artifacts(files: list[str]) -> list[str]:
-    """Remove artefatos de ferramenta (coverage, caches, bytecode) da lista."""
-    return [f for f in files if not _is_tool_artifact(f)]
-
-
 def _oversized_untracked(files: list[str], cwd: Path | None = None) -> list[str]:
     """Arquivos untracked grandes demais para inspecionar (viram caveat)."""
     base = cwd or Path.cwd()
@@ -768,37 +706,16 @@ def _run_git_diff(
 def _changed_files(
     cwd: Path | None = None, base_commit: str | None = None, diff_end: str | None = None
 ) -> list[str]:
-    """Retorna a lista de arquivos alterados pela tarefa (mesma lógica de _run_git_diff)."""
-    result = None
-    if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
-        if diff_end:
-            result = _run(["git", "diff", "--name-only", base_commit, diff_end], cwd=cwd)
-        else:
-            result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
-    else:
-        try:
-            result = _run(["git", "diff", "HEAD", "--name-only"], cwd=cwd)
-        except OSError:
-            result = None
-        if result is None or result.returncode != 0:
-            try:
-                result = _run(["git", "diff", "--name-only"], cwd=cwd)
-            except OSError:
-                result = None
-            if result is None:
-                return []
-            if not result.stdout.strip():
-                try:
-                    result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
-                except OSError:
-                    return []
+    """Arquivos alterados pela tarefa — janela única em `kata.verify`.
 
-    tracked = _sem_escrituracao(
-        _remove_tool_artifacts([f for f in result.stdout.strip().split("\n") if f.strip()])
-    )
-    seen = set(tracked)
-    novos = _sem_escrituracao(_remove_tool_artifacts(untracked_files(cwd=cwd)))
-    return tracked + [f for f in novos if f not in seen]
+    Delegado de propósito: o SURGICAL declara escopo a partir da mesma lista
+    com que o judge o confere. Enquanto havia duas implementações, uma olhava
+    a árvore de trabalho e a outra `base..approved_commit`, e uma tarefa
+    retomada depois do commit era declarada numa janela e julgada em outra
+    (revisão completa 2026-10, B5). O nome fica para os testes e para manter
+    um ponto único de patch.
+    """
+    return changed_files(cwd=cwd, base_commit=base_commit, diff_end=diff_end)
 
 
 # ── fraud hunters ─────────────────────────────────────────────────────────

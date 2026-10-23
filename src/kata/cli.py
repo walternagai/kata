@@ -65,7 +65,7 @@ from kata.report import (  # noqa: E402
     _print_judge_verdict,
 )
 from kata.skills import DOMAIN_SKILLS, doctor
-from kata.verify import VerifyResult, run_all, search_pattern, untracked_files
+from kata.verify import VerifyResult, changed_files, run_all, search_pattern
 
 try:
     import yaml
@@ -381,25 +381,14 @@ def _run_git(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 def _changed_paths() -> list[str]:
     """Arquivos que a tarefa alterou, segundo o git.
 
-    Usa diff contra HEAD para incluir staged e unstaged, com fallback para
-    repositórios sem commit. Untracked são somados sempre, porque arquivos
-    novos nunca aparecem em `git diff`.
+    Delega para `kata.verify.changed_files`, a mesma função que o JUDGE usa
+    para conferir escopo: enquanto eram duas implementações, uma olhava a
+    árvore de trabalho e a outra `base..approved_commit`, e uma tarefa
+    retomada depois do commit era declarada numa janela e auditada em outra
+    (revisão completa 2026-10, B5). O nome fica porque é o ponto de patch dos
+    testes e o vocabulário do CLI.
     """
-    result = _run_git(["git", "diff", "HEAD", "--name-only"])
-    if result.returncode == 0:
-        rastreados = [f for f in result.stdout.strip().split("\n") if f.strip()]
-    else:
-        result = _run_git(["git", "diff", "--name-only"])
-        rastreados = [f for f in result.stdout.strip().split("\n") if f.strip()]
-    if result.returncode != 0 or not rastreados:
-        rastreados = [
-            f
-            for f in _run_git(["git", "diff", "--cached", "--name-only"]).stdout.strip().split("\n")
-            if f.strip()
-        ]
-    novos = untracked_files()
-    vistos = set(rastreados)
-    return rastreados + [f for f in novos if f not in vistos]
+    return changed_files()
 
 
 def _confirm(prompt: str, default: bool = True) -> bool:

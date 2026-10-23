@@ -20,7 +20,7 @@ from importlib import resources
 from pathlib import Path
 
 from kata import __version__
-from kata.skills import FRONTENDS, Frontend
+from kata.skills import FRONTENDS, SUBAGENTES_DIR, Frontend
 
 MARKER = ".kata-managed"
 # O marcador de um arquivo avulso nomeia o arquivo que ele protege: o
@@ -30,8 +30,10 @@ AGENT_FILE = "kata.md"
 AGENT_DIR = "agent"
 ADVISOR_FILE = "kata-advisor.md"
 # Subagente do OpenCode (OpenCode V2 procura em `agents/`). O Claude Code não
-# recebe este arquivo: o advisor lá é o `/advisor` nativo.
-ADVISOR_DIR = "agents"
+# recebe este arquivo: o advisor lá é o `/advisor` nativo. O nome do diretório
+# vem de `skills.py`, que é quem descreve o layout do frontend e quem o doctor
+# consulta — um só literal para os dois (B8).
+ADVISOR_DIR = SUBAGENTES_DIR
 
 
 def _marcador(arquivo: str) -> str:

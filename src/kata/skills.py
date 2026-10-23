@@ -39,6 +39,13 @@ PHASE_SKILLS: tuple[str, ...] = (
 
 ORCHESTRATOR_SKILL = "kata"
 
+# Diretório dos subagentes dentro do config dir do frontend. Fonte única: o
+# `install.py` copia e o `--doctor` confere. Enquanto o literal vivia nos dois
+# módulos, renomear um sem o outro fazia o doctor procurar no lugar errado, e
+# cada um tinha seu próprio teste — nenhum pegava a divergência (revisão
+# completa 2026-10, B8).
+SUBAGENTES_DIR = "agents"
+
 # Skills de domain adapters. Diferente das fases, elas são opcionais: o ciclo
 # não reprova se estiverem ausentes, porque uma tarefa coding não precisa delas.
 # O doctor as lista como aviso, e o orquestrador só as carrega quando o domínio
@@ -181,7 +188,7 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
     # Estágio 1 (mecânico), que continua válido — a revisão semântica é o
     # extra. Por isso não entra em `faltando`/`parcial`.
     subagentes_faltando = [
-        nome for nome in frontend.subagentes if not (raiz_config / "agents" / nome).is_file()
+        nome for nome in frontend.subagentes if not (raiz_config / SUBAGENTES_DIR / nome).is_file()
     ]
     return InstallStatus(
         frontend=frontend.nome,

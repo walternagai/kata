@@ -12,6 +12,7 @@ from kata.verify import (
     MAX_UNTRACKED_FILE_BYTES,
     VerifyResult,
     _run,
+    changed_files,
     is_inspectable,
     run_all,
     run_command,
@@ -651,6 +652,67 @@ class TestUntrackedFiles:
         (tmp_path / "ignorado" / "x.py").write_text("z = 1\n", encoding="utf-8")
 
         assert untracked_files(cwd=tmp_path) == [".gitignore"]
+
+
+class TestChangedFiles:
+    """A janela de arquivos alterados — uma só para SURGICAL e JUDGE (B5).
+
+    Antes havia duas implementações: o CLI olhava a árvore de trabalho e o
+    judge `base..approved_commit`. Uma tarefa retomada depois do commit era
+    declarada numa janela e auditada em outra.
+    """
+
+    def test_usa_base_commit_quando_resolve(self, repo_git) -> None:
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True
+        ).stdout.strip()
+        (repo_git / "novo.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "novo.py"], cwd=repo_git, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=a@b", "-c", "user.name=t", "commit", "-qm", "add"],
+            cwd=repo_git,
+            check=True,
+        )
+
+        assert changed_files(cwd=repo_git, base_commit=base) == ["novo.py"]
+
+    def test_janela_fecha_no_diff_end(self, repo_git) -> None:
+        """`base..approved_commit`: o que veio depois não é trabalho desta tarefa."""
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True
+        ).stdout.strip()
+        (repo_git / "um.py").write_text("a = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "um.py"], cwd=repo_git, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=a@b", "-c", "user.name=t", "commit", "-qm", "um"],
+            cwd=repo_git,
+            check=True,
+        )
+        aprovado = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True
+        ).stdout.strip()
+        (repo_git / "dois.py").write_text("b = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "dois.py"], cwd=repo_git, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=a@b", "-c", "user.name=t", "commit", "-qm", "dois"],
+            cwd=repo_git,
+            check=True,
+        )
+
+        assert changed_files(cwd=repo_git, base_commit=base, diff_end=aprovado) == ["um.py"]
+
+    def test_escrituracao_do_kata_sai_da_lista(self, repo_git) -> None:
+        (repo_git / ".kata").mkdir()
+        (repo_git / ".kata" / "t.yaml").write_text("task: t\n", encoding="utf-8")
+        (repo_git / "codigo.py").write_text("y = 2\n", encoding="utf-8")
+
+        assert changed_files(cwd=repo_git) == ["codigo.py"]
+
+    def test_artefatos_de_ferramenta_saem_da_lista(self, repo_git) -> None:
+        (repo_git / ".coverage").write_text("dados\n", encoding="utf-8")
+        (repo_git / "real.py").write_text("z = 3\n", encoding="utf-8")
+
+        assert changed_files(cwd=repo_git) == ["real.py"]
 
 
 class TestRunCommand:

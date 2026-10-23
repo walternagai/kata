@@ -16,6 +16,7 @@ from kata.skills import (
     FRONTENDS,
     ORCHESTRATOR_SKILL,
     PHASE_SKILLS,
+    SUBAGENTES_DIR,
     Frontend,
     check_frontend,
     doctor,
@@ -118,6 +119,17 @@ class TestSubagenteOpcional:
     def test_advisor_esperado_so_no_opencode(self) -> None:
         assert FRONTENDS[0].subagentes == ("kata-advisor.md",)
         assert FRONTENDS[1].subagentes == ()
+
+    def test_diretorio_dos_subagentes_tem_uma_fonte(self) -> None:
+        """B8: o literal morava em skills.py e em install.py.
+
+        Renomear um sem o outro fazia o doctor procurar num diretório e o
+        install copiar em outro — cada módulo com seu próprio teste, nenhum
+        pegando a divergência.
+        """
+        from kata import install
+
+        assert install.ADVISOR_DIR == SUBAGENTES_DIR == "agents"
 
     def test_advisor_faltando_e_avisado_sem_reprovar(self, oc, tmp_path) -> None:
         _instala(tmp_path, PHASE_SKILLS)

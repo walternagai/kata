@@ -95,6 +95,147 @@ def untracked_files(cwd: Path | None = None) -> list[str]:
     return [f for f in result.stdout.strip().split("\n") if f.strip()]
 
 
+# Nomes de arquivo que são dados de ferramenta, nunca trabalho da tarefa.
+_TOOL_ARTIFACT_NAMES = frozenset({".coverage", "coverage.xml"})
+
+# Diretórios cujo conteúdo inteiro é gerado por ferramenta. `__pycache__` NÃO
+# entra: lá o filtro é pela extensão, para um `.py` de verdade guardado ali
+# não ficar invisível — a mesma doutrina do `is_kata_bookkeeping` (filtra o
+# dado da ferramenta, não o diretório).
+_TOOL_ARTIFACT_DIRS = frozenset({".mypy_cache", ".pytest_cache", ".ruff_cache", "htmlcov"})
+_TOOL_ARTIFACT_SUFFIXES = frozenset({".pyc", ".pyo"})
+
+
+def is_kata_bookkeeping(filepath: str) -> bool:
+    """O arquivo é escrituração da própria ferramenta, não trabalho da tarefa.
+
+    `.kata/<task>.yaml` é criado pelo kata, não pelo autor da tarefa. Ele é
+    untracked em qualquer projeto que não tenha ignorado `.kata/` — e nada no
+    kata pede isso: `--init` não mexe no .gitignore e nenhum doc instrui a
+    ignorá-lo. Sem este filtro, o judge conta o arquivo da própria tarefa como
+    "arquivo alterado não declarado" e acusa trabalho honesto de scope creep;
+    acima de 2 arquivos a severidade vira alta e o veredito, REFUTED (R11-3).
+
+    Duas coisas esconderam isso por dez rodadas, e as duas são ambiente: este
+    repositório tem `/.kata/` no .gitignore, então o kata sobre si mesmo nunca
+    via; e o harness de traps escreve `.kata/` no .git/info/exclude de todo
+    fixture, o que torna a classe inalcançável até pelo s07-honest-work.
+
+    Filtra a escrituração, não o diretório: `.kata/config.yaml` também é
+    ferramenta, mas um arquivo de código que alguém guarde sob `.kata/` não
+    tem por que ficar invisível ao juiz.
+    """
+    partes = Path(filepath).parts
+    if ".kata" not in partes:
+        return False
+    return Path(filepath).suffix.lower() in {".yaml", ".yml", ".json"}
+
+
+def _sem_escrituracao(files: list[str]) -> list[str]:
+    """Remove a escrituração do kata de uma lista de arquivos."""
+    return [f for f in files if not is_kata_bookkeeping(f)]
+
+
+def _is_tool_artifact(filepath: str) -> bool:
+    """O arquivo é dado que uma ferramenta de verificação deixou na árvore?
+
+    O `run_all` que o próprio judge dispara — e o `--check-only` do CI —
+    deixam `.coverage`, `*.pyc` e caches na árvore. Num repositório sem
+    `.gitignore` para eles, a execução SEGUINTE os vê como untracked e
+    `hunt_scope_creep` acusava trabalho honesto: run1 VERIFIED → run2 REFUTED
+    com scope_creep [high], e uma árvore sujada por `--check-only` já caía em
+    WITH CAVEATS na run 1.
+
+    O filtro é por nome de artefato, nunca por sufixo genérico:
+    `.coveragerc` é configuração do projeto e NÃO é filtrado, e um
+    `src/__pycache__/helper.py` — código que alguém guardou ali — também não
+    (só `.pyc`/`.pyo` saem de `__pycache__`).
+    """
+    path = Path(filepath)
+    nome = path.name
+    if nome in _TOOL_ARTIFACT_NAMES:
+        return True
+    # `.coverage.<host>` é dado do coverage; `.coveragerc` é config do projeto
+    # e o `startswith` com ponto final não o alcança.
+    if nome.startswith(".coverage."):
+        return True
+    if path.suffix.lower() in _TOOL_ARTIFACT_SUFFIXES:
+        return True
+    return bool(_TOOL_ARTIFACT_DIRS.intersection(path.parts))
+
+
+def _remove_tool_artifacts(files: list[str]) -> list[str]:
+    """Remove artefatos de ferramenta (coverage, caches, bytecode) da lista."""
+    return [f for f in files if not _is_tool_artifact(f)]
+
+
+def _commit_exists(base_commit: str, cwd: Path | None = None) -> bool:
+    """O piso do diff ainda resolve para um commit?
+
+    Só existência: ancestralidade e âncora são a checagem de baseline do judge
+    (`judge._base_commit_resolves`), que precisa continuar olhando pelo
+    `judge._run` para o teste de OSError continuar valendo.
+    """
+    try:
+        result = _run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{base_commit}^{{commit}}"], cwd=cwd
+        )
+    except OSError:
+        return False
+    # Só o código de saída: `--quiet` já suprime o erro, e exigir stdout
+    # não-vazio quebraria o caso (legítimo) de teste que mocka o comando.
+    return result.returncode == 0
+
+
+def changed_files(
+    cwd: Path | None = None,
+    base_commit: str | None = None,
+    diff_end: str | None = None,
+) -> list[str]:
+    """Arquivos que a tarefa alterou, com a mesma janela em todo o ciclo.
+
+    Uma implementação só, e não duas: o SURGICAL declara arquivos a partir
+    desta lista e o JUDGE confere escopo a partir dela. Enquanto eram duas
+    (uma olhando a árvore de trabalho, outra `base..approved_commit`), uma
+    tarefa retomada depois do commit era declarada numa janela e auditada em
+    outra (revisão completa 2026-10, B5).
+
+    Janela: `base_commit..diff_end` quando ambos resolvem; `base_commit..HEAD`
+    quando só o piso; e, sem piso, `HEAD` → unstaged → staged, o suficiente
+    para repositório sem commits. Untracked entram sempre: `git diff` é cego a
+    eles. Saem a escrituração do kata (`.kata/*.yaml`) e os dados que a
+    verificação deixa na árvore (`.coverage`, caches, bytecode).
+    """
+    result = None
+    if base_commit and _commit_exists(base_commit, cwd=cwd):
+        if diff_end:
+            result = _run(["git", "diff", "--name-only", base_commit, diff_end], cwd=cwd)
+        else:
+            result = _run(["git", "diff", "--name-only", base_commit], cwd=cwd)
+    else:
+        try:
+            result = _run(["git", "diff", "HEAD", "--name-only"], cwd=cwd)
+        except OSError:
+            result = None
+        if result is None or result.returncode != 0:
+            try:
+                result = _run(["git", "diff", "--name-only"], cwd=cwd)
+            except OSError:
+                return []
+            if not result.stdout.strip():
+                try:
+                    result = _run(["git", "diff", "--cached", "--name-only"], cwd=cwd)
+                except OSError:
+                    return []
+
+    tracked = _sem_escrituracao(
+        _remove_tool_artifacts([f for f in result.stdout.strip().split("\n") if f.strip()])
+    )
+    seen = set(tracked)
+    novos = _sem_escrituracao(_remove_tool_artifacts(untracked_files(cwd=cwd)))
+    return tracked + [f for f in novos if f not in seen]
+
+
 def run_ruff(
     paths: list[str] | None = None,
     cwd: Path | None = None,

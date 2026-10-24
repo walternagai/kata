@@ -1809,6 +1809,7 @@ class TestMainInteractive:
         mock_verify.return_value = {
             "task": "test-task",
             "status": "approved",
+            "done": "criterion",
             "verify": {
                 "ruff_clean": True,
                 "tests_pass": True,
@@ -2183,11 +2184,14 @@ class TestMainRouteHandling:
         mock_verify.return_value = {
             "task": "route-task",
             "status": "approved",
-            "verify": {"ruff_clean": True},
+            "done": "criterion",
+            "verify": {"ruff_clean": True, "success_criteria_met": True},
         }
         mock_artifact.return_value = {
             "task": "route-task",
             "status": "approved",
+            "done": "criterion",
+            "verify": {"ruff_clean": True, "success_criteria_met": True},
             "artifact": {},
         }
 
@@ -2253,6 +2257,7 @@ class TestMainInteractiveNoTaskArg:
         mock_verify.return_value = {
             "task": "auto-task",
             "status": "approved",
+            "done": "criterion",
             "verify": {
                 "ruff_clean": True,
                 "tests_pass": True,
@@ -3007,6 +3012,27 @@ class TestStepReport:
         cli._step_report("test-task", data)
         out = capsys.readouterr().out
         assert "Critério declarado" not in out
+        assert "INCONSISTENTE" in out
+        assert "done vazio" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_approved_com_sucesso_false_vira_inconsistente(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "approved",
+            "done": "criterion",
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 90.0,
+                "success_criteria_met": False,
+            },
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+        assert "INCONSISTENTE" in out
+        assert "critério de sucesso não satisfeito" in out
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_report_hand_back_caveat(self, mock_scratch, capsys) -> None:
@@ -3200,7 +3226,12 @@ class TestMainReport:
         task_file = kata_dir / "test-task.yaml"
         task_file.write_text("task: test-task\nstatus: approved\n", encoding="utf-8")
         mock_path.return_value = task_file
-        mock_deserialize.return_value = {"task": "test-task", "status": "approved"}
+        mock_deserialize.return_value = {
+            "task": "test-task",
+            "status": "approved",
+            "done": "criterion",
+            "verify": {"success_criteria_met": True},
+        }
 
         with patch("sys.argv", ["kata", "--task", "test-task", "--report"]):
             with pytest.raises(SystemExit) as exc:
@@ -3237,7 +3268,10 @@ class TestMainReport:
         task_file = kata_dir / "t.yaml"
         task_file.write_text(f"task: t\nstatus: {status}\n", encoding="utf-8")
         mock_path.return_value = task_file
-        mock_deserialize.return_value = {"task": "t", "status": status}
+        dados = {"task": "t", "status": status}
+        if status == "approved":
+            dados.update({"done": "criterion", "verify": {"success_criteria_met": True}})
+        mock_deserialize.return_value = dados
 
         with patch("sys.argv", ["kata", "--task", "t", "--report"]):
             with pytest.raises(SystemExit) as exc:
@@ -3256,6 +3290,37 @@ class TestMainReport:
             with pytest.raises(SystemExit) as exc:
                 cli.main()
         assert exc.value.code == 1
+
+    @patch("kata.cli._step_report")
+    @patch("kata.cli._deserialize")
+    @patch("kata.cli._task_path")
+    @patch("kata.cli._kata_dir")
+    def test_report_approved_inconsistente_sai_1(
+        self,
+        mock_kata_dir,
+        mock_path,
+        mock_deserialize,
+        mock_report,
+        tmp_path,
+    ) -> None:
+        kata_dir = tmp_path / ".kata"
+        kata_dir.mkdir()
+        mock_kata_dir.return_value = kata_dir
+        task_file = kata_dir / "t.yaml"
+        task_file.write_text("task: t\nstatus: approved\n", encoding="utf-8")
+        mock_path.return_value = task_file
+        mock_deserialize.return_value = {
+            "task": "t",
+            "status": "approved",
+            "done": "criterion",
+            "verify": {"success_criteria_met": False},
+        }
+
+        with patch("sys.argv", ["kata", "--task", "t", "--report"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+        mock_report.assert_called_once()
 
     def test_report_conflicts_with_judge(self) -> None:
         with patch("sys.argv", ["kata", "--report", "--judge"]):
@@ -3784,6 +3849,30 @@ class TestDoctor:
         out = capsys.readouterr().out
         assert exc.value.code == 0
         assert "link (fluxo dev" in out
+
+
+class TestAuditStatusInconsistente:
+    def test_approved_com_sucesso_false_vira_verify_faked(self) -> None:
+        data = {
+            "status": "approved",
+            "done": "criterion",
+            "fit": {"answered": True, "reason": "x", "skipped": False},
+            "think": {"answered": True, "problem": "x", "skipped": False},
+            "intent": {"answered": True, "code_does": "x", "skipped": False},
+            "simplify": {"answered": True, "minimum_code": True, "skipped": False},
+            "surgical": {"answered": True, "files": [], "skipped": False},
+            "verify": {
+                "success_criteria_met": False,
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+            },
+            "twins": {"defect_fixed": False, "searched": True},
+        }
+        achados = cli._audit_task(data)
+        verify = next(a for a in achados if a["fase"] == "verify")
+        assert verify["status"] == "faked"
+        assert "critério de sucesso não satisfeito" in verify["risco"]
 
 
 class TestAuditPreflight:

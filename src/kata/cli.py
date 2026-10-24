@@ -65,7 +65,13 @@ from kata.report import (  # noqa: E402
     _print_judge_verdict,
 )
 from kata.skills import DOMAIN_SKILLS, doctor
-from kata.verify import VerifyResult, changed_files, run_all, search_pattern
+from kata.verify import (
+    VerifyResult,
+    changed_files,
+    consistency_failures,
+    run_all,
+    search_pattern,
+)
 
 try:
     import yaml
@@ -1256,15 +1262,19 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     detalhes depois, sem números de passo, com linhas INTENT/AUTH/PENDING/TWINS.
     """
     status = data.get("status", "unknown")
-    icon = "✅" if status == "approved" else "❌"
+    falhas = consistency_failures(data)
+    outcome = "inconsistent" if status == "approved" and falhas else status
+    icon = "✅" if outcome == "approved" else "❌"
     verify = _secao(data, "verify")
 
     # Outcome first
     print()
-    if status == "approved":
+    if outcome == "approved":
         print(f"{icon}  KATA CYCLE — APROVADO: critério de sucesso satisfeito")
-    elif status == "rejected":
+    elif outcome == "rejected":
         print(f"{icon}  KATA CYCLE — REJEITADO: verifique os problemas abaixo")
+    elif outcome == "inconsistent":
+        print(f"{icon}  KATA CYCLE — INCONSISTENTE: status approved, mas " + "; ".join(falhas))
     else:
         print(f"  ⏳  Tarefa '{task}' está em andamento (status: {status})")
         return
@@ -1330,8 +1340,10 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
 
     # Caveats
     caveats: list[str] = []
-    if status == "rejected":
+    if outcome == "rejected":
         caveats.append("Ciclo rejeitado — problemas de qualidade pendentes")
+    elif outcome == "inconsistent":
+        caveats.append("Status inconsistente — approved sem critério de sucesso verificável")
     # Hard bound (Fable Step 5): estourado o limite de tentativas, o relatório
     # diz explicitamente que a tarefa foi devolvida ao usuário — com o que foi
     # tentado, o output real e a hipótese atual — em vez de um "rejeitado"
@@ -1732,7 +1744,9 @@ def main() -> None:
         # think-complete — o estado normal de `--plan`) está funcionando como
         # esperado; sair 1 ao consultar seu relatório equipara planejar a
         # falhar.
-        sys.exit(1 if data.get("status") == "rejected" else 0)
+        if data.get("status") == "rejected" or consistency_failures(data):
+            sys.exit(1)
+        sys.exit(0)
 
     # Modo --judge (adversarial verification)
     if args.judge:
@@ -1878,7 +1892,7 @@ def main() -> None:
     _save_task(path, data)
     print(f"\n📝  Resultado salvo em {path}")
 
-    if data.get("status") == "rejected":
+    if data.get("status") == "rejected" or consistency_failures(data):
         sys.exit(1)
 
 

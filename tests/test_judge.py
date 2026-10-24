@@ -891,6 +891,27 @@ class TestJudgeTask:
         assert any("nenhuma verificação re-executada" in b for b in result.blind_spots)
         mock_run_all.assert_not_called()
 
+    def test_approved_com_sucesso_false_e_refutado(
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        mock_diff.return_value = ""
+        mock_files.return_value = []
+        task = {
+            "status": "approved",
+            "done": "criterion",
+            "verify": {"success_criteria_met": False},
+        }
+        result = judge_task(task)
+        assert result.verdict == "REFUTED"
+        assert any(
+            f.type == "false_completion" and "critério" in f.description for f in result.frauds
+        )
+
     def test_verify_nao_mapa_vira_ponto_cego_nao_crash(
         self,
         mock_run_all: MagicMock,

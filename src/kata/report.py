@@ -18,6 +18,7 @@ from typing import Any
 
 from kata.judge import JudgeResult
 from kata.skills import InstallStatus, doctor_domain
+from kata.verify import consistency_failures
 
 
 def _print_header(text: str) -> None:
@@ -236,8 +237,17 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
             achados.append({"fase": fase, "status": "faked", "risco": _AUDIT_RISKS[fase]})
 
     verify = bloco("verify")
+    consistencia = consistency_failures(data)
     evidencias = [verify.get(chave) for chave in ("ruff_clean", "tests_pass", "coverage_pass")]
-    if verify.get("success_criteria_met") and not any(evidencias):
+    if consistencia:
+        achados.append(
+            {
+                "fase": "verify",
+                "status": "faked",
+                "risco": _AUDIT_RISKS["verify"] + " — " + "; ".join(consistencia),
+            }
+        )
+    elif verify.get("success_criteria_met") and not any(evidencias):
         achados.append({"fase": "verify", "status": "faked", "risco": _AUDIT_RISKS["verify"]})
     elif any(evidencias):
         achados.append({"fase": "verify", "status": "followed", "risco": ""})

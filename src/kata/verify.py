@@ -31,6 +31,44 @@ class VerifyResult:
     details: dict[str, Any] = field(default_factory=dict)
 
 
+def consistency_failures(task_data: dict[str, Any]) -> list[str]:
+    """Motivos pelos quais uma tarefa ``approved`` não se sustenta.
+
+    O status é um campo persistido; o report/judge/audit não podem confiar
+    nele quando o próprio verify diz que o critério não foi satisfeito (ou
+    nem foi declarado). Devolve lista vazia para qualquer status diferente de
+    ``approved`` e para uma tarefa consistente.
+    """
+    if not isinstance(task_data, dict):
+        return []
+    if task_data.get("status") != "approved":
+        return []
+
+    verify = task_data.get("verify")
+    if not isinstance(verify, dict):
+        verify = {}
+
+    falhas: list[str] = []
+    done = task_data.get("done", "")
+    if not isinstance(done, str) or not done.strip():
+        falhas.append("critério de sucesso não declarado (done vazio)")
+
+    success = verify.get("success_criteria_met")
+    if success is False:
+        falhas.append("critério de sucesso não satisfeito")
+    elif success is not True:
+        falhas.append("critério de sucesso não registrado")
+
+    for chave, rotulo in (
+        ("ruff_clean", "lint"),
+        ("tests_pass", "testes"),
+        ("coverage_pass", "coverage"),
+    ):
+        if verify.get(chave) is False:
+            falhas.append(f"{rotulo} falhou")
+    return falhas
+
+
 def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     """Executa um comando e captura saída."""
     try:

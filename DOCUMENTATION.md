@@ -424,6 +424,8 @@ reserved for this file and cannot be used as a task name.
 - `0`: the requested operation passed;
 - `1`: the cycle or report status failed, the audit found fakes/skips/degraded
   phases (or the audited task does not exist), the judge returned `REFUTED`,
+  `--report` found an `approved` task whose `verify` contradicts the status
+  (`success_criteria_met` not true, empty `done`, or an explicit check false),
   or `--doctor` found a partial install;
 - `2`: invalid CLI arguments, as produced by `argparse`.
 
@@ -526,9 +528,12 @@ evidence that a defect was fixed; a gate that fires on every task is noise.
 Prints the outcome first, followed by the problem, the `done` criterion
 declared in THINK, changed files, verification results, caveats, and any due
 artifact lines. Reports can be regenerated with `--report` without re-running
-the cycle. A rejected task whose `verify.hand_back` is `true` reports the
-hand-back explicitly with the number of failed attempts, instead of a generic
-"rejected" that invites yet another fix-verify cycle.
+the cycle. An `approved` task whose stored `verify` contradicts the status —
+`success_criteria_met` not true, empty `done`, or an explicit check false — is
+printed as `INCONSISTENTE` and exits `1`, instead of claiming a success the
+evidence does not support. A rejected task whose `verify.hand_back` is `true`
+reports the hand-back explicitly with the number of failed attempts, instead of
+a generic "rejected" that invites yet another fix-verify cycle.
 
 ### AUDIT
 
@@ -544,6 +549,10 @@ The audit mode (`kata --audit [--task TASK]`) grades each phase of a task as:
 - **degraded**: `preflight.skills_missing` is not empty — one or more phases
   ran without their own skill loaded, so whatever the other grades read was
   written without those instructions.
+
+An `approved` task whose `done` is empty or whose `success_criteria_met` is not
+true is graded as a faked VERIFY, even if lint/tests/coverage passed: the
+status claims a success criterion the task did not declare or satisfy.
 
 For each skip/fake, the audit names the concrete risk it created (e.g.
 "THINK faked → assumptions never declared; any solution may attack the wrong

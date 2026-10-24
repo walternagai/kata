@@ -35,6 +35,7 @@ from kata.verify import (
     _run,
     _sem_escrituracao,
     changed_files,
+    consistency_failures,
     is_inspectable,
     is_kata_bookkeeping,  # noqa: F401
     run_all,
@@ -1573,6 +1574,16 @@ def judge_task(
     frauds.extend(hunt_unauthorized_action(task_data))
     frauds.extend(hunt_spec_betrayal(task_data))
     frauds.extend(hunt_debris(diff, changed))
+    consistencia = consistency_failures(task_data)
+    if consistencia:
+        frauds.append(
+            JudgeFraud(
+                type="false_completion",
+                severity="high",
+                description="status approved sem critério de sucesso satisfeito/declarado",
+                evidence="; ".join(consistencia),
+            )
+        )
 
     if not claimed_checks:
         blind_spots.append(

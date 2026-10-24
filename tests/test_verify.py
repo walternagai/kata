@@ -13,6 +13,7 @@ from kata.verify import (
     VerifyResult,
     _run,
     changed_files,
+    consistency_failures,
     is_inspectable,
     run_all,
     run_command,
@@ -652,6 +653,55 @@ class TestUntrackedFiles:
         (tmp_path / "ignorado" / "x.py").write_text("z = 1\n", encoding="utf-8")
 
         assert untracked_files(cwd=tmp_path) == [".gitignore"]
+
+
+class TestConsistencyFailures:
+    """Uma tarefa ``approved`` precisa de critério declarado e satisfeito."""
+
+    def test_approved_consistente(self) -> None:
+        data = {
+            "status": "approved",
+            "done": "teste passa",
+            "verify": {
+                "success_criteria_met": True,
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+            },
+        }
+        assert consistency_failures(data) == []
+
+    def test_sucesso_falso(self) -> None:
+        data = {
+            "status": "approved",
+            "done": "teste passa",
+            "verify": {"success_criteria_met": False},
+        }
+        assert "critério de sucesso não satisfeito" in consistency_failures(data)
+
+    def test_done_vazio(self) -> None:
+        data = {
+            "status": "approved",
+            "done": "   ",
+            "verify": {"success_criteria_met": True},
+        }
+        assert "critério de sucesso não declarado (done vazio)" in consistency_failures(data)
+
+    def test_check_explicito_falso(self) -> None:
+        data = {
+            "status": "approved",
+            "done": "x",
+            "verify": {"success_criteria_met": True, "ruff_clean": False},
+        }
+        assert "lint falhou" in consistency_failures(data)
+
+    def test_status_diferente_de_approved_nao_e_avaliado(self) -> None:
+        data = {"status": "rejected", "done": "", "verify": {"success_criteria_met": False}}
+        assert consistency_failures(data) == []
+
+    def test_verify_nao_mapa_nao_crasha(self) -> None:
+        data = {"status": "approved", "done": "x", "verify": True}
+        assert "critério de sucesso não registrado" in consistency_failures(data)
 
 
 class TestChangedFiles:

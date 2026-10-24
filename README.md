@@ -344,7 +344,7 @@ O kata usa `.kata/` na raiz do projeto. Cada tarefa é um arquivo YAML:
 ```bash
 make build-skills          # gera opencode/, claude-code/ e src/kata/assets/ de phases/+domains/
 make check-skills          # falha se o gerado estiver desatualizado
-make test                  # pytest + coverage
+make test                  # pytest + coverage (usa PYTHONPATH=src)
 make package               # constrói o wheel/sdist e confere contra src/kata/assets/
 make lint                  # ruff check
 make format                # ruff format
@@ -357,6 +357,9 @@ make paper                   # compila paper/jserd/paper.pdf (exige TeX Live)
 ```
 
 Para publicar uma versão no PyPI, siga [`RELEASING.md`](RELEASING.md).
+
+`make test` já aponta para `src/`; rodar `pytest` direto exige
+`pip install -e '.[dev]'` (o conftest aborta se `kata` vier de outro lugar).
 
 ## Compatibilidade
 

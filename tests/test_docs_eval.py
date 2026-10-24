@@ -12,6 +12,8 @@ o drift em silêncio.
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -19,6 +21,9 @@ SCENARIOS = REPO / "eval" / "scenarios"
 README = REPO / "eval" / "README.md"
 DOCS = REPO / "DOCUMENTATION.md"
 ROADMAP = REPO / "docs" / "features-roadmap.md"
+ARTIGO = REPO / "docs" / "artigo-kata.md"
+AGENTS = REPO / "AGENTS.md"
+COMPETITIVE = REPO / "COMPETITIVE.md"
 
 
 def _cenarios() -> list[str]:
@@ -193,3 +198,34 @@ class TestMarkdownNaoTemLixo:
                 linha = texto[: m.start()].count("\n") + 1
                 sujos.append(f"{md.relative_to(REPO)}:{linha}")
         assert not sujos, f"caractere cirílico (corrupção?) em: {', '.join(sujos)}"
+
+
+class TestArtigoNaoEnvelhece:
+    """O artigo em docs/ também afirma números que precisam ser medidos."""
+
+    def test_conta_os_cenarios(self) -> None:
+        texto = ARTIGO.read_text(encoding="utf-8")
+        n = len(_cenarios())
+        assert f"{n} cenários de trap" in texto, (
+            f"docs/artigo-kata.md não cita '{n} cenários de trap' — "
+            f"existem {n} diretórios em eval/scenarios/"
+        )
+
+    def test_percentual_compartilhado(self) -> None:
+        """O número de linhas compartilhadas vem de build_skills, não da memória."""
+        saida = subprocess.run(
+            [sys.executable, "scripts/build_skills.py", "--stats"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        casamento = re.search(r"compartilhado:\s*([\d.]+)%", saida)
+        assert casamento is not None, f"build_skills --stats mudou de formato: {saida!r}"
+        pct = casamento.group(1)
+        variantes = {f"{pct}%", f"{pct.replace('.', ',')}%"}
+        for caminho in (DOCS, AGENTS, COMPETITIVE, ARTIGO):
+            texto = caminho.read_text(encoding="utf-8")
+            assert any(v in texto for v in variantes), (
+                f"{caminho.name} não cita o percentual compartilhado {pct}%"
+            )

@@ -47,7 +47,7 @@ paper:
 # === Desenvolvimento ===
 
 test:
-	python3 -m pytest tests/ -v --cov --cov-report=term-missing
+	PYTHONPATH="$(CURDIR)/src" python3 -m pytest tests/ -v --cov --cov-report=term-missing
 
 # Constrói e confere o artefato que vai para o PyPI. Os testes leem a árvore de
 # fontes; sem este alvo, um package-data quebrado só aparecia no release.

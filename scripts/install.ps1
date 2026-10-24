@@ -16,8 +16,9 @@ $ErrorActionPreference = "Stop"
 #   diretório com marcador legado         recopia         remove
 #   qualquer outra coisa (do usuário)     throw           avisa e preserva
 #
-# Verificação: este script não foi executado — não há PowerShell no ambiente
-# em que foi escrito. A tabela acima é o contrato a conferir.
+# Verificação: o job installers-windows do CI executa -Copy e o modo default.
+# Junction de diretório funciona no runner; SymbolicLink de arquivo pode exigir
+# privilégio e o script cai para cópia — o CI registra o LinkType observado.
 
 
 $kataRoot = Split-Path -Parent $PSScriptRoot

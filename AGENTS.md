@@ -76,7 +76,7 @@ traz. Editar a fonte é correto; editar o espelho em `assets/`, não.
 
 Antes disto a fase vivia em duplicata mantida por disciplina manual, e a
 disciplina falhou: 395 linhas divergentes, parte delas melhoria aplicada num
-frontend e esquecida no outro. Hoje 92,6% das linhas renderizadas são
+frontend e esquecida no outro. Hoje 92,5% das linhas renderizadas são
 compartilhadas (93% arredondado; `python3 scripts/build_skills.py --stats`);
 o restante é diferença declarada, não acidental.
 

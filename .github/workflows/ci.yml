@@ -112,6 +112,27 @@ jobs:
           if (Test-Path "$env:OPENCODE_CONFIG_DIR/agent/kata.md") { throw "agente não removido" }
           if (Test-Path "$env:OPENCODE_CONFIG_DIR/agents/kata-advisor.md") { throw "subagente não removido" }
 
+      - name: Instala skills do OpenCode (modo default)
+        shell: pwsh
+        run: |
+          $env:OPENCODE_CONFIG_DIR = "$env:RUNNER_TEMP/opencode-default"
+          .\scripts\install.ps1
+          if (-not (Test-Path "$env:OPENCODE_CONFIG_DIR/agent/kata.md")) { throw "agente não instalado (default)" }
+          if (-not (Test-Path "$env:OPENCODE_CONFIG_DIR/agents/kata-advisor.md")) { throw "subagente não instalado (default)" }
+          $skills = Get-ChildItem -Directory "$env:OPENCODE_CONFIG_DIR/skills"
+          if ($skills.Count -lt 10) { throw "skills insuficientes (default): $($skills.Count)" }
+          $skill = Get-Item "$env:OPENCODE_CONFIG_DIR/skills/kata-fit"
+          Write-Host "kata-fit LinkType: $($skill.LinkType)"
+          if ($skill.LinkType -ne "Junction") { Write-Warning "modo default caiu para cópia (sem privilégio de link)" }
+
+      - name: Desinstala skills do OpenCode (modo default)
+        shell: pwsh
+        run: |
+          $env:OPENCODE_CONFIG_DIR = "$env:RUNNER_TEMP/opencode-default"
+          .\scripts\install.ps1 -Uninstall
+          if (Test-Path "$env:OPENCODE_CONFIG_DIR/agent/kata.md") { throw "agente não removido (default)" }
+          if (Test-Path "$env:OPENCODE_CONFIG_DIR/agents/kata-advisor.md") { throw "subagente não removido (default)" }
+
       - name: Instala skills do Claude Code (-Copy)
         shell: pwsh
         run: |

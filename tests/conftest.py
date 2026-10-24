@@ -9,8 +9,30 @@ tinham divergido (email, nome, arquivo base, mensagem de commit).
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 import pytest
+
+import kata
+
+REPO = Path(__file__).resolve().parent.parent
+KATA_SRC = (REPO / "src").resolve()
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """A suíte mede o checkout, nunca um kata instalado em site-packages.
+
+    `make test` define PYTHONPATH para src/; quem roda pytest direto precisa
+    do editable install. Sem esta guarda, um `pip install kata-dev` no venv
+    faz 981 testes passarem contra outra cópia e o coverage nem lista
+    src/kata (revisão de 2026-10-23, M1).
+    """
+    arquivo = Path(kata.__file__).resolve()
+    if not arquivo.is_relative_to(KATA_SRC):
+        raise pytest.UsageError(
+            f"os testes importaram kata de {arquivo}, fora de {KATA_SRC}. "
+            "Use `make test` ou instale com `pip install -e '.[dev]'`."
+        )
 
 
 @pytest.fixture

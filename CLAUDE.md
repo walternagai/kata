@@ -35,12 +35,14 @@ pip install -e '.[dev]'       # do this first — the suite imports `kata`, and 
                               # ModuleNotFoundError before a single assertion runs
 
 make lint && make test        # recommended order before committing
+# make test prepends <repo>/src to PYTHONPATH; running pytest directly requires
+# `pip install -e '.[dev]'` (conftest aborts if kata resolves outside src/).
 make build-skills             # regenerate opencode/ + claude-code/ from phases/
 make check-skills             # fail if the generated files are stale
 make lint                     # ruff check src/ tests/ eval/ scripts/
 make format                   # ruff format src/ tests/ eval/ scripts/
 make format-check             # CI runs this; `ruff check` does not catch format drift
-make test                     # pytest tests/ -v --cov=kata --cov=build_skills --cov=run_traps (gate 70%)
+make test                     # pytest tests/ -v --cov (gate 70%); sets PYTHONPATH=src
 make package                  # build the wheel/sdist and check the contents against src/kata/assets/
 
 python3 -m pytest tests/test_verify.py::TestRunRuff -v      # a single class

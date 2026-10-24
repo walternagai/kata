@@ -58,6 +58,10 @@ Set-ExecutionPolicy -Scope Process Bypass
 O instalador usa `OPENCODE_CONFIG_DIR` quando definido; caso contrário, usa
 `~/.config/opencode`, o caminho global do OpenCode em todas as plataformas.
 
+> `kata --install` (Python) e `scripts/install.ps1` (PowerShell) são caminhos
+> de instalação separados, com registros de posse próprios. Desinstale pelo
+> mesmo caminho que instalou; não misture os dois no mesmo config dir.
+
 ### Skills Claude Code
 
 ```bash

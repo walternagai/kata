@@ -266,6 +266,10 @@ Use `-Copy` if symbolic links or junctions are unavailable, and
 installer also honors `OPENCODE_CONFIG_DIR` and otherwise uses
 `~/.config/opencode`.
 
+`kata --install` (Python) and `scripts/install.ps1` (PowerShell) are separate
+install paths with separate ownership records: uninstall through the same path
+that installed, and do not mix the two in one config directory.
+
 To remove the installed symlinks:
 
 ```bash
@@ -592,6 +596,13 @@ without `--force` and without leaving a `.bak`. A link whose content differs
 and it is refused as before. The same content-based rule applies to the
 agent file, and `--uninstall` removes a `.bak` only when it is a symlink to
 Kata's own content, never a `.bak` of the user's.
+The `.kata-managed` marker now stores the version and per-file hashes of what
+was installed. Reinstalling over intact content is a safe upgrade; if a file
+inside a managed skill or the agent was edited after installation, the hash
+does not match, the install refuses without `--force` (and backs the whole
+directory/file up to `.bak` with it), and `--uninstall` preserves the drift
+instead of deleting user work.
+
 
 **A partial install is what fails, not an absent one.** Exit code `1` is
 reserved for a frontend that has some skills but not all: someone who never

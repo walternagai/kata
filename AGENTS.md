@@ -131,8 +131,12 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
   e o subagente `agents/kata-advisor.md`; a recusa do advisor é reportada mas
   não interrompe o resto (sem ele o JUDGE cai no Estágio 1, que continua
   válido), enquanto a recusa do orquestrador interrompe. A prova de "criado
-  pelo Kata" é o marcador `.kata-managed`; conteúdo do usuário é preservado
-  ou vai para `.bak` com `--force`.
+  pelo Kata" é o marcador `.kata-managed`, que guarda versão e hashes do que
+  foi instalado: conteúdo intacto é upgrade seguro; drift do usuário é
+  recusado no install e preservado no uninstall, ou vai para `.bak` com
+  `--force`. `kata --install` (Python) e `scripts/install.ps1` (PowerShell)
+  são caminhos separados, com registros de posse próprios; desinstale pelo
+  mesmo caminho que instalou.
 - O CLI (`cli.py`) orquestra as 9 fases + audit + judge opcional e chama
   `fit.py`, `verify.py`, `judge.py`; o I/O de relatório/auditoria
   (`_step_report`, `_print_judge_verdict`, `_audit_task`, `_print_doctor`) vive

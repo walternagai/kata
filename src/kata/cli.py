@@ -1677,6 +1677,8 @@ def main() -> None:
                 print(f"    💾 backup em {nome}")
             for msg in rep.recusadas:
                 print(f"    ❌ {msg}")
+            for msg in rep.preservadas:
+                print(f"    ⚠  {msg}")
             for msg in rep.erros:
                 print(f"    ⚠  {msg}")
         print()

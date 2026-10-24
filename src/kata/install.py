@@ -7,13 +7,21 @@ copia o gerado embarcado em `src/kata/assets/` para `~/.config/opencode` ou
 não criou é sobrescrito sem `--force`, e o uninstall remove só o que criou.
 
 A prova de "criado pelo Kata" é um marcador `.kata-managed` dentro de cada
-diretório de skill (e ao lado do arquivo do agente): reinstalar por cima de
-conteúdo nosso é upgrade seguro; por cima de personalização do usuário,
-recusa — a menos de `force=True`, que guarda o original em `<nome>.bak`.
+diretório de skill (e ao lado do arquivo do agente). O marcador guarda a
+versão e os hashes dos arquivos instalados: reinstalar por cima de conteúdo
+intacto é upgrade seguro; se o usuário editou um arquivo gerenciado, o hash
+não confere e o install recusa — a menos de `force=True`, que guarda o
+original em `<nome>.bak`. O uninstall também preserva conteúdo com drift.
+
+`kata --install` (Python) e `scripts/install.ps1` (PowerShell) são caminhos
+de instalação separados, com registros de posse próprios; desinstale pelo
+mesmo caminho que instalou.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 from dataclasses import dataclass, field
 from importlib import resources
@@ -56,6 +64,7 @@ class InstallReport:
     removidas: list[str] = field(default_factory=list)
     backups: list[str] = field(default_factory=list)
     recusadas: list[str] = field(default_factory=list)
+    preservadas: list[str] = field(default_factory=list)
     erros: list[str] = field(default_factory=list)
 
     @property
@@ -93,8 +102,54 @@ def _origens(frontend: Frontend) -> tuple[Path, Path | None, Path | None]:
     return raiz / "claude-code" / "skills", None, None
 
 
-def _e_nosso_skill(destino: Path) -> bool:
-    return (destino / MARKER).is_file()
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _hashes_dir(root: Path) -> dict[str, str]:
+    """Hashes dos arquivos de um diretório, relativos à raiz, sem o marcador."""
+    return {
+        str(p.relative_to(root)): _sha256(p)
+        for p in sorted(root.rglob("*"))
+        if p.is_file() and p.name != MARKER
+    }
+
+
+def _hashes_file(path: Path) -> dict[str, str]:
+    return {path.name: _sha256(path)}
+
+
+def _ler_marcador(marcador: Path) -> dict[str, str] | None:
+    """Hashes gravados no marcador; None para marcador legado (texto puro)."""
+    if not marcador.is_file():
+        return None
+    try:
+        data = json.loads(marcador.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    files = data.get("files") if isinstance(data, dict) else None
+    return files if isinstance(files, dict) else None
+
+
+def _conteudo_bate(destino: Path, marcador: Path, *, is_dir: bool) -> bool:
+    """True se o conteúdo atual bate com os hashes que o Kata gravou."""
+    files = _ler_marcador(marcador)
+    if files is None:
+        # Marcador legado (texto puro): posse sem hash. Mantém o comportamento
+        # anterior — não há como distinguir edição de upgrade.
+        return True
+    if is_dir:
+        return _hashes_dir(destino) == files
+    return destino.is_file() and _hashes_file(destino) == files
+
+
+def _estado_skill(destino: Path) -> str:
+    if not destino.exists():
+        return "missing"
+    marcador = destino / MARKER
+    if not marcador.is_file():
+        return "foreign"
+    return "ours" if _conteudo_bate(destino, marcador, is_dir=True) else "drifted"
 
 
 def _e_link_nosso(destino: Path, origem: Path) -> bool:
@@ -123,9 +178,23 @@ def _e_link_nosso(destino: Path, origem: Path) -> bool:
     return a.is_file() and b.is_file() and a.read_bytes() == b.read_bytes()
 
 
+def _estado_arquivo(marcador: Path, destino: Path) -> str:
+    if not destino.exists():
+        return "missing"
+    if not marcador.is_file():
+        return "foreign"
+    files = _ler_marcador(marcador)
+    if files is None:
+        return "ours"  # marcador legado: posse sem hash
+    return "ours" if destino.is_file() and _hashes_file(destino) == files else "drifted"
+
+
 def _e_nosso_arquivo(marcador: Path, destino: Path, origem: Path) -> bool:
     if marcador.is_file():
-        return True
+        files = _ler_marcador(marcador)
+        if files is None:
+            return True  # marcador legado: posse sem hash
+        return destino.is_file() and _hashes_file(destino) == files
     # Sem marcador mas conteúdo idêntico ao embarcado: intacto, é nosso.
     return destino.is_file() and destino.read_bytes() == origem.read_bytes()
 
@@ -142,8 +211,15 @@ def _backup(caminho: Path) -> Path:
     return backup
 
 
-def _escrever_marcador(destino: Path) -> None:
-    (destino / MARKER).write_text(f"kata-dev {__version__}\n", encoding="utf-8")
+def _escrever_marcador(destino: Path, marcador: Path | None = None, *, is_dir: bool = True) -> None:
+    """Grava versão e hashes do conteúdo recém-instalado."""
+    alvo = marcador or (destino / MARKER)
+    payload = {
+        "version": __version__,
+        "kind": "dir" if is_dir else "file",
+        "files": _hashes_dir(destino) if is_dir else _hashes_file(destino),
+    }
+    alvo.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _instalar_arquivo(
@@ -165,8 +241,26 @@ def _instalar_arquivo(
     destino = destino_dir / origem.name
     marcador = destino_dir / _marcador(origem.name)
     if destino.is_symlink() or destino.exists():
-        if _e_nosso_arquivo(marcador, destino, origem):
+        estado = _estado_arquivo(marcador, destino)
+        if destino.is_symlink() and _e_link_nosso(destino, origem):
             destino.unlink()
+        elif (
+            not marcador.is_file()
+            and destino.is_file()
+            and destino.read_bytes() == origem.read_bytes()
+        ):
+            destino.unlink()
+        elif estado == "ours":
+            destino.unlink()
+        elif estado == "drifted":
+            if force:
+                report.backups.append(str(_backup(destino)))
+            else:
+                report.recusadas.append(
+                    f"{destino} tem alterações do usuário "
+                    "(use --force para guardar .bak e substituir)"
+                )
+                return False
         elif force:
             report.backups.append(str(_backup(destino)))
         else:
@@ -176,18 +270,19 @@ def _instalar_arquivo(
             )
             return False
     shutil.copy2(origem, destino)
-    marcador.write_text(f"kata-dev {__version__}\n", encoding="utf-8")
+    _escrever_marcador(destino, marcador, is_dir=False)
     report.instaladas.append(f"{destino_dir.name}/{origem.name}")
     return True
 
 
 def _remover_arquivo(destino_dir: Path, origem: Path, report: InstallReport) -> None:
-    """Remove um arquivo avulso instalado pelo Kata; o de terceiros fica."""
+    """Remove um arquivo avulso instalado pelo Kata; drift e terceiros ficam."""
     destino = destino_dir / origem.name
     marcador = destino_dir / _marcador(origem.name)
-    if not (
-        marcador.is_file() or (origem.is_file() and _e_nosso_arquivo(marcador, destino, origem))
-    ):
+    if not destino.exists() and not marcador.is_file():
+        return
+    if not _e_nosso_arquivo(marcador, destino, origem):
+        report.preservadas.append(f"{destino} tem alterações do usuário; preservado")
         return
     if destino.is_symlink() or destino.is_file():
         destino.unlink()
@@ -211,13 +306,25 @@ def install_frontend(nome: str, force: bool = False) -> InstallReport:
 
     for origem in sorted(p for p in skills_src.iterdir() if p.is_dir()):
         destino = skills_dir / origem.name
-        if destino.is_symlink() or destino.exists():
-            if _e_nosso_skill(destino) or _e_link_nosso(destino, origem):
-                if destino.is_symlink():
-                    destino.unlink()
-                else:
-                    shutil.rmtree(destino)
-            elif force:
+        estado = _estado_skill(destino)
+        if destino.is_symlink() and _e_link_nosso(destino, origem):
+            destino.unlink()
+        elif estado == "ours":
+            if destino.is_symlink():
+                destino.unlink()
+            else:
+                shutil.rmtree(destino)
+        elif estado == "drifted":
+            if force:
+                report.backups.append(str(_backup(destino)))
+            else:
+                report.recusadas.append(
+                    f"{destino} tem alterações do usuário "
+                    "(use --force para guardar .bak e substituir)"
+                )
+                continue
+        elif estado == "foreign":
+            if force:
                 report.backups.append(str(_backup(destino)))
             else:
                 report.recusadas.append(
@@ -268,9 +375,17 @@ def uninstall_frontend(nome: str) -> InstallReport:
 
     if skills_dir.is_dir():
         for filho in sorted(skills_dir.iterdir()):
-            if filho.is_dir() and _e_nosso_skill(filho):
-                shutil.rmtree(filho)
+            if not (filho.is_dir() or filho.is_symlink()):
+                continue
+            estado = _estado_skill(filho)
+            if estado == "ours":
+                if filho.is_symlink():
+                    filho.unlink()
+                else:
+                    shutil.rmtree(filho)
                 report.removidas.append(filho.name)
+            elif estado == "drifted":
+                report.preservadas.append(f"{filho} tem alterações do usuário; preservado")
         _limpar_bak_de_link(skills_dir, skills_src, report)
 
     if agent_src is not None:

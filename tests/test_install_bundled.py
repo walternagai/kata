@@ -354,3 +354,95 @@ class TestUninstallLimpaBakDeLink:
 
         assert bak.is_symlink()
         assert "kata-fit.bak" not in report.removidas
+
+
+def test_marcador_guarda_hashes(tmp_path, monkeypatch) -> None:
+    """O marcador novo não é só 'existe': guarda hashes do conteúdo instalado."""
+    import json
+
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+    assert bundled.install_frontend("opencode").ok
+    marker = tmp_path / "skills" / "kata-fit" / bundled.MARKER
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    assert payload["kind"] == "dir"
+    assert "SKILL.md" in payload["files"]
+
+
+def test_reinstala_recusa_drift_em_skill_gerenciada(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+    assert bundled.install_frontend("opencode").ok
+    skill = tmp_path / "skills" / "kata-fit" / "SKILL.md"
+    skill.write_text("edição do usuário", encoding="utf-8")
+
+    report = bundled.install_frontend("opencode")
+
+    assert not report.ok
+    assert skill.read_text(encoding="utf-8") == "edição do usuário"
+    assert not (tmp_path / "skills" / "kata-fit.bak").exists()
+
+
+def test_reinstala_com_force_faz_backup_de_drift(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+    assert bundled.install_frontend("opencode").ok
+    skill = tmp_path / "skills" / "kata-fit" / "SKILL.md"
+    skill.write_text("edição do usuário", encoding="utf-8")
+
+    report = bundled.install_frontend("opencode", force=True)
+
+    assert report.ok, report.recusadas or report.erros
+    backup = tmp_path / "skills" / "kata-fit.bak" / "SKILL.md"
+    assert backup.read_text(encoding="utf-8") == "edição do usuário"
+    assert skill.read_text(encoding="utf-8") != "edição do usuário"
+
+
+def test_uninstall_preserva_drift_em_skill_gerenciada(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+    assert bundled.install_frontend("opencode").ok
+    extra = tmp_path / "skills" / "kata-fit" / "CUSTOM.md"
+    extra.write_text("arquivo do usuário", encoding="utf-8")
+
+    report = bundled.uninstall_frontend("opencode")
+
+    assert report.ok
+    assert extra.read_text(encoding="utf-8") == "arquivo do usuário"
+    assert any("kata-fit" in msg for msg in report.preservadas)
+    assert not (tmp_path / "skills" / "kata-artifact").exists()
+
+
+def test_reinstala_recusa_drift_no_agente(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+    assert bundled.install_frontend("opencode").ok
+    agent = tmp_path / "agent" / "kata.md"
+    agent.write_text("edição do usuário", encoding="utf-8")
+
+    report = bundled.install_frontend("opencode")
+
+    assert not report.ok
+    assert agent.read_text(encoding="utf-8") == "edição do usuário"
+
+
+def test_uninstall_preserva_drift_no_agente(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+    assert bundled.install_frontend("opencode").ok
+    agent = tmp_path / "agent" / "kata.md"
+    agent.write_text("edição do usuário", encoding="utf-8")
+
+    report = bundled.uninstall_frontend("opencode")
+
+    assert report.ok
+    assert agent.read_text(encoding="utf-8") == "edição do usuário"
+    assert any("kata.md" in msg for msg in report.preservadas)
+
+
+def test_force_backup_do_agente_com_drift(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path))
+    assert bundled.install_frontend("opencode").ok
+    agent = tmp_path / "agent" / "kata.md"
+    agent.write_text("edição do usuário", encoding="utf-8")
+
+    report = bundled.install_frontend("opencode", force=True)
+
+    assert report.ok, report.recusadas or report.erros
+    backup = tmp_path / "agent" / "kata.md.bak"
+    assert backup.read_text(encoding="utf-8") == "edição do usuário"
+    assert agent.read_text(encoding="utf-8") != "edição do usuário"

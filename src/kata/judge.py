@@ -1449,6 +1449,24 @@ def _normaliza_task(task_data: Any) -> tuple[dict[str, Any], list[str]]:
     return normalizado, avisos
 
 
+def _eh_interpretador(token: str) -> bool:
+    """O token é o executável do Python (linux, macOS ou Windows)?"""
+    nome = token.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return nome.startswith("python") or nome in {"py", "py.exe"}
+
+
+def normaliza_comando(comando: str) -> str:
+    """Comando comparável entre máquinas: o interpretador vira `<python>`.
+
+    `verify.commands` grava o argv real, e nos defaults Python ele começa com
+    o caminho absoluto do interpretador (`/usr/bin/python3`, o do venv, o do
+    runner do CI). Comparar a string crua acusaria divergência em toda
+    re-execução feita noutra máquina — o oposto do que a comparação existe
+    para detectar, que é o comando do projeto ter mudado.
+    """
+    return " ".join("<python>" if _eh_interpretador(tok) else tok for tok in comando.split())
+
+
 def judge_task(
     task_data: dict[str, Any],
     cwd: Path | None = None,
@@ -1732,6 +1750,32 @@ def judge_task(
         and float(gate_usado) != float(gate)
     ):
         caveats.append(f"gate da aprovação era {gate_usado}%; a re-execução usou {gate:.0f}%")
+    # A4: o comando APROVADO, contra o que o juiz de fato rodou. Sem isto o
+    # juiz reexecutava o `.kata/config.yaml` de hoje e apresentava o resultado
+    # como re-execução do claim aprovado: se `verify.test` mudou entre os dois
+    # momentos, ele rodou outra coisa e disse "confere".
+    comandos_aprovados = verify.get("commands")
+    if isinstance(comandos_aprovados, dict):
+        for chave, rotulo in (
+            ("ruff", "lint"),
+            ("typecheck", "typecheck"),
+            ("pytest", "test"),
+            ("coverage", "coverage"),
+        ):
+            if chave not in verify_results:
+                continue
+            aprovado = comandos_aprovados.get(rotulo)
+            atual = verify_results[chave].details.get("command", "")
+            if (
+                isinstance(aprovado, str)
+                and aprovado
+                and atual
+                and normaliza_comando(aprovado) != normaliza_comando(atual)
+            ):
+                caveats.append(
+                    f"re-execução rodou comando diferente do aprovado em `{rotulo}`: "
+                    f"aprovado `{aprovado}`, reexecutado `{atual}`"
+                )
     if janela_confiavel:
         caveats.append(
             f"{janela_confiavel}: base_commit e approved_commit do YAML não definem a janela"

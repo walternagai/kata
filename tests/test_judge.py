@@ -45,6 +45,7 @@ from kata.judge import (
     is_kata_bookkeeping,
     judge_task,
     measured_diff_size,
+    normaliza_comando,
     probes_for,
     record_baseline_ref,
 )
@@ -3286,3 +3287,106 @@ class TestEvidenciaDaExecucao:
         task = {"verify": {"gate_used": 70}, "surgical": {}, "intent": {}, "artifact": {}}
         result = judge_task(task, cwd=tmp_path)
         assert not any("gate da aprovação" in c for c in result.caveats)
+
+
+class TestComandosDaAprovacao:
+    """A4: o juiz confronta o comando gravado com o que ele realmente rodou.
+
+    Antes, `verify.commands` era escrito e nunca lido: se `verify.test` mudou
+    entre a aprovação e o julgamento, o juiz reexecutava outra coisa e
+    apresentava o resultado como re-execução do claim aprovado.
+    """
+
+    @staticmethod
+    def _task(commands: object) -> dict:
+        return {
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "commands": commands,
+            },
+            "surgical": {},
+            "intent": {},
+            "artifact": {},
+        }
+
+    @patch("kata.judge.run_all")
+    def test_comando_diferente_vira_ressalva(self, mock_run_all: MagicMock) -> None:
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, details={"command": "npx eslint src"}),
+            "pytest": VerifyResult(ok=True, details={"command": "npm test"}),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0}),
+        }
+        task = self._task({"lint": "npx eslint src", "test": "npm run test:unit"})
+        result = judge_task(task)
+
+        ressalva = [c for c in result.caveats if "comando diferente" in c]
+        assert len(ressalva) == 1
+        assert "`test`" in ressalva[0]
+        assert "npm run test:unit" in ressalva[0] and "npm test" in ressalva[0]
+
+    @patch("kata.judge.run_all")
+    def test_mesmo_comando_nao_gera_ressalva(self, mock_run_all: MagicMock) -> None:
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, details={"command": "npx eslint src"}),
+            "pytest": VerifyResult(ok=True, details={"command": "npm test"}),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0}),
+        }
+        task = self._task({"lint": "npx eslint src", "test": "npm test"})
+        result = judge_task(task)
+
+        assert not [c for c in result.caveats if "comando diferente" in c]
+
+    @patch("kata.judge.run_all")
+    def test_interpretador_diferente_nao_e_divergencia(self, mock_run_all: MagicMock) -> None:
+        """Aprovar no venv e julgar no CI muda o caminho do interpretador —
+        o comando do projeto é o mesmo, e a re-execução também."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(
+                ok=True, details={"command": "/usr/bin/python3 -m ruff check src/"}
+            ),
+            "pytest": VerifyResult(ok=True, details={"command": "/usr/bin/python3 -m pytest"}),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0}),
+        }
+        task = self._task(
+            {
+                "lint": "/home/dev/.venv/bin/python -m ruff check src/",
+                "test": "python -m pytest",
+            }
+        )
+        result = judge_task(task)
+
+        assert not [c for c in result.caveats if "comando diferente" in c]
+
+    @patch("kata.judge.run_all")
+    def test_papel_nao_reexecutado_nao_e_comparado(self, mock_run_all: MagicMock) -> None:
+        """Sem claim, não houve re-execução — não há o que confrontar."""
+        mock_run_all.return_value = {"ruff": VerifyResult(ok=True, details={"command": "x"})}
+        task = {
+            "verify": {"ruff_clean": True, "commands": {"test": "npm run test:unit"}},
+            "surgical": {},
+            "intent": {},
+            "artifact": {},
+        }
+        result = judge_task(task)
+
+        assert not [c for c in result.caveats if "comando diferente" in c]
+
+    @patch("kata.judge.run_all")
+    def test_commands_malformado_nao_crasha(self, mock_run_all: MagicMock) -> None:
+        """YAML à mão pode trazer `commands: "npm test"` — ressalva, não traceback."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, details={"command": "npx eslint src"}),
+            "pytest": VerifyResult(ok=True, details={"command": "npm test"}),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0}),
+        }
+        result = judge_task(self._task("npm test"))
+
+        assert not [c for c in result.caveats if "comando diferente" in c]
+
+    def test_normalizacao_troca_so_o_interpretador(self) -> None:
+        assert (
+            normaliza_comando("C:\\Python311\\python.exe -m pytest tests/")
+            == "<python> -m pytest tests/"
+        )
+        assert normaliza_comando("npx vitest run") == "npx vitest run"

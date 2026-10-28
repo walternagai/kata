@@ -1384,6 +1384,30 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
         for c in checks:
             print(c)
 
+    # A6: evidência da execução. O VERIFY grava `ran_at`, `gate_used` e
+    # `commands` desde 2026-10-28; até aqui só o YAML os mostrava, e quem lê o
+    # relatório não tinha como saber qual régua produziu os números acima.
+    comandos = verify.get("commands")
+    gate_usado = verify.get("gate_used")
+    ran_at = verify.get("ran_at")
+    tem_evidencia = (
+        (isinstance(comandos, dict) and bool(comandos))
+        or (isinstance(gate_usado, (int, float)) and not isinstance(gate_usado, bool))
+        or (isinstance(ran_at, str) and bool(ran_at))
+    )
+    if tem_evidencia:
+        print()
+        print("  Evidência:")
+        if isinstance(ran_at, str) and ran_at:
+            print(f"    executado em: {ran_at}")
+        if isinstance(gate_usado, (int, float)) and not isinstance(gate_usado, bool):
+            print(f"    gate: {gate_usado:g}%")
+        if isinstance(comandos, dict):
+            for papel in ("lint", "typecheck", "test", "coverage"):
+                comando = comandos.get(papel)
+                if isinstance(comando, str) and comando:
+                    print(f"    {papel}: {comando}")
+
     # Caveats
     caveats: list[str] = []
     if outcome == "rejected":

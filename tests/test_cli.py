@@ -4137,3 +4137,81 @@ class TestLoadTaskOrExit:
         saida = capsys.readouterr().out
         assert "ilegível" in saida
         assert "Traceback" not in saida
+
+
+class TestReportEvidencia:
+    """A6: o relatório mostra com que gate, com que comandos e quando."""
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_mostra_evidencia(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "approved",
+            "done": "ok",
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 91.0,
+                "success_criteria_met": True,
+                "gate_used": 38.0,
+                "ran_at": "2026-10-28T18:00:00+00:00",
+                "commands": {
+                    "lint": "npx eslint src",
+                    "test": "npx vitest run",
+                    "coverage": "npx vitest run --coverage",
+                },
+            },
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+
+        assert "Evidência:" in out
+        assert "executado em: 2026-10-28T18:00:00+00:00" in out
+        assert "gate: 38%" in out
+        assert "lint: npx eslint src" in out
+        assert "test: npx vitest run" in out
+        assert "coverage: npx vitest run --coverage" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_sem_evidencia_nao_inventa_bloco(self, mock_scratch, capsys) -> None:
+        """Task antiga (anterior a 2026-10-28) não tem os campos: o relatório
+        não pode mostrar um bloco vazio nem quebrar."""
+        data = {
+            "status": "approved",
+            "done": "ok",
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 91.0,
+                "success_criteria_met": True,
+            },
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+
+        assert "Evidência:" not in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_com_commands_malformado_nao_crasha(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "approved",
+            "done": "ok",
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 91.0,
+                "success_criteria_met": True,
+                "commands": "npm test",
+                "gate_used": 70,
+            },
+            "artifact": {},
+        }
+        cli._step_report("test-task", data)
+        out = capsys.readouterr().out
+
+        assert "gate: 70%" in out
+        assert "lint:" not in out

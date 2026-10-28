@@ -8,6 +8,7 @@
 # com 3+ arquivos deve ser VERIFIED, não REFUTED.
 task: tarefa-trivial-3-arquivos
 status: approved
+done: "cenário de trap do eval: a tarefa está concluída quando o fixture está aplicado"
 base_commit: BASE_COMMIT_PLACEHOLDER
 fit:
   trivial: true

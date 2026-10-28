@@ -1,4 +1,4 @@
-.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills skills-stats test package lint format format-check paper clean
+.PHONY: install uninstall reinstall install-claude-code uninstall-claude-code reinstall-claude-code build-skills check-skills skills-stats test eval check package lint format format-check paper clean
 
 # === Instalação do agente + skills no OpenCode ===
 
@@ -48,6 +48,18 @@ paper:
 
 test:
 	PYTHONPATH="$(CURDIR)/src" python3 -m pytest tests/ -v --cov --cov-report=term-missing
+
+# Os traps provam que o JUDGE ainda caça as fraudes plantadas — e que não
+# acusa trabalho honesto. O CI já rodava o script direto; local, ninguém
+# rodava, e foi assim que ele ficou 0/23 desde 0b31c07 sem que `make test`
+# reclamasse (achado A2 da revisão estrutural de 2026-10). Com alvo próprio,
+# `make check` alcança o mesmo conjunto que o CI.
+eval:
+	python3 eval/run_traps.py
+
+# O conjunto que o CI verifica, num comando. Cada passo é o mesmo alvo que o
+# workflow chama: o que é verde local não pode ser vermelho remoto.
+check: lint format-check check-skills test eval
 
 # Constrói e confere o artefato que vai para o PyPI. Os testes leem a árvore de
 # fontes; sem este alvo, um package-data quebrado só aparecia no release.

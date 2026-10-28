@@ -16,8 +16,12 @@ A arquitetura, os vereditos e o contrato do CLI estão documentados em
 
 ```bash
 pip install -e '.[dev]'   # pré-requisito: o pacote kata + PyYAML, ruff, pytest
-python3 eval/run_traps.py
+make eval                 # 23/23 é o esperado
 ```
+
+`make check` roda lint + format-check + check-skills + test + eval — o mesmo
+conjunto que o CI verifica. Rodar `make test` sozinho não cobre os traps, e
+foi assim que eles ficaram 0/23 (2026-10) sem que o alvo mais usado reclamasse.
 
 O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
 além do subprocesso `python3 -m kata`, então o pacote precisa estar

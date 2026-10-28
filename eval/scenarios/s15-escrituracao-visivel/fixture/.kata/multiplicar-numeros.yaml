@@ -1,5 +1,6 @@
 task: multiplicar-numeros
 status: approved
+done: "cenário de trap do eval: a tarefa está concluída quando o fixture está aplicado"
 fit:
   trivial: false
   route: code-loop

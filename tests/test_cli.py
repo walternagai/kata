@@ -4201,6 +4201,48 @@ class TestReportEvidencia:
         assert "coverage: npx vitest run --coverage" in out
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_avisa_carimbo_pendente(self, mock_scratch, capsys) -> None:
+        """A19: o aviso do `--stamp` vivia só no VERIFY; quem lê o relatório
+        no handoff não sabia que a janela do juiz estava aberta."""
+        data = {
+            "status": "approved",
+            "done": "ok",
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 91.0,
+                "success_criteria_met": True,
+            },
+            "artifact": {},
+        }
+        cli._step_report("minha-task", data)
+        out = capsys.readouterr().out
+
+        assert "approved_commit não carimbado" in out
+        assert "kata --stamp minha-task" in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_report_carimbado_nao_avisa(self, mock_scratch, capsys) -> None:
+        data = {
+            "status": "approved",
+            "done": "ok",
+            "approved_commit": "a" * 40,
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 91.0,
+                "success_criteria_met": True,
+            },
+            "artifact": {},
+        }
+        cli._step_report("minha-task", data)
+        out = capsys.readouterr().out
+
+        assert "approved_commit não carimbado" not in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_report_sem_evidencia_nao_inventa_bloco(self, mock_scratch, capsys) -> None:
         """Task antiga (anterior a 2026-10-28) não tem os campos: o relatório
         não pode mostrar um bloco vazio nem quebrar."""

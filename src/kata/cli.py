@@ -1489,6 +1489,16 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
 
     # Caveats
     caveats: list[str] = []
+    # A19: o aviso do carimbo mora no VERIFY — a fase que ninguém reabre depois
+    # do commit. O relatório é o que se lê no handoff, e é aqui que a janela
+    # aberta do juiz precisa aparecer, com o comando que a fecha.
+    if data.get("status") == "approved" and task != "check-only":
+        carimbo = data.get("approved_commit")
+        if not (isinstance(carimbo, str) and carimbo.strip()):
+            caveats.append(
+                f"approved_commit não carimbado — depois do commit, rode `kata --stamp {task}` "
+                "para fechar a janela do juiz (sem isso, a próxima task contamina esta)"
+            )
     if outcome == "rejected":
         caveats.append("Ciclo rejeitado — problemas de qualidade pendentes")
     elif outcome == "inconsistent":

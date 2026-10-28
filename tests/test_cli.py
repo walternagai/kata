@@ -4215,3 +4215,136 @@ class TestReportEvidencia:
 
         assert "gate: 70%" in out
         assert "lint:" not in out
+
+
+class TestStamp:
+    """A17: `--stamp` fecha a janela do juiz depois do commit.
+
+    O VERIFY aprova sobre a árvore de trabalho e não pode gravar
+    `approved_commit` ali (teto igual ao piso = janela vazia). Sem carimbo, o
+    juiz difa `base..HEAD` e a task seguinte contamina a anterior (P-1).
+    """
+
+    @staticmethod
+    def _tarefa(base: str | None, status: str = "approved") -> None:
+        cli._save_task(
+            cli._task_path("t"),
+            {
+                "task": "t",
+                "status": status,
+                "base_commit": base or "",
+                "done": "x",
+                "verify": {},
+                "surgical": {},
+                "intent": {},
+                "artifact": {},
+            },
+        )
+
+    @staticmethod
+    def _commit(repo, nome: str) -> str:
+        (repo / nome).write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", nome], cwd=repo, check=True)
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    def test_carimba_o_head(self, repo_git, monkeypatch, capsys) -> None:
+        monkeypatch.chdir(repo_git)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        self._tarefa(base)
+        alvo = self._commit(repo_git, "trabalho.txt")
+
+        assert cli._stamp_approved_commit("t") == 0
+        gravado = cli._load_task_or_exit(cli._task_path("t"))
+        assert gravado["approved_commit"] == alvo
+        assert alvo[:7] in capsys.readouterr().out
+
+    def test_carimba_commit_explicito(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        self._tarefa(base)
+        meio = self._commit(repo_git, "a.txt")
+        self._commit(repo_git, "b.txt")
+
+        assert cli._stamp_approved_commit("t", meio) == 0
+        assert cli._load_task_or_exit(cli._task_path("t"))["approved_commit"] == meio
+
+    def test_recusa_tarefa_inexistente(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        assert cli._stamp_approved_commit("nao-existe") == 1
+
+    def test_recusa_tarefa_nao_aprovada(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        self._tarefa(None, status="draft")
+        assert cli._stamp_approved_commit("t") == 1
+        assert "approved_commit" not in cli._load_task_or_exit(cli._task_path("t"))
+
+    def test_recusa_sem_base_commit(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        self._tarefa(None)
+        assert cli._stamp_approved_commit("t") == 1
+
+    def test_recusa_commit_anterior_ao_base(self, repo_git, monkeypatch) -> None:
+        """Janela invertida produziria diff vazio — a mesma fraude que o
+        §6.4 fecha no juiz (K-04)."""
+        monkeypatch.chdir(repo_git)
+        anterior = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        base = self._commit(repo_git, "trabalho.txt")
+        self._tarefa(base)
+
+        assert cli._stamp_approved_commit("t", anterior) == 1
+        assert "approved_commit" not in cli._load_task_or_exit(cli._task_path("t"))
+
+    def test_recusa_commit_que_nao_resolve(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        self._tarefa(base)
+        assert cli._stamp_approved_commit("t", "deadbeef" * 5) == 1
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_verify_avisa_para_carimbar_depois_do_commit(
+        self, mock_run_all, mock_confirm, repo_git, monkeypatch, capsys
+    ) -> None:
+        """A17: o aviso é o único canal que leva ao `--stamp` — sem ele, a
+        task vira REFUTED quando a próxima entra no histórico."""
+        monkeypatch.chdir(repo_git)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_git, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 95.0, "gate": 70.0}),
+        }
+        mock_confirm.return_value = True
+
+        cli._step_verify("minha-task", {"base_commit": head})
+
+        out = capsys.readouterr().out
+        assert "kata --stamp minha-task" in out
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_check_only_nao_avisa_de_carimbo(self, mock_run_all, mock_confirm, capsys) -> None:
+        """`--check-only` não tem task para carimbar."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 95.0, "gate": 70.0}),
+        }
+        mock_confirm.return_value = True
+
+        cli._step_verify("check-only", {})
+
+        assert "--stamp" not in capsys.readouterr().out

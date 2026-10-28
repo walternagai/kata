@@ -174,6 +174,14 @@ O critério volta à fase THINK — o problema declarado foi resolvido?
 Se o `done` declarado não foi alcançado, o ciclo é **rejeitado** — o critério
 não pode ser reescrito depois do fato.
 
+### Depois do commit: carimbe a janela
+
+A aprovação acontece sobre a árvore de trabalho, então `approved_commit` não
+pode ser gravado aqui (teto igual ao piso é janela vazia). Assim que o commit
+existir, rode `python -m kata --stamp <task>`: sem o carimbo, o JUDGE difa
+`base..HEAD` e a task seguinte passa a contaminar a anterior — a task
+aprovada volta REFUTED por escopo que não é dela (P-1).
+
 ### Hard bound (Fable Step 5)
 
 Registre `verify.attempts` (contador de execuções do VERIFY). Após **3

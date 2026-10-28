@@ -439,6 +439,60 @@ def _resolve_trusted_base(ref: str) -> str | None:
     return sha if result.returncode == 0 and sha else None
 
 
+def _git_ancestral(ancestral: str, descendente: str) -> bool:
+    """`ancestral` é ancestral de `descendente` no histórico atual?"""
+    return _run_git(["git", "merge-base", "--is-ancestor", ancestral, descendente]).returncode == 0
+
+
+def _stamp_approved_commit(task: str, commit: str | None = None) -> int:
+    """Grava em `approved_commit` o commit que encerra o trabalho da tarefa.
+
+    O VERIFY aprova sobre a árvore de trabalho, antes do commit — e ali
+    `approved_commit` não pode ser gravado: teto igual ao piso é janela de
+    diff vazia (artigo JSERD §6.4). Sem carimbo depois do commit, o JUDGE
+    difa `base..HEAD` e conta o trabalho da task seguinte como escopo não
+    declarado (P-1) — toda task aprovada vira REFUTED assim que a próxima é
+    commitada.
+
+    As checagens são as mesmas que o juiz faz no teto (K-04): resolver, ser
+    ancestral do HEAD e descendente do piso. Carimbar um commit invertido
+    criaria exatamente a janela vazia que o §6.4 fecha.
+    """
+    caminho = _task_path(task)
+    if not caminho.exists():
+        print(f"⚠  tarefa não encontrada: {caminho}")
+        return 1
+    data = _load_task_or_exit(caminho)
+
+    if data.get("status") != "approved":
+        print(f"⚠  {task}: status {data.get('status')!r} — só tarefa aprovada recebe carimbo")
+        return 1
+
+    base = str(data.get("base_commit") or "")
+    if not base:
+        print(f"⚠  {task}: sem base_commit — não há janela para fechar")
+        return 1
+
+    pedido = commit or "HEAD"
+    resolvido = _run_git(["git", "rev-parse", "--verify", "--quiet", f"{pedido}^{{commit}}"])
+    sha = resolvido.stdout.strip()
+    if resolvido.returncode != 0 or not sha:
+        print(f"⚠  {task}: commit '{pedido}' não resolve no histórico")
+        return 1
+
+    if not _git_ancestral(base, sha):
+        print(f"⚠  {task}: {pedido} é anterior ao base_commit {base[:7]} — janela invertida")
+        return 1
+    if not _git_ancestral(sha, "HEAD"):
+        print(f"⚠  {task}: {pedido} não é ancestral do HEAD atual")
+        return 1
+
+    data["approved_commit"] = sha
+    _save_task(caminho, data)
+    print(f"✅  {task}: approved_commit = {sha[:7]} (janela {base[:7]}..{sha[:7]})")
+    return 0
+
+
 def _capture_base_commit(data: dict[str, Any], task: str | None = None) -> dict[str, Any]:
     """Registra o HEAD do git no início da tarefa, uma única vez.
 
@@ -986,6 +1040,15 @@ def _step_verify(
         )
         if result.returncode == 0 and sha and not mesmo_que_base:
             data["approved_commit"] = sha
+        elif task != "check-only":
+            # A17: aprovar antes de commitar é o fluxo normal, e nesse
+            # instante o teto não pode ser gravado. Sem este aviso ninguém
+            # descobre o `--stamp`, e a task vira REFUTED quando a próxima
+            # entra no histórico (P-1).
+            print(
+                "  ⚠ approved_commit não gravado: o HEAD ainda é o base_commit.\n"
+                f"     Depois do commit, rode `kata --stamp {task}` para fechar a janela do juiz."
+            )
 
     # Resumo
     print()
@@ -1690,6 +1753,21 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--stamp",
+        metavar="TASK",
+        default=None,
+        help=(
+            "Grava o commit que encerra a tarefa em approved_commit — rode depois do "
+            "commit. Sem --commit, usa o HEAD"
+        ),
+    )
+    parser.add_argument(
+        "--commit",
+        metavar="SHA",
+        default=None,
+        help="Com --stamp: commit a carimbar (default: HEAD)",
+    )
+    parser.add_argument(
         "--report",
         action="store_true",
         help="Gera relatório outcome-first de tarefa concluída",
@@ -1725,6 +1803,20 @@ def main() -> None:
         parser.error("--init é mutuamente exclusivo com --judge, --report, --plan e --check-only")
     if args.task and args.check_only:
         parser.error("--task é mutuamente exclusivo com --check-only")
+    if args.commit and not args.stamp:
+        parser.error("--commit só vale com --stamp")
+    if args.stamp and (
+        args.init
+        or args.plan
+        or args.check_only
+        or args.judge
+        or args.report
+        or args.audit
+        or args.task
+        or args.install
+        or args.uninstall
+    ):
+        parser.error("--stamp é mutuamente exclusivo com os outros modos")
     if args.install and args.uninstall:
         parser.error("--install e --uninstall são mutuamente exclusivos")
     if args.force and not args.install:
@@ -1770,6 +1862,12 @@ def main() -> None:
         sys.exit(_print_doctor(doctor()))
 
     _kata_dir().mkdir(parents=True, exist_ok=True)
+
+    # --stamp não verifica nada: só fecha a janela do juiz com o commit que
+    # já existe. Fica antes da leitura do config, que não tem o que dizer aqui.
+    if args.stamp:
+        _print_header("STAMP — Fecha a janela de diff da tarefa")
+        sys.exit(_stamp_approved_commit(args.stamp, args.commit))
 
     # Comandos de verificação declarados pelo projeto alvo. Config quebrada
     # aborta em vez de cair no default: quem escreveu .kata/config.yaml quis

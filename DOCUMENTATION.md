@@ -349,6 +349,7 @@ reports a summary at the end.
 | `kata --plan [--task TASK]` | Run FIT and THINK, save the plan, and stop |
 | `kata --check-only` | Run Ruff, pytest, and coverage without task interaction |
 | `kata --report --task TASK` | Regenerate the outcome-first report |
+| `kata --stamp TASK [--commit SHA]` | Record the commit that ends the task in `approved_commit`, closing the judge's diff window. Run it right after the commit; without `--commit` it uses `HEAD`. Validates that the commit resolves, descends from `base_commit` and is an ancestor of `HEAD` |
 | `kata --judge --task TASK` | Run adversarial verification (requires `status: approved`) |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
 | `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters and the optional `kata-advisor` subagent are warnings, not failures |
@@ -357,11 +358,12 @@ reports a summary at the end.
 | `kata --force` | With `--install`: back up existing customization to `.bak` and replace it |
 | `kata --version` | Print the package version |
 
-The `--plan`, `--check-only`, `--judge`, `--report`, and `--audit`
+The `--plan`, `--check-only`, `--judge`, `--report`, `--audit` and `--stamp`
 combinations are validated by the CLI. In particular, `--plan` and
 `--check-only` cannot be used together, `--judge` cannot be combined with
-either one, and `--audit` is mutually exclusive with `--init`, `--plan`,
-`--check-only`, `--judge`, and `--report`.
+either one, `--audit` is mutually exclusive with `--init`, `--plan`,
+`--check-only`, `--judge`, and `--report`, and `--stamp` excludes every other
+mode (`--commit` only exists with it).
 
 ### Verification options
 
@@ -759,7 +761,8 @@ approved_commit: ""  # R14: HEAD at the moment of approval. JUDGE diffs
                     # (approved before this round) — they keep diffing to HEAD.
                     # Not recorded while HEAD is still base_commit (approved
                     # before committing): a ceiling equal to the floor is an
-                    # empty diff window (JSERD paper §6.4).
+                    # empty diff window (JSERD paper §6.4). VERIFY prints how
+                    # to close it: `kata --stamp TASK` after the commit.
                     #
                     # P-1 (0.6.0): legacy tasks WITHOUT approved_commit are
                     # expected to come back REFUTED for structural scope

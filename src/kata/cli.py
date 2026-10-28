@@ -1953,6 +1953,21 @@ def main() -> None:
 
     if config.customizado:
         print(f"▶ verificações de {config_path()} (declaradas pelo projeto)")
+        # A10: com o papel declarado, o comando do projeto é executado verbatim
+        # e a flag de caminho correspondente deixa de valer. Antes isso era
+        # silencioso: quem passava `--test-paths tests/unit` achava que tinha
+        # estreitado o escopo, e o kata rodava a suíte inteira.
+        ignoradas: list[str] = []
+        if args.ruff_paths and config.lint:
+            ignoradas.append("--ruff-paths (verify.lint declarado)")
+        if args.test_paths and config.test:
+            ignoradas.append("--test-paths (verify.test declarado)")
+        if args.ignore and config.test:
+            ignoradas.append("--ignore (verify.test declarado)")
+        if args.cov_source and config.coverage:
+            ignoradas.append("--cov-source (verify.coverage declarado)")
+        if ignoradas:
+            print(f"  ⚠ ignorada(s): {', '.join(ignoradas)} — o comando declarado roda inteiro")
 
     # Modo --init
     if args.init:

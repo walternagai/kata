@@ -106,3 +106,20 @@ def test_o_asset_do_subagente_esta_na_lista(nome: str) -> None:
     from check_package import assets_esperados
 
     assert any(p.endswith(nome) for p in assets_esperados())
+
+
+def test_versao_do_pacote_bate_com_o_pyproject() -> None:
+    """A12: o número do pyproject e o do pacote são o mesmo release.
+
+    O bump é em dois arquivos (RELEASING.md), e nada garantia que andassem
+    juntos — `kata --version` podia divergir do pacote publicado.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from check_package import versao_do_pyproject
+
+    import kata
+
+    assert kata.__version__ == versao_do_pyproject()

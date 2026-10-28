@@ -223,7 +223,7 @@ Ou:
 ```yaml
 status: approved
 done: "warn no startup + /health degraded quando misconfig (verificado via curl)"
-kata_version: "0.7.5"
+kata_version: "0.8.0"
 verify:
   ruff_clean: true
   typecheck_clean: true   # null quando o projeto não declara o papel

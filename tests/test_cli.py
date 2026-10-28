@@ -4523,3 +4523,55 @@ class TestSerializacao:
         texto = cli._serialize({"done": "ok"})
         assert "done: ok\n" in texto
         assert "|-" not in texto
+
+
+class TestFlagsIgnoradas:
+    """A10: com o papel declarado, a flag de caminho não vale — e o CLI diz.
+
+    Antes era silencioso: quem passava `--test-paths tests/unit` achava que
+    tinha estreitado o escopo, e o comando declarado rodava a suíte inteira.
+    """
+
+    @staticmethod
+    def _config(tmp_path) -> None:
+        (tmp_path / ".kata").mkdir()
+        (tmp_path / ".kata" / "config.yaml").write_text(
+            'verify:\n  lint: "true"\n  test: "true"\n  coverage: "true"\n'
+            "  coverage_pattern: '(\\\\d+)%'\n",
+            encoding="utf-8",
+        )
+
+    @patch("kata.cli.run_all")
+    def test_avisa_quando_flag_de_caminho_e_ignorada(
+        self, mock_run_all, tmp_path, monkeypatch, capsys
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0, "gate": 70.0}),
+        }
+
+        with patch("sys.argv", ["kata", "--check-only", "--test-paths", "tests/unit"]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert "ignorada(s)" in out
+        assert "--test-paths" in out
+
+    @patch("kata.cli.run_all")
+    def test_sem_config_flag_nao_avisa(self, mock_run_all, tmp_path, monkeypatch, capsys) -> None:
+        monkeypatch.chdir(tmp_path)
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0, "gate": 70.0}),
+        }
+
+        with patch("sys.argv", ["kata", "--check-only", "--test-paths", "tests/unit"]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+        assert "ignorada(s)" not in capsys.readouterr().out

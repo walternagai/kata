@@ -14,9 +14,13 @@ precisa, e onde procurar por isso em cada frontend.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from kata import __version__
 
 # As skills de fase do ciclo. São 10 skills para 9 fases + JUDGE + QUESTION:
 # o ciclo real tem 9 fases (FIT, THINK, SIMPLIFY, INTENT, SURGICAL, VERIFY,
@@ -50,6 +54,11 @@ SUBAGENTES_DIR = "agents"
 # não reprova se estiverem ausentes, porque uma tarefa coding não precisa delas.
 # O doctor as lista como aviso, e o orquestrador só as carrega quando o domínio
 # da tarefa não é coding.
+# Nome do marcador gravado pelo `kata --install` ao lado de cada item. Fica
+# aqui (e não só no install.py) porque o doctor o lê: enquanto o literal vivia
+# num módulo só, quem lia usava string própria.
+MARKER_DIR = ".kata-managed"
+
 DOMAIN_SKILLS: tuple[str, ...] = ("kata-devops", "kata-data-analysis", "kata-research", "kata-docs")
 
 
@@ -115,6 +124,9 @@ class InstallStatus:
     agente_instalado: bool = True
     subagentes_esperados: tuple[str, ...] = ()
     subagentes_faltando: list[str] = field(default_factory=list)
+    # Versões gravadas nos marcadores `.kata-managed` deste frontend. Mais de
+    # uma é estado real: instalação feita em releases diferentes.
+    versoes: tuple[str, ...] = ()
 
     @property
     def modo(self) -> str:
@@ -157,12 +169,74 @@ class InstallStatus:
         )
 
     @property
+    def versao_desatualizada(self) -> bool:
+        """Algum item foi instalado por uma versão diferente da que roda.
+
+        A5 da revisão estrutural: o marcador sempre guardou a versão, e o
+        doctor nunca a leu — uma cópia da 0.7.4 com o CLI 0.7.5 reportava
+        "instalação completa", e o agente rodava as instruções de fase da
+        versão antiga. Sem marcador (instalação por link), não há o that
+        comparar e não há aviso.
+        """
+        return any(versao != __version__ for versao in self.versoes)
+
+    @property
     def completo(self) -> bool:
         return (
             bool(self.instaladas)
             and not self.faltando
             and (not self.agente_esperado or self.agente_instalado)
         )
+
+
+def _versao_do_marcador(marcador: Path) -> str | None:
+    """Versão gravada num `.kata-managed`, nos dois formatos que existem.
+
+    O install atual grava JSON (`{"version": ..., "files": ...}`). Instalações
+    anteriores deixaram texto puro (`kata-dev 0.7.5`), que o `install.py` já
+    reconhece como marcador legado sem hash. Ler só JSON fazia o doctor não
+    ver versão nenhuma justamente nas máquinas instaladas há mais tempo —
+    inclusive nesta, medido em 2026-10-28: a primeira versão deste código
+    devolvia `()` para `~/.config/opencode`.
+    """
+    try:
+        texto = marcador.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    try:
+        dados = json.loads(texto)
+    except json.JSONDecodeError:
+        dados = None
+    if isinstance(dados, dict):
+        versao = dados.get("version")
+        return versao.strip() if isinstance(versao, str) and versao.strip() else None
+    # Formato legado: `<distribuição> <versão>`.
+    partes = texto.split()
+    if len(partes) == 2 and re.match(r"^\d+(?:\.\d+)+", partes[1]):
+        return partes[1]
+    return None
+
+
+def _versoes_instaladas(config_dir: Path) -> tuple[str, ...]:
+    """Versões gravadas nos marcadores `.kata-managed` de um frontend.
+
+    O marcador é por item instalado — `skills/<nome>/.kata-managed` para
+    diretório, `<dir>/<arquivo>.kata-managed` para arquivo avulso (o agente e
+    o subagente) —, então a leitura varre os três diretórios onde o install
+    escreve. Marcador ilegível é ignorado: doctor é diagnóstico, não auditoria
+    de JSON.
+    """
+    versoes: set[str] = set()
+    alvos = (config_dir / "skills", config_dir / "agent", config_dir / SUBAGENTES_DIR)
+    for base in alvos:
+        if not base.is_dir():
+            continue
+        marcadores = [*base.rglob(f"{MARKER_DIR}"), *base.glob(f"*{MARKER_DIR}")]
+        for marcador in marcadores:
+            versao = _versao_do_marcador(marcador)
+            if versao:
+                versoes.add(versao)
+    return tuple(sorted(versoes))
 
 
 def check_frontend(frontend: Frontend) -> InstallStatus:
@@ -201,6 +275,7 @@ def check_frontend(frontend: Frontend) -> InstallStatus:
         agente_instalado=agente_instalado,
         subagentes_esperados=frontend.subagentes,
         subagentes_faltando=subagentes_faltando,
+        versoes=_versoes_instaladas(frontend.config_dir()),
     )
 
 

@@ -8,6 +8,7 @@ trabalho de verdade.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -343,3 +344,82 @@ def test_a_lista_canonica_bate_com_as_fontes_em_phases() -> None:
         f"só em phases/ {sorted(fontes - esperado)}, "
         f"só em PHASE_SKILLS {sorted(esperado - fontes)}"
     )
+
+
+class TestVersoesInstaladas:
+    """A5: o `.kata-managed` guarda a versão; o doctor passou a lê-la."""
+
+    def _marcador(self, caminho, versao) -> None:
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_text(json.dumps({"version": versao, "kind": "dir"}), encoding="utf-8")
+
+    def test_le_marcador_de_diretorio_e_de_arquivo(self, tmp_path) -> None:
+        from kata.skills import _versoes_instaladas
+
+        self._marcador(tmp_path / "skills" / "kata-fit" / ".kata-managed", "0.7.4")
+        self._marcador(tmp_path / "agent" / "kata.md.kata-managed", "0.7.5")
+
+        assert _versoes_instaladas(tmp_path) == ("0.7.4", "0.7.5")
+
+    def test_versao_repetida_aparece_uma_vez(self, tmp_path) -> None:
+        from kata.skills import _versoes_instaladas
+
+        self._marcador(tmp_path / "skills" / "a" / ".kata-managed", "0.7.5")
+        self._marcador(tmp_path / "skills" / "b" / ".kata-managed", "0.7.5")
+
+        assert _versoes_instaladas(tmp_path) == ("0.7.5",)
+
+    def test_marcador_ilegivel_e_ignorado(self, tmp_path) -> None:
+        from kata.skills import _versoes_instaladas
+
+        self._marcador(tmp_path / "skills" / "a" / ".kata-managed", "0.7.5")
+        (tmp_path / "skills" / "b").mkdir(parents=True)
+        (tmp_path / "skills" / "b" / ".kata-managed").write_text("{nao json", encoding="utf-8")
+
+        assert _versoes_instaladas(tmp_path) == ("0.7.5",)
+
+    def test_marcador_legado_em_texto_puro(self, tmp_path) -> None:
+        """Formato anterior ao JSON: `<distribuição> <versão>`.
+
+        Medido na máquina do autor em 2026-10-28: `~/.config/opencode` tinha
+        `kata-dev 0.7.5` em texto puro, e a leitura só-JSON devolvia `()` —
+        o doctor não veria versão nenhuma justamente onde a instalação é mais
+        antiga.
+        """
+        from kata.skills import _versoes_instaladas
+
+        (tmp_path / "skills" / "kata-fit").mkdir(parents=True)
+        (tmp_path / "skills" / "kata-fit" / ".kata-managed").write_text(
+            "kata-dev 0.7.4\n", encoding="utf-8"
+        )
+        assert _versoes_instaladas(tmp_path) == ("0.7.4",)
+
+    def test_marcador_em_texto_sem_versao_e_ignorado(self, tmp_path) -> None:
+        from kata.skills import _versoes_instaladas
+
+        (tmp_path / "skills" / "a").mkdir(parents=True)
+        (tmp_path / "skills" / "a" / ".kata-managed").write_text("lixo", encoding="utf-8")
+        assert _versoes_instaladas(tmp_path) == ()
+
+    def test_sem_marcador_nao_ha_versao(self, tmp_path) -> None:
+        """Instalação por link não grava marcador: nada a comparar."""
+        from kata.skills import _versoes_instaladas
+
+        (tmp_path / "skills" / "kata-fit").mkdir(parents=True)
+        assert _versoes_instaladas(tmp_path) == ()
+
+    def test_versao_desatualizada_so_com_diferenca(self) -> None:
+        import kata
+        from kata.skills import InstallStatus
+
+        atual = InstallStatus(frontend="x", config_dir=Path("/x"), versoes=(kata.__version__,))
+        velha = InstallStatus(frontend="x", config_dir=Path("/x"), versoes=("0.0.1",))
+        mista = InstallStatus(
+            frontend="x", config_dir=Path("/x"), versoes=("0.0.1", kata.__version__)
+        )
+        vazia = InstallStatus(frontend="x", config_dir=Path("/x"))
+
+        assert atual.versao_desatualizada is False
+        assert velha.versao_desatualizada is True
+        assert mista.versao_desatualizada is True
+        assert vazia.versao_desatualizada is False

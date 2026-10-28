@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from kata import __version__
 from kata.judge import JudgeResult
 from kata.skills import InstallStatus, doctor_domain
 from kata.verify import consistency_failures
@@ -308,6 +309,7 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
         "misto": "MISTO — parte link, parte cópia",
     }
     parciais = 0
+    desatualizados = 0
     for e in estados:
         modo = _MODO_LABEL.get(e.modo, "")
         if e.completo:
@@ -330,6 +332,16 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
             print(f"     {len(e.instaladas)} instalada(s), faltando: {', '.join(faltando)}")
             if modo:
                 print(f"     modo: {modo}")
+        # A5: a versão que instalou fica no `.kata-managed`, e o doctor nunca
+        # a lia. Cópia da 0.7.4 com o CLI 0.7.5 saía como "instalação
+        # completa", e o agente rodava as instruções de fase da versão antiga.
+        # Aviso, não reprovação: instalação pinada pode ser intencional, e o
+        # exit 1 do doctor significa "parcial".
+        if e.versao_desatualizada:
+            desatualizados += 1
+            antigas = ", ".join(v for v in e.versoes if v != __version__)
+            print(f"     ⚠ skills gravadas por {antigas}; este kata é {__version__}")
+            print(f"     Rode `kata --install {e.frontend}` para atualizar.")
     print()
 
     # Domain skills são opcionais: avisar, mas não reprovar.
@@ -369,6 +381,9 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
         print("  ⚠  Nenhum frontend instalado. Rode `kata --install all` (ou")
         print("     `make install` / `make install-claude-code` no checkout).")
         print("     O CLI `kata` funciona sem isso.")
+    elif desatualizados:
+        print(f"  ⚠  Instalação completa, mas {desatualizados} frontend(s) com versão")
+        print("     desatualizada — as skills em disco são de outra release.")
     else:
         print("  ✅  Instalação completa.")
     print()

@@ -3807,6 +3807,59 @@ class TestDoctor:
         assert exc.value.code == 0
         assert "Instalação completa" in capsys.readouterr().out
 
+    def _marca(self, config_dir, versao: str) -> None:
+        import json
+
+        skills = config_dir / "skills"
+        for skill in skills.iterdir():
+            (skill / ".kata-managed").write_text(
+                json.dumps({"version": versao, "kind": "dir", "files": {}}), encoding="utf-8"
+            )
+
+    def test_versao_antiga_avisa_sem_reprovar(self, tmp_path, monkeypatch, capsys) -> None:
+        """A5: o marcador sempre guardou a versão e o doctor nunca a leu —
+        cópia da 0.7.4 com o CLI 0.7.5 saía como 'instalação completa'."""
+        from kata.skills import ORCHESTRATOR_SKILL, PHASE_SKILLS
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(tmp_path / "oc", PHASE_SKILLS)
+        (tmp_path / "oc" / "agent").mkdir(parents=True)
+        (tmp_path / "oc" / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        self._instala(tmp_path / "cc", [*PHASE_SKILLS, ORCHESTRATOR_SKILL])
+        self._marca(tmp_path / "oc", "0.0.1")
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0, "versão velha avisa; só parcial reprova"
+        assert "0.0.1" in out
+        assert "kata --install opencode" in out
+        assert "desatualizada" in out
+
+    def test_mesma_versao_nao_avisa(self, tmp_path, monkeypatch, capsys) -> None:
+        import kata
+        from kata.skills import ORCHESTRATOR_SKILL, PHASE_SKILLS
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(tmp_path / "oc", PHASE_SKILLS)
+        (tmp_path / "oc" / "agent").mkdir(parents=True)
+        (tmp_path / "oc" / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+        self._instala(tmp_path / "cc", [*PHASE_SKILLS, ORCHESTRATOR_SKILL])
+        self._marca(tmp_path / "oc", kata.__version__)
+
+        with patch("sys.argv", ["kata", "--doctor"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0
+        assert "desatualizada" not in out
+        assert "Instalação completa." in out
+
     def test_advisor_ausente_avisa_sem_reprovar(self, tmp_path, monkeypatch, capsys) -> None:
         """Subagente faltando é aviso: o JUDGE degrada para o Estágio 1.
 

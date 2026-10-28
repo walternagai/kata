@@ -211,8 +211,8 @@ class TestArtigoNaoEnvelhece:
             f"existem {n} diretórios em eval/scenarios/"
         )
 
-    def test_percentual_compartilhado(self) -> None:
-        """O número de linhas compartilhadas vem de build_skills, não da memória."""
+    @staticmethod
+    def _medido() -> float:
         saida = subprocess.run(
             [sys.executable, "scripts/build_skills.py", "--stats"],
             cwd=REPO,
@@ -222,10 +222,36 @@ class TestArtigoNaoEnvelhece:
         ).stdout
         casamento = re.search(r"compartilhado:\s*([\d.]+)%", saida)
         assert casamento is not None, f"build_skills --stats mudou de formato: {saida!r}"
-        pct = casamento.group(1)
-        variantes = {f"{pct}%", f"{pct.replace('.', ',')}%"}
+        return float(casamento.group(1))
+
+    @staticmethod
+    def _dentro_da_tolerancia(texto: str, medido: float) -> bool:
+        """Algum percentual citado está a ≤ 0,5 p.p. do medido.
+
+        A tolerância existe porque exigir o literal exato transformava
+        qualquer linha nova numa fase em quatro edições de documentação —
+        medido três vezes em 2026-10 (92,5 → 92,7 → 92,8). O guarda continua
+        pegando drift real (release que move o número em 1 p.p. reprova) e não
+        vira vácuo: `test_tolerancia_nao_e_vacua` prova.
+        """
+        numeros = [float(n.replace(",", ".")) for n in re.findall(r"(\d{2}[.,]\d)%", texto)]
+        return any(abs(n - medido) <= 0.5 for n in numeros)
+
+    def test_percentual_compartilhado(self) -> None:
+        """O número vem de build_skills, não da memória — dentro da tolerância."""
+        medido = self._medido()
         for caminho in (DOCS, AGENTS, COMPETITIVE, ARTIGO):
             texto = caminho.read_text(encoding="utf-8")
-            assert any(v in texto for v in variantes), (
-                f"{caminho.name} não cita o percentual compartilhado {pct}%"
+            assert self._dentro_da_tolerancia(texto, medido), (
+                f"{caminho.name} não cita o percentual compartilhado ~{medido}% "
+                "(tolerância de 0,5 p.p.)"
             )
+
+    def test_tolerancia_nao_e_vacua(self) -> None:
+        """Um número fora da faixa reprova: a tolerância é 0,5, não infinita."""
+        assert self._dentro_da_tolerancia("compartilhado: 92,8%", 92.8) is True
+        assert self._dentro_da_tolerancia("compartilhado: 92,4%", 92.8) is True
+        # 0,5 é a borda e conta como dentro; 0,6 reprova.
+        assert self._dentro_da_tolerancia("compartilhado: 93,3%", 92.8) is True
+        assert self._dentro_da_tolerancia("compartilhado: 93,4%", 92.8) is False
+        assert self._dentro_da_tolerancia("nada de percentual aqui", 92.8) is False

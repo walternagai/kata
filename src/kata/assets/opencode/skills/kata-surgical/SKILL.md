@@ -47,6 +47,25 @@ app/api/routers/run.py
 tests/unit/test_orchestrator.py
 ```
 
+### 1.1 Arquivos gerados contam — gere antes de listar
+
+Se você editou `phases/`, rode `make build-skills` **antes** de listar: cada
+fase editada produz quatro arquivos derivados, e eles são parte da mudança.
+
+| Fonte | Derivados |
+|---|---|
+| `phases/kata-<fase>.md` | `opencode/skills/kata-<fase>/SKILL.md`, `claude-code/skills/kata-<fase>/SKILL.md` e os dois espelhos em `src/kata/assets/` |
+| `phases/kata.md` | `opencode/agent/kata.md`, `claude-code/skills/kata/SKILL.md` e os dois espelhos em `src/kata/assets/` |
+
+`make check-skills` reprova se fonte e gerado divergirem, então os derivados vão
+no mesmo commit — e precisam estar em `surgical.files` com `necessary: true`.
+Declarar só a fonte custa `scope_creep [high]` e um REFUTED sobre trabalho que
+está correto (A18 da revisão estrutural; aconteceu na task A17).
+
+Não escreva a lista de memória. `git diff --name-only` **depois** da geração
+mostra exatamente o que precisa ser declarado; a lista de antes omite os
+derivados e é a origem do erro.
+
 ### 2. Validar cada arquivo
 
 Para **cada arquivo** da lista, **inspecione o diff real** (não apenas o nome) e

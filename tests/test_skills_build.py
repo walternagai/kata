@@ -368,3 +368,19 @@ def test_um_frontend_novo_e_so_uma_entrada_na_tabela() -> None:
             assert saida.strip(), f"{caminho.stem} rendeu vazio"
             assert "{{" not in saida
             assert "<!--only" not in saida and "<!--if" not in saida
+
+
+def test_surgical_manda_gerar_antes_de_listar() -> None:
+    """A18: editar `phases/` produz quatro derivados por fase.
+
+    Declarar só a fonte custa `scope_creep [high]` e um REFUTED sobre trabalho
+    correto — aconteceu na task A17. A skill que lista arquivos precisa dizer
+    que os derivados contam e que a lista sai do diff DEPOIS da geração.
+    """
+    fonte = (REPO / "phases" / "kata-surgical.md").read_text(encoding="utf-8")
+
+    assert "make build-skills" in fonte, "a skill não manda gerar antes de listar"
+    assert "git diff --name-only" in fonte
+    for destino in ("opencode/skills/", "claude-code/skills/", "src/kata/assets/"):
+        assert destino in fonte, f"a skill não nomeia o derivado {destino}"
+    assert "scope_creep" in fonte, "a skill não diz o que acontece se faltar"

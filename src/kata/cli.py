@@ -67,6 +67,7 @@ from kata.report import (  # noqa: E402
 )
 from kata.skills import DOMAIN_SKILLS, doctor
 from kata.verify import (
+    ROLE_LABELS,
     VerifyResult,
     changed_files,
     consistency_failures,
@@ -1439,21 +1440,29 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     checks = []
     ruff = verify.get("ruff_clean")
     if ruff is not None:
-        checks.append(f"  {'✅' if ruff else '❌'} ruff check {'limpo' if ruff else 'com erros'}")
+        checks.append(
+            f"  {'✅' if ruff else '❌'} {ROLE_LABELS['ruff']}: {'limpo' if ruff else 'com erros'}"
+        )
     typecheck = verify.get("typecheck_clean")
     if typecheck is not None:
         estado = "passou" if typecheck else "falhou"
         checks.append(f"  {'✅' if typecheck else '❌'} typecheck {estado}")
     tests = verify.get("tests_pass")
     if tests is not None:
-        checks.append(f"  {'✅' if tests else '❌'} pytest {'passou' if tests else 'falhou'}")
+        checks.append(
+            f"  {'✅' if tests else '❌'} {ROLE_LABELS['pytest']}: "
+            f"{'passou' if tests else 'falhou'}"
+        )
     cov = verify.get("coverage_pass")
     # `or 0.0` e não `get(..., 0)`: a chave existe com valor None no template
     # de --init e nos YAMLs escritos à mão pelas skills, então o default do
     # get nunca entra e o format de None levanta TypeError.
     cov_pct = verify.get("coverage_pct") or 0.0
     if cov is not None:
-        label = f"  {'✅' if cov else '❌'} coverage {cov_pct:.1f}% {'≥' if cov else '<'} gate"
+        label = (
+            f"  {'✅' if cov else '❌'} {ROLE_LABELS['coverage']} "
+            f"{cov_pct:.1f}% {'≥' if cov else '<'} gate"
+        )
         checks.append(label)
     success = verify.get("success_criteria_met")
     if success is not None:

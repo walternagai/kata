@@ -27,6 +27,7 @@ from kata import __version__
 from kata.config import VerifyConfig
 from kata.fit import TRIVIAL_MAX_LINES
 from kata.verify import (
+    ROLE_LABELS,
     VerifyResult,
     _is_tool_artifact,  # noqa: F401
     # Re-exportados para os testes e para quem importa de `kata.judge`: os
@@ -434,7 +435,7 @@ def collect_claims(task_data: dict[str, Any]) -> list[str]:
     claims: list[str] = []
     verify = task_data.get("verify", {})
     if verify.get("ruff_clean"):
-        claims.append("ruff check limpo (sem erros de lint)")
+        claims.append(f"{ROLE_LABELS['ruff']} limpo (sem erros de lint)")
     if verify.get("tests_pass"):
         claims.append("todos os testes passam")
     if verify.get("coverage_pass"):
@@ -1153,10 +1154,10 @@ def hunt_false_completion(
     verify = task_data.get("verify", {})
 
     checks: list[tuple[str, str, str]] = [
-        ("ruff_clean", "ruff", "ruff check"),
-        ("typecheck_clean", "typecheck", "typecheck"),
-        ("tests_pass", "pytest", "pytest"),
-        ("coverage_pass", "coverage", "coverage"),
+        ("ruff_clean", "ruff", ROLE_LABELS["ruff"]),
+        ("typecheck_clean", "typecheck", ROLE_LABELS["typecheck"]),
+        ("tests_pass", "pytest", ROLE_LABELS["pytest"]),
+        ("coverage_pass", "coverage", ROLE_LABELS["coverage"]),
     ]
 
     for claim_key, result_key, label in checks:

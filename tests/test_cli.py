@@ -4223,6 +4223,33 @@ class TestReportEvidencia:
     """A6: o relatório mostra com que gate, com que comandos e quando."""
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
+    def test_verificacoes_usam_o_papel_e_nao_a_ferramenta(self, mock_scratch, capsys) -> None:
+        """A7: num projeto que roda eslint e vitest, 'ruff check limpo' é ruído.
+
+        A tabela única em `verify.ROLE_LABELS` é o que impede as duas
+        convenções (ferramenta no cli, papel no judge) de voltarem.
+        """
+        data = {
+            "status": "approved",
+            "done": "ok",
+            "verify": {
+                "ruff_clean": True,
+                "tests_pass": True,
+                "coverage_pass": True,
+                "coverage_pct": 91.0,
+                "success_criteria_met": True,
+            },
+            "artifact": {},
+        }
+        cli._step_report("t", data)
+        out = capsys.readouterr().out
+
+        assert "lint: limpo" in out
+        assert "teste: passou" in out
+        assert "ruff check" not in out
+        assert "pytest passou" not in out
+
+    @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_report_mostra_evidencia(self, mock_scratch, capsys) -> None:
         data = {
             "status": "approved",
@@ -4336,7 +4363,9 @@ class TestReportEvidencia:
         out = capsys.readouterr().out
 
         assert "gate: 70%" in out
-        assert "lint:" not in out
+        # O bloco de evidência usa 4 espaços de recuo; a linha de verificação
+        # legítima ("lint: limpo") usa 2 — o que não pode aparecer é o comando.
+        assert "    lint:" not in out
 
 
 class TestStamp:

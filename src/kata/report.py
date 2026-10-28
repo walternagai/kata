@@ -19,7 +19,7 @@ from typing import Any
 from kata import __version__
 from kata.judge import JudgeResult
 from kata.skills import InstallStatus, doctor_domain
-from kata.verify import consistency_failures
+from kata.verify import ROLE_LABELS, consistency_failures
 
 
 def _print_header(text: str) -> None:
@@ -34,9 +34,8 @@ def _print_header(text: str) -> None:
 
 # As chaves de verificação são papéis, mas carregam nome de ferramenta Python
 # por serem o mesmo vocabulário que o schema da tarefa persiste (`ruff_clean`,
-# `tests_pass`). Renomear o schema é migração à parte; exibir o papel não é, e
-# "✅ ruff" num projeto JS é ruído que confunde quem lê o veredito.
-_ROLE_LABELS = {"ruff": "lint", "typecheck": "typecheck", "pytest": "teste", "coverage": "coverage"}
+# `tests_pass`). A tabela mora em `verify.ROLE_LABELS`: era aqui e no cli, e as
+# duas divergiam (A7 da revisão estrutural).
 
 
 def _print_judge_verdict(result: JudgeResult) -> None:
@@ -89,7 +88,7 @@ def _print_judge_verdict(result: JudgeResult) -> None:
         print("  Re-execução:")
         for check, ok in result.re_ran_checks.items():
             status = "✅" if ok else "❌"
-            print(f"    {status} {_ROLE_LABELS.get(check, check)}")
+            print(f"    {status} {ROLE_LABELS.get(check, check)}")
         print()
 
     print("─" * 58)

@@ -21,6 +21,18 @@ from typing import Any
 
 from kata.config import DEFAULT_COVERAGE_PATTERN, VerifyConfig
 
+# Rótulo de exibição de cada papel. As chaves persistidas no YAML mantêm o
+# nome histórico da ferramenta (`ruff_clean`, `tests_pass`) — renomear é
+# migração de schema, e não é isso que o relatório precisa. O que o humano lê
+# é o papel: num projeto que roda eslint e vitest, "ruff check limpo" é ruído
+# que confunde (A7 da revisão estrutural de 2026-10).
+ROLE_LABELS: dict[str, str] = {
+    "ruff": "lint",
+    "typecheck": "typecheck",
+    "pytest": "teste",
+    "coverage": "coverage",
+}
+
 
 @dataclass
 class VerifyResult:

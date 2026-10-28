@@ -123,7 +123,7 @@ class TestCollectClaims:
         }
         claims = collect_claims(data)
         assert len(claims) == 5
-        assert any("ruff" in c for c in claims)
+        assert any("lint" in c for c in claims)
         assert any("testes" in c for c in claims)
         assert any("coverage" in c for c in claims)
         assert any("intenção" in c for c in claims)
@@ -153,7 +153,7 @@ class TestCollectClaims:
         data = {"verify": {"ruff_clean": True}}
         claims = collect_claims(data)
         assert len(claims) == 1
-        assert "ruff" in claims[0]
+        assert "lint" in claims[0]
 
     def test_optional_sections_empty(self) -> None:
         data = {"verify": {"ruff_clean": True}, "surgical": {}, "intent": {}}
@@ -574,7 +574,7 @@ class TestHuntFalseCompletion:
         results = {"ruff": VerifyResult(ok=False, output="error")}
         frauds = hunt_false_completion(task, results)
         assert len(frauds) == 1
-        assert "ruff" in frauds[0].description
+        assert "lint" in frauds[0].description
 
     def test_all_claims_match_rerun(self) -> None:
         task = {
@@ -1019,7 +1019,7 @@ class TestJudgeTask:
         # determinística hoje, mas congelá-la aqui faria uma claim nova
         # quebrar o teste sem indicar defeito de comportamento (R10-5).
         assert set(result.claims) == {
-            "ruff check limpo (sem erros de lint)",
+            "lint limpo (sem erros de lint)",
             "todos os testes passam",
             "coverage ≥ gate (?%)",
         }

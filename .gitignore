@@ -25,7 +25,13 @@ Thumbs.db
 # Kata working directory (task files are project-specific, not part of this repo)
 # Anchored to the repo root so it doesn't also swallow eval/scenarios/*/fixture/.kata/,
 # which are fixture files that must be tracked.
-/.kata/
+# `/.kata/` (diretório) impediria a exceção abaixo: git não re-inclui arquivo
+# cujo diretório pai está excluído. `/.kata/*` exclui o conteúdo e deixa a
+# negação valer.
+/.kata/*
+# Exceção: o gate do próprio repo é declarado e versionado (A13 da revisão
+# estrutural). Só o config sai do ignore — as tarefas continuam locais.
+!/.kata/config.yaml
 
 # Test artifacts
 .pytest_cache/

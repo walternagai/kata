@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -984,3 +985,60 @@ class TestRunAllComConfig:
         assert results["pytest"].ok is False
         assert results["coverage"].ok is False
         assert "skipped" in results["coverage"].output
+
+
+class TestComandoDeclaradoDeVerdade:
+    """A14: o caminho "comando declarado" executava zero subprocessos na suíte.
+
+    Todos os testes de `run_command` mockam `kata.verify._run` — inclusive o
+    caso de `FileNotFoundError`. Um mock no wrapper esconde exatamente a
+    classe de defeito que o caminho existe para cobrir: comando que não existe,
+    que sai diferente de zero, ou que devolve saída. Estes três rodam de
+    verdade, com `python -c`, para não depender de ferramenta instalada.
+
+    Todas as roles são declaradas de propósito: com uma só, o `run_all` cai no
+    pytest real e roda a suíte inteira dentro da suíte.
+    """
+
+    @staticmethod
+    def _cfg(**kwargs) -> VerifyConfig:
+        return VerifyConfig(
+            coverage_pattern=r"TOTAL\s+\d+\s+\d+\s+(\d+)%",
+            gate=70.0,
+            **kwargs,
+        )
+
+    def test_papeis_declarados_executam_e_aprovam(self, tmp_path) -> None:
+        cfg = self._cfg(
+            lint=[sys.executable, "-c", "print('lint ok')"],
+            test=[sys.executable, "-c", "print('test ok')"],
+            coverage=[sys.executable, "-c", "print('TOTAL 10 1 90%')"],
+        )
+        results = run_all(config=cfg, cwd=tmp_path)
+
+        assert results["ruff"].ok is True
+        assert "lint ok" in results["ruff"].output
+        assert results["pytest"].ok is True
+        assert "test ok" in results["pytest"].output
+        assert results["coverage"].details["coverage_pct"] == 90.0
+
+    def test_returncode_diferente_de_zero_reprova(self, tmp_path) -> None:
+        cfg = self._cfg(
+            lint=[sys.executable, "-c", "import sys; sys.exit(3)"],
+            test=[sys.executable, "-c", "print('ok')"],
+            coverage=[sys.executable, "-c", "print('TOTAL 10 1 90%')"],
+        )
+        results = run_all(config=cfg, cwd=tmp_path)
+
+        assert results["ruff"].ok is False
+
+    def test_comando_inexistente_reprova_sem_excecao(self, tmp_path) -> None:
+        cfg = self._cfg(
+            lint=["comando-que-nao-existe-kata-xyz"],
+            test=[sys.executable, "-c", "print('ok')"],
+            coverage=[sys.executable, "-c", "print('TOTAL 10 1 90%')"],
+        )
+        results = run_all(config=cfg, cwd=tmp_path)
+
+        assert results["ruff"].ok is False
+        assert "não foi possível executar" in results["ruff"].output

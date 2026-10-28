@@ -1,0 +1,16 @@
+# Gate do próprio kata, declarado no formato que o produto lê.
+#
+# Existe por dois motivos: o repositório passa a dogfoodar o caminho "comando
+# declarado" (o que faz o kata servir a projeto não-Python), e a régua do CLI
+# vira a mesma do `make test` — não um subconjunto deduzido do pyproject
+# (A13/A14 da revisão estrutural de 2026-10).
+#
+# Os comandos são os do Makefile, sem `-v` para o output caber no relatório.
+# `make test` continua sendo o gate do CI; isto é o mesmo conjunto, lido pelo
+# kata.
+verify:
+  lint: python3 -m ruff check src/ tests/ eval/ scripts/
+  test: python3 -m pytest tests/ -q
+  coverage: python3 -m pytest tests/ -q --cov --cov-report=term-missing --cov-fail-under=70
+  coverage_pattern: '^TOTAL\s+.*?(\d+(?:\.\d+)?)%'
+  gate: 70

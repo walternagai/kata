@@ -115,9 +115,34 @@ def _kata_dir() -> Path:
     return _cwd() / ".kata"
 
 
+class _Dumper(yaml.SafeDumper):
+    """Dumper que mantém strings multilinha legíveis.
+
+    Sem isto, `yaml.dump` escolhe escalar entre aspas e, para preservar o
+    `\\n` no folding do YAML, emite uma linha em branco entre cada linha do
+    texto: o round-trip é exato, mas o arquivo que o humano lê — `done`,
+    `unknowns`, `twins.result` — vira ilegível. O bloco literal (`|`) é o que
+    qualquer pessoa espera encontrar num YAML de tarefa (A15).
+    """
+
+
+def _representa_str(dumper: yaml.SafeDumper, data: str) -> yaml.Node:
+    estilo = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=estilo)
+
+
+_Dumper.add_representer(str, _representa_str)
+
+
 def _serialize(data: dict[str, Any]) -> str:
     if _HAS_YAML:
-        return yaml.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
+        return yaml.dump(
+            data,
+            Dumper=_Dumper,
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False,
+        )
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 

@@ -1042,3 +1042,18 @@ class TestComandoDeclaradoDeVerdade:
 
         assert results["ruff"].ok is False
         assert "não foi possível executar" in results["ruff"].output
+
+
+def test_comando_gravado_nao_tem_caminho_absoluto() -> None:
+    """A9: `sys.executable` no YAML não é portável e não diz o papel.
+
+    `verify.commands.lint` gravava `/usr/bin/python3 -m ruff check ...` — o
+    mesmo comando em outra máquina (ou venv) saía diferente sem que nada
+    tivesse mudado no projeto.
+    """
+    with patch("kata.verify._run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        comando = run_ruff(paths=["src"]).details["command"]
+
+    assert comando.startswith("python -m ruff check")
+    assert sys.executable not in comando

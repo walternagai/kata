@@ -287,6 +287,19 @@ def changed_files(
     return tracked + [f for f in novos if f not in seen]
 
 
+def _comando_portatil(cmd: list[str]) -> str:
+    """argv legível para o YAML, sem o caminho absoluto do interpretador.
+
+    `sys.executable` é caminho de máquina (`/usr/bin/python3`, o do venv, o do
+    runner do CI): não é portável e não diz nada sobre o papel executado
+    (A9 da revisão estrutural). A comparação do juiz normaliza o interpretador
+    de qualquer forma (`judge.normaliza_comando`).
+    """
+    if cmd and cmd[0] == sys.executable:
+        return " ".join(["python", *cmd[1:]])
+    return " ".join(cmd)
+
+
 def run_ruff(
     paths: list[str] | None = None,
     cwd: Path | None = None,
@@ -307,7 +320,7 @@ def run_ruff(
     return VerifyResult(
         ok=result.returncode == 0,
         output=result.stdout + result.stderr,
-        details={"command": " ".join(cmd)},
+        details={"command": _comando_portatil(cmd)},
     )
 
 
@@ -340,7 +353,7 @@ def run_pytest(
     return VerifyResult(
         ok=result.returncode == 0,
         output=result.stdout + result.stderr,
-        details={"command": " ".join(cmd)},
+        details={"command": _comando_portatil(cmd)},
     )
 
 
@@ -395,7 +408,7 @@ def run_coverage(
         return VerifyResult(
             ok=False,
             output=result.stdout + result.stderr + "\n(kata: linha TOTAL de coverage ausente)",
-            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
         )
     cov_pct = float(match.group(1))
 
@@ -406,7 +419,7 @@ def run_coverage(
         details={
             "coverage_pct": cov_pct,
             "gate": gate,
-            "command": " ".join(cmd),
+            "command": _comando_portatil(cmd),
         },
     )
 
@@ -456,13 +469,13 @@ def run_command_coverage(
         return VerifyResult(
             ok=False,
             output=result.output + f"\n(kata: padrão de coverage inválido: {exc})",
-            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
         )
     if match is None:
         return VerifyResult(
             ok=False,
             output=result.output + f"\n(kata: nenhum percentual casou com o padrão {pattern!r})",
-            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
         )
 
     try:
@@ -475,7 +488,7 @@ def run_command_coverage(
             ok=False,
             output=result.output
             + f"\n(kata: o padrão {pattern!r} não tem grupo de captura para o percentual)",
-            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
         )
     except ValueError:
         # O padrão CASOU mas o grupo não é número (ex.: "N/A"). Não conseguiu
@@ -486,7 +499,7 @@ def run_command_coverage(
             ok=False,
             output=result.output
             + f"\n(kata: o percentual casado {match.group(1)!r} não é um número)",
-            details={"coverage_pct": 0.0, "gate": gate, "command": " ".join(cmd)},
+            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
         )
 
     return VerifyResult(

@@ -4499,3 +4499,27 @@ class TestStamp:
         cli._step_verify("check-only", {})
 
         assert "--stamp" not in capsys.readouterr().out
+
+
+class TestSerializacao:
+    """A15: o YAML da tarefa é artefato de leitura humana, não payload."""
+
+    def test_multilinha_vira_bloco_literal(self) -> None:
+        import yaml
+
+        texto = cli._serialize({"done": "linha 1\nlinha 2"})
+        assert "|" in texto, f"esperava bloco literal, veio: {texto!r}"
+        assert yaml.safe_load(texto)["done"] == "linha 1\nlinha 2"
+        # Sem o bloco, o dump dobra cada linha (uma em branco entre elas).
+        assert "\n\n" not in texto
+
+    def test_round_trip_com_linha_em_branco_e_espaco_final(self) -> None:
+        import yaml
+
+        original = {"unknowns": "a\n\nb  \n", "n": 1, "b": True, "vazio": None}
+        assert yaml.safe_load(cli._serialize(original)) == original
+
+    def test_string_simples_continua_na_mesma_linha(self) -> None:
+        texto = cli._serialize({"done": "ok"})
+        assert "done: ok\n" in texto
+        assert "|-" not in texto

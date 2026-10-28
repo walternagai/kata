@@ -166,6 +166,16 @@ def _chaves_escritas_pelo_codigo() -> set[str]:
             escritas.add(chave)
         elif secao in _SECOES:
             escritas.add(f"{secao}.{chave}")
+
+    # Variável intermediária: `checks: dict[str, Any] = {...}` seguido de
+    # `data["artifact"] = checks`. O regex de bloco só via o dict literal
+    # inline, e `artifact` aparecia com 0 escritas detectadas — o teste passava
+    # porque a leitura cobria (A11 da revisão estrutural).
+    for secao, var in re.findall(r'\bdata\["(\w+)"\]\s*=\s*(\w+)\s*$', fonte, re.M):
+        corpo = re.search(rf"\b{var}\s*(?::[^=\n]+)?=\s*\{{(.*?)^\s*\}}", fonte, re.M | re.S)
+        if corpo:
+            for chave in re.findall(r'"(\w+)"\s*:', corpo.group(1)):
+                escritas.add(f"{secao}.{chave}")
     return escritas
 
 

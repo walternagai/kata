@@ -414,10 +414,12 @@ advisor:
 | Key | Meaning |
 |---|---|
 | `verify.lint` / `typecheck` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list. `typecheck` has no default: undeclared, it does not run and `verify.typecheck_clean` stays `null` |
+| Unknown key at the top level | A named error. A misspelled section (`veirfy:`) used to fall back to the Python defaults with `customizado=False` and no warning — and the error for an unknown key *inside* `verify` made that more likely, because the intuitive fix is moving the key out. Only `verify` and `advisor` are accepted |
 | Unknown key under `verify` | A named error, never a silent default: a misspelled or newer-version role would otherwise be dropped and the cycle would approve having run nothing for it |
 | Shell operators | Commands run **without a shell**, so `&&`, `\|\|`, `\|`, `;`, `>`, `<` are refused as standalone tokens. `npm run check && npm run test:db` reaches npm as arguments and exits 0 with the second tier never executed; declare a project script (`npm run check:all`) or an explicit shell (`bash -c "..."`) |
 | `verify.coverage_pattern` | Regex whose first group is the coverage percentage. Default reads the `TOTAL` line pytest-cov prints |
 | `verify.gate` | Minimum coverage percentage. A `--gate` flag overrides it |
+| Unknown key under `advisor` | A named error, same reason: `enabld: false` (typo) used to be dropped and the advisor stayed on, while a misspelled `model` silently fell back to the default |
 | `advisor.enabled` | Whether semantic adversarial review is active (`true`, `false`, `auto`, `never`). Default `true` |
 | `advisor.model` | Model identifier for the advisor subagent (e.g., `anthropic/claude-opus-4#high`, `google/gemini-2.5-pro#thinking`) |
 | `advisor.effort` | Thinking / reasoning effort level (`low`, `medium`, `high`, `max`) |

@@ -26,10 +26,13 @@ exceto `typecheck`, que não tem default: não existe verificador de tipos
 universal, e inventar um faria o kata reportar como verificada uma checagem
 que o projeto nunca pediu.
 
-Chave desconhecida em `verify` é erro, não default silencioso: alguém que
-escreve `typecheck` num kata antigo acreditava ter declarado o gate de tipos.
-Ignorar a chave fazia o ciclo aprovar sem nunca tê-lo rodado — a mesma classe
-de mentira que o `ConfigError` acima existe para impedir.
+Chave desconhecida é erro nos três níveis — topo, `verify` e `advisor`. Quem
+escreve `typecheck` num kata antigo acreditava ter declarado o gate de tipos;
+quem escreve `veirfy:` (ou move a chave para fora de `verify` para calar o
+erro) acredita ter declarado o arquivo inteiro; quem escreve `enabld: false`
+acredita ter desligado o advisor. Ignorar em qualquer dos três fazia o ciclo
+aprovar sem nunca ter rodado o que o projeto pediu — a mesma classe de mentira
+que o `ConfigError` acima existe para impedir.
 """
 
 from __future__ import annotations
@@ -63,6 +66,22 @@ _ROLES = ("lint", "typecheck", "test", "coverage")
 # (ver o docstring do módulo): antes, `verify.typecheck` num kata que não
 # conhecia o papel era lido, descartado e o VERIFY aprovava sem ele.
 _VERIFY_KEYS = frozenset({*_ROLES, "coverage_pattern", "gate"})
+
+# O que pode aparecer no topo do arquivo. Fechar o nível de cima é tão
+# necessário quanto fechar `verify`: um `veirfy:` (typo) caía em
+# `dados.get("verify") → None` e o projeto rodava nos defaults Python com
+# `customizado=False`, sem uma linha de aviso. O erro de chave desconhecida
+# dentro de `verify` tornava isso mais provável, não menos: a correção
+# intuitiva de quem lê "chave desconhecida em `verify`" é mover a chave para
+# fora, onde ela era descartada em silêncio.
+_TOP_LEVEL_KEYS = frozenset({"verify", "advisor"})
+
+# O que pode aparecer dentro de `advisor`. Mesma doutrina, mesmo defeito:
+# `enabld: false` (typo) era descartado e o advisor continuava ligado —
+# medido em 2026-10-28. Um `model` com typo deixava a revisão semântica no
+# default sem ninguém saber.
+_ADVISOR_KEYS = frozenset({"enabled", "model", "effort", "skip_trivial"})
+
 
 # Operadores que só existem num shell. `verify._run` executa SEM shell, então
 # `npm run check && npm run test:db` chegava ao processo como seis argumentos
@@ -208,6 +227,17 @@ def _load_raw_config(cwd: Path | None = None) -> tuple[Path | None, dict[str, An
         return caminho, None
     if not isinstance(dados, dict):
         raise ConfigError(f"{caminho}: esperava um mapa no topo")
+    # Fechar o topo, não só `verify`: chave irmã não é lida por ninguém, e
+    # aceitá-la calada faz o projeto rodar nos defaults Python achando que
+    # declarou os próprios comandos (achado A1 da revisão estrutural).
+    desconhecidas = sorted(str(k) for k in dados if str(k) not in _TOP_LEVEL_KEYS)
+    if desconhecidas:
+        raise ConfigError(
+            f"{caminho}: chave(s) desconhecida(s) no topo: {', '.join(desconhecidas)} "
+            f"(conhecidas: {', '.join(sorted(_TOP_LEVEL_KEYS))}) — chave fora de "
+            "`verify`/`advisor` não é lida por ninguém, e o arquivo passa a valer "
+            "menos do que aparenta"
+        )
     return caminho, dados
 
 
@@ -273,6 +303,13 @@ def load_advisor_config(cwd: Path | None = None) -> AdvisorConfig:
         return AdvisorConfig()
     if not isinstance(advisor, dict):
         raise ConfigError(f"{caminho}: `advisor` deve ser um mapa")
+
+    desconhecidas = sorted(str(k) for k in advisor if str(k) not in _ADVISOR_KEYS)
+    if desconhecidas:
+        raise ConfigError(
+            f"{caminho}: chave(s) desconhecida(s) em `advisor`: {', '.join(desconhecidas)} "
+            f"(conhecidas: {', '.join(sorted(_ADVISOR_KEYS))})"
+        )
 
     enabled = advisor.get("enabled", True)
     if isinstance(enabled, str):

@@ -49,7 +49,7 @@ class TestDefaults:
         assert load_verify_config(cwd=tmp_path) == VerifyConfig()
 
     def test_sem_secao_verify_devolve_defaults(self, tmp_path) -> None:
-        _escreve(tmp_path, "outra_coisa: 1\n")
+        _escreve(tmp_path, "advisor:\n  enabled: false\n")
         assert load_verify_config(cwd=tmp_path) == VerifyConfig()
 
     def test_gate_default_e_setenta(self) -> None:
@@ -344,3 +344,60 @@ class TestSemShell:
         _escreve(tmp_path, 'verify:\n  test: bash -c "npm run check && npm run test:db"\n')
         cfg = load_verify_config(cwd=tmp_path)
         assert cfg.test == ["bash", "-c", "npm run check && npm run test:db"]
+
+
+class TestTopoDesconhecido:
+    """A1 da revisão estrutural: o nível de cima do config também é fechado.
+
+    `veirfy:` (typo) caía em `dados.get("verify") → None` e o projeto rodava
+    nos defaults Python com `customizado=False`, sem aviso. O erro de chave
+    desconhecida dentro de `verify` tornava isso mais provável: a correção
+    intuitiva de quem o lê é mover a chave para fora.
+    """
+
+    def test_typo_no_topo_reprova(self, tmp_path) -> None:
+        _escreve(tmp_path, 'veirfy:\n  lint: "npx eslint src"\n')
+        with pytest.raises(ConfigError, match="desconhecida.*no topo"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_chave_movida_para_fora_de_verify_reprova(self, tmp_path) -> None:
+        """O caminho que o erro de 2026-10-28 sugeria: mover a chave para o
+        topo calava o erro e descartava o comando."""
+        _escreve(tmp_path, "verify:\n  gate: 38\ntypecheck: npx tsc --noEmit\n")
+        with pytest.raises(ConfigError, match="topo: typecheck"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_erro_lista_as_chaves_conhecidas(self, tmp_path) -> None:
+        _escreve(tmp_path, "config:\n  x: 1\n")
+        with pytest.raises(ConfigError, match="conhecidas: advisor, verify"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_config_so_com_advisor_continua_valido(self, tmp_path) -> None:
+        """Fechar o topo não pode quebrar quem só configura o advisor: sem
+        `verify`, os defaults Python continuam valendo (comportamento
+        anterior preservado)."""
+        _escreve(tmp_path, "advisor:\n  enabled: false\n  effort: high\n")
+        assert load_verify_config(cwd=tmp_path) == VerifyConfig()
+        assert load_advisor_config(cwd=tmp_path).enabled is False
+
+    def test_verify_e_advisor_juntos_carregam(self, tmp_path) -> None:
+        _escreve(
+            tmp_path,
+            "verify:\n  gate: 38\nadvisor:\n  model: anthropic/claude-opus-4\n",
+        )
+        assert load_verify_config(cwd=tmp_path).gate == 38.0
+        assert load_advisor_config(cwd=tmp_path).model == "anthropic/claude-opus-4"
+
+    def test_typo_dentro_de_advisor_reprova(self, tmp_path) -> None:
+        """TWIN CHECK da mesma task: `enabld: false` era engolido e o advisor
+        continuava ligado — a revisão semântica que o usuário desligou seguia
+        rodando, e a que ele configurou com typo no `model` caía no default."""
+        _escreve(tmp_path, "advisor:\n  enabld: false\n")
+        with pytest.raises(ConfigError, match="desconhecida.*advisor"):
+            load_advisor_config(cwd=tmp_path)
+
+    def test_advisor_valido_continua_carregando(self, tmp_path) -> None:
+        _escreve(tmp_path, "advisor:\n  enabled: false\n  effort: max\n")
+        cfg2 = load_advisor_config(cwd=tmp_path)
+        assert cfg2.enabled is False
+        assert cfg2.effort == "max"

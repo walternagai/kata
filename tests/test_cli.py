@@ -603,6 +603,83 @@ class TestStepVerify:
 
     @patch("kata.cli._confirm")
     @patch("kata.cli.run_all")
+    def test_step_verify_registra_evidencia_da_execucao(
+        self, mock_run_all, mock_confirm, capsys
+    ) -> None:
+        """S4: gate, comandos e instante ficam no arquivo, não só no terminal.
+
+        Antes, aprovar com `--gate 38` e com `--gate 5` produzia YAMLs
+        indistinguíveis: só `coverage_pass`/`coverage_pct` sobreviviam, e o
+        juiz reexecutava com o gate resolvido na hora dele.
+        """
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, details={"command": "npx eslint src"}),
+            "typecheck": VerifyResult(ok=True, details={"command": "npx tsc --noEmit"}),
+            "pytest": VerifyResult(ok=True, details={"command": "npx vitest run"}),
+            "coverage": VerifyResult(
+                ok=True,
+                details={
+                    "coverage_pct": 39.0,
+                    "gate": 38.0,
+                    "command": "npx vitest run --coverage",
+                },
+            ),
+        }
+        mock_confirm.return_value = True
+
+        data = cli._step_verify("my-task", {}, gate=38.0)
+
+        verify = data["verify"]
+        assert verify["typecheck_clean"] is True
+        assert verify["gate_used"] == 38.0
+        assert verify["commands"] == {
+            "lint": "npx eslint src",
+            "typecheck": "npx tsc --noEmit",
+            "test": "npx vitest run",
+            "coverage": "npx vitest run --coverage",
+        }
+        assert verify["ran_at"].endswith("+00:00")
+        assert data["kata_version"] == cli.__version__
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_sem_typecheck_declarado_grava_nada(
+        self, mock_run_all, mock_confirm, capsys
+    ) -> None:
+        """Sem o papel, a chave fica ausente: `null` é "não há gate de tipos",
+        e `False` seria reprovar uma checagem que ninguém pediu."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0, "gate": 70.0}),
+        }
+        mock_confirm.return_value = True
+
+        data = cli._step_verify("my-task", {})
+
+        assert "typecheck_clean" not in data["verify"]
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
+    def test_step_verify_typecheck_reprovado_rejeita(
+        self, mock_run_all, mock_confirm, capsys
+    ) -> None:
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "typecheck": VerifyResult(ok=False, output="src/a.ts(1,1): error TS2304"),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0, "gate": 70.0}),
+        }
+        mock_confirm.return_value = True
+
+        data = cli._step_verify("my-task", {})
+
+        assert data["verify"]["typecheck_clean"] is False
+        assert data["status"] == "rejected"
+        assert "TS2304" in capsys.readouterr().out
+
+    @patch("kata.cli._confirm")
+    @patch("kata.cli.run_all")
     def test_step_verify_approved_grava_approved_commit(
         self, mock_run_all, mock_confirm, capsys, repo_git, monkeypatch
     ) -> None:

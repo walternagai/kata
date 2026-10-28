@@ -81,10 +81,11 @@ the following situations:
 - **Documentation-only changes**: docs-only tasks are recognized and are not
   asked the INTENT question, keeping the gate silent where no behavior changed.
 - **Adversarial verification of finished work**: `kata --judge` re-runs every
-  claimed check and hunts seven fraud categories (weakened checks, false
+  claimed check and hunts eight fraud categories (weakened checks, false
   completion, scope creep, unauthorized actions, specification betrayal,
-  debris, and baseline tampering — the YAML's `base_commit` diverging from the
-  Git anchor recorded when the task started) before a merge or hand-over.
+  debris, baseline tampering — the YAML's `base_commit` diverging from the
+  Git anchor recorded when the task started — and a triviality claim the
+  measured diff does not support) before a merge or hand-over.
 - **Auditing tasks after the fact**: `kata --audit` grades each phase of a
   completed task as followed, skipped, faked, or degraded, and names the
   concrete risk each grade other than followed created — useful for review
@@ -160,14 +161,24 @@ changed lines.
 
 The verification layer provides independent functions for Ruff, pytest,
 coverage, and project-wide regular-expression searches. `run_all()` executes
-Ruff and pytest, then runs coverage only when pytest succeeds.
+Ruff (or the declared lint command), the declared typecheck when there is one,
+and pytest, then runs coverage only when pytest succeeds. `typecheck` is the
+one role without a Python default: no universal type checker exists, and a
+role that did not run must not be recorded as passed.
 
 #### `kata.judge`
 
 The optional judge treats the task file as a collection of claims, compares
-those claims with the Git diff, re-runs claimed checks, and searches for seven
+those claims with the Git diff, re-runs claimed checks, and searches for eight
 fraud categories: weakened checks, false completion, scope creep, unauthorized
-actions, specification betrayal, debris, and baseline tampering.
+actions, specification betrayal, debris, baseline tampering, and a triviality
+claim that the measured diff does not support (`fit.trivial` disables scope
+creep, so the flag itself is measured). The tolerance is deliberately gross —
+100 added lines or 10 files — because S2/CR-002 already ruled that a trivial
+task may touch a few small files; the target is the sixteen-thousand-line
+commit approved as trivial, not the three-helper change the eval scenario
+`s16` fixes as `VERIFIED`.
+
 
 Specification betrayal is an INTENT disagreement (`intent.all_agree: false`)
 approved **without** a recorded `intent.conflict_resolution`. A disagreement
@@ -175,6 +186,13 @@ with a written resolution is the intent gate working — it is what the CLI
 records for a bug fix, and what TWIN CHECK reads as a fixed defect — so it is
 not a fraud; the resolution is self-declared and is listed among the claims
 accepted without verification.
+
+Every task file also carries the execution evidence: `kata_version`,
+`verify.gate_used`, `verify.commands`, and `verify.ran_at`. The judge compares
+the recorded version and gate with its own and lists a caveat when they
+differ — a verdict produced by a different version, or under a different
+coverage gate, is not the same verdict, and saying so is cheaper than letting
+two audits of the same commit disagree without an explanation.
 
 The baseline anchor `refs/kata/base/<hash>` is written with a reflog. An
 anchor that has pointed at more than one commit was moved after the task
@@ -380,6 +398,7 @@ to the task files:
 ```yaml
 verify:
   lint: npx eslint src tests
+  typecheck: npx tsc --noEmit
   test: npx vitest run
   coverage: npx vitest run --coverage
   coverage_pattern: 'All files\s+\|\s+([\d.]+)'
@@ -394,7 +413,9 @@ advisor:
 
 | Key | Meaning |
 |---|---|
-| `verify.lint` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list |
+| `verify.lint` / `typecheck` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list. `typecheck` has no default: undeclared, it does not run and `verify.typecheck_clean` stays `null` |
+| Unknown key under `verify` | A named error, never a silent default: a misspelled or newer-version role would otherwise be dropped and the cycle would approve having run nothing for it |
+| Shell operators | Commands run **without a shell**, so `&&`, `\|\|`, `\|`, `;`, `>`, `<` are refused as standalone tokens. `npm run check && npm run test:db` reaches npm as arguments and exits 0 with the second tier never executed; declare a project script (`npm run check:all`) or an explicit shell (`bash -c "..."`) |
 | `verify.coverage_pattern` | Regex whose first group is the coverage percentage. Default reads the `TOTAL` line pytest-cov prints |
 | `verify.gate` | Minimum coverage percentage. A `--gate` flag overrides it |
 | `advisor.enabled` | Whether semantic adversarial review is active (`true`, `false`, `auto`, `never`). Default `true` |
@@ -722,6 +743,10 @@ domain: coding    # coding | devops | data-analysis | research | docs
                   # default is coding; other domains load a domain adapter
 done: ""    # Fable Step 1: done criterion declared in THINK, before the
             # evidence; VERIFY confronts it and the report displays it
+kata_version: ""    # version of the kata that recorded the evidence (stamped
+                    # by VERIFY). JUDGE compares it with the version running:
+                    # a mismatch is a caveat, because the re-execution is not
+                    # the code that verified
 base_commit: ""    # HEAD captured when the task started; lets JUDGE diff
                     # against it even after the task has been committed.
                     # The CLI also stores an independent Git ref anchor.
@@ -779,6 +804,8 @@ surgical:
   skipped: false        # true only in non-interactive mode
 verify:
   ruff_clean: null
+  typecheck_clean: null  # only when the project declares verify.typecheck;
+                       # null means "there is no type gate", not "passed"
   tests_pass: null
   coverage_pct: null
   coverage_pass: null
@@ -788,6 +815,12 @@ verify:
   hand_back: false     # true after 3 failed attempts — task handed back to
                        # the user with what was tried, the real output, and
                        # the current hypothesis
+  gate_used: null      # coverage gate in force at approval; without it,
+                       # approving with --gate 38 and with --gate 5 produced
+                       # indistinguishable task files
+  commands: {}         # role -> command that ran ("lint", "typecheck",
+                       # "test", "coverage"): evidence of what executed
+  ran_at: ""           # UTC timestamp of the run (ISO 8601)
 auth:
   action_taken: false
   authorized: false
@@ -1070,7 +1103,7 @@ the copies accumulated 395 divergent lines, and part of that was an improvement
 applied to one frontend and forgotten in the other — the ARTIFACT phase had a
 "Ferramentas" section only in Claude Code, and the OpenCode orchestrator never
 received the corrected step numbering or the `base_commit` instruction. Today
-92.5% of the rendered lines are shared (93% at whole-number precision;
+92.8% of the rendered lines are shared (93% at whole-number precision;
 measure it with `python3 scripts/build_skills.py --stats`) and the remainder
 is declared difference.
 

@@ -38,11 +38,13 @@ from kata.judge import (
     hunt_false_completion,
     hunt_scope_creep,
     hunt_spec_betrayal,
+    hunt_triviality_claim,
     hunt_unauthorized_action,
     hunt_weakened_checks,
     is_debris_file,
     is_kata_bookkeeping,
     judge_task,
+    measured_diff_size,
     probes_for,
     record_baseline_ref,
 )
@@ -676,6 +678,64 @@ class TestHuntScopeCreep:
         task = {"surgical": {"files": []}}
         frauds = hunt_scope_creep(task, ["a.py"])
         assert len(frauds) == 1
+
+
+class TestHuntTrivialityClaim:
+    """Caça 8: `fit.trivial` desliga o scope creep — o juiz mede a flag.
+
+    S3: um commit de 16 mil linhas podia ser aprovado como mudança trivial.
+    O único hunter que olharia o escopo era desligado pela própria flag, e
+    nada mais reclamava.
+    """
+
+    @staticmethod
+    def _diff(linhas: int) -> str:
+        corpo = "\n".join(f"+linha {i}" for i in range(linhas))
+        return f"diff --git a/x.py b/x.py\n--- a/x.py\n+++ b/x.py\n{corpo}"
+
+    def test_trivial_com_diff_pequeno_nao_e_fraude(self) -> None:
+        task = {"fit": {"trivial": True}, "surgical": {"files": []}}
+        assert hunt_triviality_claim(task, ["x.py"], self._diff(3)) == []
+
+    def test_tres_arquivos_pequenos_continuam_verificados(self) -> None:
+        """S2/CR-002 e o cenário s16: 3 helpers pequenos são decisão legítima
+        do triviality gate — o juiz não reabre essa decisão."""
+        task = {"fit": {"trivial": True}, "surgical": {"files": []}}
+        assert hunt_triviality_claim(task, ["a.py", "b.py", "c.py"], self._diff(12)) == []
+
+    def test_diff_de_cem_linhas_e_fraude_media(self) -> None:
+        task = {"fit": {"trivial": True}, "surgical": {"files": []}}
+        frauds = hunt_triviality_claim(task, ["x.py"], self._diff(100))
+        assert len(frauds) == 1
+        assert frauds[0].type == "triviality_claim"
+        assert frauds[0].severity == "medium"
+
+    def test_dez_arquivos_e_fraude(self) -> None:
+        task = {"fit": {"trivial": True}, "surgical": {"files": []}}
+        arquivos = [f"m{i}.py" for i in range(10)]
+        frauds = hunt_triviality_claim(task, arquivos, self._diff(3))
+        assert len(frauds) == 1
+
+    def test_diff_de_mil_linhas_e_alta_severidade(self) -> None:
+        """O caso que motivou o hunter: um commit de 16 mil linhas."""
+        task = {"fit": {"trivial": True}, "surgical": {"files": []}}
+        frauds = hunt_triviality_claim(task, ["x.py"], self._diff(1000))
+        assert frauds[0].severity == "high"
+
+    def test_nao_trivial_nao_e_avaliado(self) -> None:
+        """Sem a flag, o scope creep compara normalmente — não há bypass."""
+        task = {"fit": {"trivial": False}, "surgical": {"files": []}}
+        assert hunt_triviality_claim(task, ["a.py", "b.py"], self._diff(50)) == []
+
+    def test_arquivos_declarados_devolvem_a_checagem_ao_scope_creep(self) -> None:
+        task = {
+            "fit": {"trivial": True},
+            "surgical": {"files": [{"path": "a.py", "necessary": True}]},
+        }
+        assert hunt_triviality_claim(task, ["a.py", "b.py"], self._diff(50)) == []
+
+    def test_mede_linhas_adicionadas_e_ignora_cabecalho(self) -> None:
+        assert measured_diff_size(["a.py"], "+++ b/a.py\n+x\n-y\n+z") == (1, 2)
 
 
 class TestHuntUnauthorizedAction:
@@ -3127,3 +3187,102 @@ class TestPromptDaFaseBateComOsHunters:
             "src/kata/__init__.py docstring ainda menciona '8 fases' — drift com "
             "o resto do repo (README, AGENTS, phases, frontends gerados)."
         )
+
+
+class TestTrivialidadeMedidaNoRepo:
+    """S3 ponta a ponta: a flag contra o diff que o juiz realmente lê."""
+
+    @staticmethod
+    def _commit_grande(tmp_path: Path, linhas: int = 1200) -> None:
+        (tmp_path / "grande.py").write_text("\n".join(f"x{i} = {i}" for i in range(linhas)) + "\n")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "trabalho grande"], cwd=tmp_path, check=True)
+
+    def _head(self, tmp_path: Path) -> str:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    def test_janela_fechada_por_approved_commit_refuta(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        base = self._head(repo_git)
+        self._commit_grande(repo_git)
+        approved = self._head(repo_git)
+
+        task = {
+            "base_commit": base,
+            "approved_commit": approved,
+            "fit": {"trivial": True},
+            "surgical": {"files": []},
+            "verify": {},
+            "intent": {},
+            "artifact": {},
+        }
+        result = judge_task(task, cwd=repo_git)
+
+        assert any(f.type == "triviality_claim" for f in result.frauds)
+        assert result.verdict == "REFUTED"
+
+    def test_sem_teto_o_excesso_vira_ressalva(self, repo_git, monkeypatch) -> None:
+        """Sem `approved_commit`, o diff inclui trabalho de tasks posteriores:
+        acusar aqui penalizaria a tarefa errada (mesma doutrina do P-1)."""
+        monkeypatch.chdir(repo_git)
+        base = self._head(repo_git)
+        self._commit_grande(repo_git)
+
+        task = {
+            "base_commit": base,
+            "fit": {"trivial": True},
+            "surgical": {"files": []},
+            "verify": {},
+            "intent": {},
+            "artifact": {},
+        }
+        result = judge_task(task, cwd=repo_git)
+
+        assert not any(f.type == "triviality_claim" for f in result.frauds)
+        assert any("não tem teto" in c for c in result.caveats)
+
+
+class TestEvidenciaDaExecucao:
+    """S4/S5: O juiz diz com que gate e com que versão a evidência foi feita."""
+
+    def test_kata_version_divergente_vira_ressalva(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        task = {
+            "kata_version": "0.0.1",
+            "verify": {},
+            "surgical": {},
+            "intent": {},
+            "artifact": {},
+        }
+        result = judge_task(task, cwd=tmp_path)
+        assert any("0.0.1" in c and "não é o mesmo código" in c for c in result.caveats)
+
+    def test_mesma_versao_nao_gera_ressalva(self, tmp_path, monkeypatch) -> None:
+        from kata import __version__
+
+        monkeypatch.chdir(tmp_path)
+        task = {
+            "kata_version": __version__,
+            "verify": {},
+            "surgical": {},
+            "intent": {},
+            "artifact": {},
+        }
+        result = judge_task(task, cwd=tmp_path)
+        assert not any("mesmo código" in c for c in result.caveats)
+
+    def test_gate_da_aprovacao_diferente_do_reexecutado_vira_ressalva(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        task = {"verify": {"gate_used": 38}, "surgical": {}, "intent": {}, "artifact": {}}
+        result = judge_task(task, cwd=tmp_path)
+        assert any("gate da aprovação era 38%" in c for c in result.caveats)
+
+    def test_gate_igual_nao_gera_ressalva(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        task = {"verify": {"gate_used": 70}, "surgical": {}, "intent": {}, "artifact": {}}
+        result = judge_task(task, cwd=tmp_path)
+        assert not any("gate da aprovação" in c for c in result.caveats)

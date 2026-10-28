@@ -24,7 +24,7 @@ Verificar adversarialmente uma tarefa concluída:
    `baseline_tampering`. Sem âncora, o resultado não pode ser VERIFIED. Sem
    baseline, usa diff local contra HEAD e declara os pontos cegos observáveis.
 3. **Re-run every claimed verification** — executar de novo e comparar
-4. **Hunt frauds** — 7 categorias
+4. **Hunt frauds** — 8 categorias
 5. **Confess blind spots** — registrar o que não teve como observar
 6. **Deliver verdict** — VERIFIED / VERIFIED WITH CAVEATS / UNVERIFIABLE / REFUTED
 
@@ -42,7 +42,7 @@ Ou para tarefa detectada por branch:
 python -m kata --judge
 ```
 
-## As 7 Fraudes
+## As 8 Fraudes
 
 | # | Fraude | Descrição | Severidade |
 |---|--------|-----------|------------|
@@ -53,6 +53,16 @@ python -m kata --judge
 | 5 | **Spec betrayal** | O INTENT registrou que código, teste e spec discordam (`all_agree: false`) e a tarefa foi aprovada sem `conflict_resolution`. **Exceção:** discordância com resolução registrada (texto não vazio) é o INTENT funcionando — o fluxo normal de um bug fix — e não é fraude; a resolução é listada entre as claims aceitas sem verificação. | 🔴 alta |
 | 6 | **Debris** | Arquivos temporários (`.tmp`, `.bak`), debug prints, TODOs, lixo | 🟢 baixa |
 | 7 | **Baseline tampering** | `base_commit` do YAML diverge da âncora `refs/kata/base/<hash>` registrada no início, a âncora foi movida depois de criada (o reflog dela aponta para mais de um commit), ou o baseline não é ancestral do HEAD — mover o baseline encolhe o diff que o juiz examina. Apagar e recriar a âncora apaga o reflog e escapa localmente: no CI, use `--trusted-base <ref>` para tirar o piso de uma ref que o agente não move | 🔴 alta |
+| 8 | **Triviality claim** | `fit.trivial=true` sem arquivos declarados no SURGICAL desliga o scope creep por decisão do triviality gate — o juiz mede se a alegação se sustenta. A tolerância é **grosseira** de propósito: só acusa a partir de 100 linhas adicionadas ou 10 arquivos, porque o S2/CR-002 declarou legítimos os 3 arquivos pequenos do cenário s16, e o alvo deste hunter é o commit de 16 mil linhas aprovado como trivial. Com arquivos declarados, o scope creep compara normalmente. Sem teto de diff conhecido (`approved_commit` ou base confiável), o excesso vira **ressalva** em vez de fraude: pode ser trabalho de task posterior | 🟡 média/alta |
+
+### Evidência da execução
+
+O arquivo da tarefa carrega `kata_version`, `verify.gate_used`,
+`verify.commands` e `verify.ran_at`. O juiz confronta versão e gate com os
+seus e, quando divergem, **não** acusa fraude: registra ressalva. "Aprovado
+sob a versão 0.7.5 e reexecutado sob 0.8.0" e "aprovado com `--gate 38` e
+reexecutado com o gate 70" são verdades diferentes que, sem esses campos,
+sairiam idênticas no relatório.
 
 A escrituração do próprio kata (`.kata/*.yaml`, `.kata/config.yaml`) não conta
 como arquivo alterado: ela é criada pela ferramenta, não pelo autor da tarefa,
@@ -74,7 +84,7 @@ acusação: não ter observado não é evidência de fraude nem de honestidade.
 Oito disparam hoje:
 
 1. **Nenhuma verificação re-executada** — o relatório não afirma nenhum
-   check (`ruff_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
+   check (`ruff_clean`, `typecheck_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
    reproduzir, então nada é re-executado. Declarar os comandos do projeto em
    `.kata/config.yaml` é o que desarma este ponto cego.
 2. **Teste em linguagem sem sondas** — o juiz conhece a sintaxe de Python,
@@ -148,7 +158,7 @@ A verificação adversarial do Kata opera em dois estágios complementares:
 ### Estágio 1: Verificação Mecânica (Determinística)
 
 Executa o CLI Python (`python -m kata --task <name> --judge` via `Bash`).
-Ele re-executa linters e testes, varre o diff e a AST contra as 7 fraudes
+Ele re-executa linters e testes, varre o diff e a AST contra as 8 fraudes
 sintáticas e confessa pontos cegos. Se o veredito mecânico for REFUTED ou
 houver falha de execução, o ciclo para imediatamente — a tarefa é reprovada
 sem necessidade de revisão semântica adicional.

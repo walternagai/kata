@@ -6,9 +6,9 @@ Inspirado no fable-judge do The Fable Method
 1. Collect claims — o que o relatório diz que foi feito
 2. Establish ground truth — git diff contra o estado real
 3. Re-run every claimed verification — executa de novo e compara
-4. Hunt frauds — 7 categorias (weakened checks, false completion,
+4. Hunt frauds — 8 categorias (weakened checks, false completion,
    scope creep, unauthorized action, spec betrayal, debris, baseline
-   tampering)
+   tampering, triviality claim)
 5. Deliver verdict — VERIFIED / VERIFIED WITH CAVEATS / UNVERIFIABLE / REFUTED
 
 UNVERIFIABLE cobre o caso em que nada foi observado: o juiz não achou fraude
@@ -23,7 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from kata import __version__
 from kata.config import VerifyConfig
+from kata.fit import TRIVIAL_MAX_LINES
 from kata.verify import (
     VerifyResult,
     _is_tool_artifact,  # noqa: F401
@@ -1152,6 +1154,7 @@ def hunt_false_completion(
 
     checks: list[tuple[str, str, str]] = [
         ("ruff_clean", "ruff", "ruff check"),
+        ("typecheck_clean", "typecheck", "typecheck"),
         ("tests_pass", "pytest", "pytest"),
         ("coverage_pass", "coverage", "coverage"),
     ]
@@ -1207,6 +1210,81 @@ def hunt_scope_creep(task_data: dict[str, Any], changed: list[str]) -> list[Judg
             )
         )
 
+    return frauds
+
+
+# Tolerância da alegação de trivialidade. S2/CR-002 decidiu que
+# `fit.trivial=true` com `surgical.files=[]` é decisão legítima do gate, e o
+# cenário s16 do eval prova que 3 arquivos pequenos devem sair VERIFIED. O
+# juiz não reabre essa decisão para uma mudança pequena: só mede quando o diff
+# deixa de ser trivial em qualquer leitura. Foi o commit de 16 mil linhas que
+# motivou o hunter, e é essa ordem de grandeza que ele precisa pegar.
+TRIVIAL_CLAIM_LINES = 100
+TRIVIAL_CLAIM_FILES = 10
+
+
+def measured_diff_size(changed: list[str], diff: str) -> tuple[int, int]:
+    """Tamanho do diff que o juiz está olhando: (arquivos, linhas adicionadas).
+
+    Conta linhas `+` do diff unificado, incluindo o diff sintético dos
+    untracked que `_untracked_diff` anexa — o triviality gate do FIT também
+    os conta, e medir por réguas diferentes faria a divergência ser do
+    instrumento, não da tarefa.
+    """
+    linhas = sum(
+        1 for line in diff.split("\n") if line.startswith("+") and not line.startswith("+++")
+    )
+    return len(changed), linhas
+
+
+def hunt_triviality_claim(
+    task_data: dict[str, Any], changed: list[str], diff: str
+) -> list[JudgeFraud]:
+    """Caça 8: trivialidade declarada que o diff não sustenta.
+
+    `fit.trivial: true` desliga `hunt_scope_creep` por decisão do triviality
+    gate: não há arquivos a declarar. O juiz confiava nessa flag sem olhar o
+    tamanho real do que ela escondia — um commit de 16 mil linhas podia ser
+    aprovado como mudança trivial e nenhum hunter reclamava, porque o único
+    que olharia o escopo havia sido desligado pela própria flag.
+
+    Duas contenções deliberadas, para não reabrir decisões já tomadas:
+
+    - só acusa quando a flag de fato pulou o SURGICAL (sem arquivos
+      declarados); com a lista preenchida, o scope creep compara normalmente;
+    - a divergência precisa ser grosseira (`TRIVIAL_CLAIM_LINES` /
+      `TRIVIAL_CLAIM_FILES`), não os 3 arquivos pequenos que o S2/CR-002
+      declarou legítimos e que o cenário s16 do eval fixa como VERIFIED.
+    """
+    frauds: list[JudgeFraud] = []
+    fit = task_data.get("fit", {})
+    if fit.get("trivial") is not True:
+        return frauds
+
+    surgical = task_data.get("surgical", {})
+    declarados = [
+        f for f in surgical.get("files", []) if isinstance(f, dict) and f.get("necessary")
+    ]
+    if declarados:
+        return frauds
+
+    arquivos, linhas = measured_diff_size(changed, diff)
+    if linhas < TRIVIAL_CLAIM_LINES and arquivos < TRIVIAL_CLAIM_FILES:
+        return frauds
+
+    frauds.append(
+        JudgeFraud(
+            type="triviality_claim",
+            severity="high" if linhas >= TRIVIAL_CLAIM_LINES * 10 or arquivos >= 50 else "medium",
+            description="trivialidade declarada não confere com o diff medido",
+            evidence=(
+                f"fit.trivial=true, mas o diff tem {arquivos} arquivo(s) e "
+                f"{linhas} linha(s) adicionada(s) — o gate admite ≤1 arquivo e "
+                f"<{TRIVIAL_MAX_LINES} linhas, e a tolerância do juiz é "
+                f"<{TRIVIAL_CLAIM_LINES} linhas e <{TRIVIAL_CLAIM_FILES} arquivos"
+            ),
+        )
+    )
     return frauds
 
 
@@ -1535,6 +1613,20 @@ def judge_task(
                     "de tasks posteriores"
                 )
 
+    # A janela é "conhecida" quando o teto do diff é a própria tarefa:
+    # approved_commit validado, base confiável do CI, ou nada commitado depois
+    # do piso (a árvore de trabalho é o que a tarefa mexeu). Sem isso, o diff
+    # medido pode incluir trabalho de tasks posteriores, e uma acusação de
+    # trivialidade passaria a penalizar a vizinha (mesma doutrina do P-1).
+    janela_conhecida = (
+        janela_confiavel is not None
+        or diff_end is not None
+        or (
+            diff_base is not None
+            and _resolve_commit("HEAD", cwd=cwd) == _resolve_commit(str(diff_base), cwd=cwd)
+        )
+    )
+
     diff = _run_git_diff(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
     changed = _changed_files(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
     claims = collect_claims(task_data)
@@ -1544,6 +1636,8 @@ def judge_task(
     claimed_checks: list[str] = []
     if verify.get("ruff_clean"):
         claimed_checks.append("ruff")
+    if verify.get("typecheck_clean"):
+        claimed_checks.append("typecheck")
     if verify.get("tests_pass"):
         claimed_checks.append("pytest")
     if verify.get("coverage_pass"):
@@ -1568,9 +1662,20 @@ def judge_task(
                 re_ran[key] = results[key].ok
 
     frauds: list[JudgeFraud] = [*baseline_frauds]
+    caveats: list[str] = []
     frauds.extend(hunt_weakened_checks(diff))
     frauds.extend(hunt_false_completion(task_data, verify_results))
     frauds.extend(hunt_scope_creep(task_data, changed))
+    trivialidade = hunt_triviality_claim(task_data, changed, diff)
+    if janela_conhecida:
+        frauds.extend(trivialidade)
+    elif trivialidade:
+        # Sem teto não se separa o diff da tarefa do de tasks posteriores.
+        # Confessar, em vez de acusar a tarefa errada.
+        caveats.append(
+            "trivialidade declarada não confere com o diff medido, mas a janela "
+            "não tem teto: pode ser trabalho de task posterior — " + trivialidade[0].evidence
+        )
     frauds.extend(hunt_unauthorized_action(task_data))
     frauds.extend(hunt_spec_betrayal(task_data))
     frauds.extend(hunt_debris(diff, changed))
@@ -1610,7 +1715,23 @@ def judge_task(
         )
 
     high = [f for f in frauds if f.severity == "high"]
-    caveats: list[str] = []
+    # S5: qual kata produziu a evidência que está sendo julgada.
+    kata_version = task_data.get("kata_version")
+    if isinstance(kata_version, str) and kata_version and kata_version != __version__:
+        caveats.append(
+            f"evidência produzida por kata {kata_version}; este juiz roda {__version__} — "
+            "o reexecutado não é o mesmo código que verificou"
+        )
+    # S4: o gate em vigor na aprovação, contra o da re-execução. Sem isso,
+    # aprovar com `--gate 90` e reexecutar com o default 70 apagava a diferença
+    # e o veredito saía como se o gate nunca tivesse mudado.
+    gate_usado = verify.get("gate_used")
+    if (
+        isinstance(gate_usado, (int, float))
+        and not isinstance(gate_usado, bool)
+        and float(gate_usado) != float(gate)
+    ):
+        caveats.append(f"gate da aprovação era {gate_usado}%; a re-execução usou {gate:.0f}%")
     if janela_confiavel:
         caveats.append(
             f"{janela_confiavel}: base_commit e approved_commit do YAML não definem a janela"

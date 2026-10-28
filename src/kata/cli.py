@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -856,6 +857,23 @@ def _step_verify(
         for line in ruff_res.output.split("\n"):
             print(f"     {line}")
 
+    # ── typecheck ──
+    # Só quando o projeto declarou o comando: sem declaração não há gate de
+    # tipos, e um `True` gravado aqui afirmaria uma verificação inexistente.
+    # Exibido na ordem em que roda (lint → typecheck → teste → coverage):
+    # imprimir depois do teste faria o relatório contar a execução fora de ordem.
+    tc_res: VerifyResult | None = results.get("typecheck")
+    if tc_res is not None:
+        print(f"\n▶ {tc_res.details.get('command', 'typecheck')}")
+        verify["typecheck_clean"] = tc_res.ok
+        if tc_res.ok:
+            print("  ✅ passou")
+        else:
+            all_ok = False
+            print("  ❌ falhou — saída:")
+            for line in tc_res.output.split("\n"):
+                print(f"     {line}")
+
     # ── teste ──
     pytest_res: VerifyResult = results["pytest"]
     print(f"\n▶ {pytest_res.details.get('command', 'test')}")
@@ -881,6 +899,25 @@ def _step_verify(
         print(f"  ❌ falhou ({cov_pct:.1f}% — gate: {gate:.0f}%)")
         for line in cov_res.output.split("\n"):
             print(f"     {line}")
+
+    # ── evidência da execução ──
+    # O que rodou, com que gate e quando. Antes o YAML guardava só
+    # `coverage_pass`/`coverage_pct`: aprovar com `--gate 38` e com `--gate 5`
+    # produzia arquivos indistinguíveis, e o juiz reexecutava com o gate
+    # resolvido na hora dele. O relatório do Fable Step 6 pede os comandos
+    # executados; eles passam a estar no arquivo, não só no terminal.
+    verify["gate_used"] = gate
+    verify["commands"] = {
+        rotulo: results[chave].details.get("command", "")
+        for chave, rotulo in (
+            ("ruff", "lint"),
+            ("typecheck", "typecheck"),
+            ("pytest", "test"),
+            ("coverage", "coverage"),
+        )
+        if chave in results and results[chave].details.get("command")
+    }
+    verify["ran_at"] = datetime.now(UTC).isoformat(timespec="seconds")
 
     # ── success criteria ──
     print("\n▶ Critério de sucesso da tarefa")
@@ -925,6 +962,11 @@ def _step_verify(
 
     data["verify"] = verify
     data["status"] = "approved" if all_ok else "rejected"
+    # S5: qual kata produziu esta evidência. Sem isto, um veredito emitido por
+    # uma versão instalada não pode ser confrontado com o código-fonte que o
+    # reexecuta — a diferença só aparecia como divergência inexplicada entre
+    # duas auditorias do mesmo commit.
+    data["kata_version"] = __version__
     if all_ok:
         # R14: approved_commit marca o FIM do trabalho da tarefa — o HEAD no
         # momento da aprovação. O JUDGE diffa base_commit..approved_commit
@@ -1319,6 +1361,10 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
     ruff = verify.get("ruff_clean")
     if ruff is not None:
         checks.append(f"  {'✅' if ruff else '❌'} ruff check {'limpo' if ruff else 'com erros'}")
+    typecheck = verify.get("typecheck_clean")
+    if typecheck is not None:
+        estado = "passou" if typecheck else "falhou"
+        checks.append(f"  {'✅' if typecheck else '❌'} typecheck {estado}")
     tests = verify.get("tests_pass")
     if tests is not None:
         checks.append(f"  {'✅' if tests else '❌'} pytest {'passou' if tests else 'falhou'}")
@@ -1425,6 +1471,8 @@ def _init_task(task: str) -> bool:
         # Fable Step 1: critério de sucesso declarado no THINK, antes da
         # evidência; exibido no VERIFY e no relatório.
         "done": "",
+        # Versão do kata que produziu a evidência (S5).
+        "kata_version": "",
         "fit": {
             "trivial": False,
             "route": "code-loop",
@@ -1465,6 +1513,7 @@ def _init_task(task: str) -> bool:
         },
         "verify": {
             "ruff_clean": None,
+            "typecheck_clean": None,
             "tests_pass": None,
             "coverage_pct": None,
             "coverage_pass": None,
@@ -1474,6 +1523,12 @@ def _init_task(task: str) -> bool:
             # tarefa foi devolvida ao usuário.
             "attempts": 0,
             "hand_back": False,
+            # Evidência da execução: gate em vigor, comandos que rodaram e
+            # quando. Gravados pelo VERIFY; o JUDGE confronta o gate e a
+            # versão antes de acreditar no resto.
+            "gate_used": None,
+            "commands": {},
+            "ran_at": "",
         },
         "auth": {"action_taken": False, "authorized": False, "action": "", "quote": ""},
         "pending": {"action": "", "documented": False},

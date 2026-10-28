@@ -287,3 +287,60 @@ class TestAdvisorConfig:
         _escreve(tmp_path, "advisor:\n  skip_trivial: 'nao'\n")
         with pytest.raises(ConfigError, match="`advisor.skip_trivial` deve ser booleano"):
             load_advisor_config(cwd=tmp_path)
+
+
+class TestTypecheck:
+    """O papel de tipos não tem default — e não pode sumir em silêncio.
+
+    S1: antes deste papel, `verify.typecheck` era lido, descartado e o VERIFY
+    aprovava sem nunca ter rodado o typechecker. O projeto achava que tinha um
+    gate de tipos; o arquivo de tarefa dizia "aprovado".
+    """
+
+    def test_typecheck_declarado(self, tmp_path) -> None:
+        _escreve(tmp_path, "verify:\n  typecheck: npx tsc --noEmit\n")
+        cfg = load_verify_config(cwd=tmp_path)
+        assert cfg.typecheck == ["npx", "tsc", "--noEmit"]
+        # Declarar um papel não declara os outros: lint continua no default.
+        assert cfg.lint is None
+
+    def test_typecheck_omitido_nao_tem_default(self, tmp_path) -> None:
+        """Não existe verificador de tipos universal: omitido, não roda."""
+        _escreve(tmp_path, "verify:\n  lint: go vet ./...\n")
+        assert load_verify_config(cwd=tmp_path).typecheck is None
+
+    def test_chave_desconhecida_vira_config_error(self, tmp_path) -> None:
+        _escreve(tmp_path, "verify:\n  typechek: npx tsc --noEmit\n")
+        with pytest.raises(ConfigError, match="desconhecida"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_lista_de_papeis_conhecidos_aparece_no_erro(self, tmp_path) -> None:
+        _escreve(tmp_path, "verify:\n  format: cargo fmt --check\n")
+        with pytest.raises(ConfigError, match="typecheck"):
+            load_verify_config(cwd=tmp_path)
+
+
+class TestSemShell:
+    """O comando roda sem shell: operador solto é erro, não encadeamento.
+
+    S2: `npm run check && npm run test:db` chegava ao npm como seis argumentos
+    e o npm os repassava ao script — exit 0 com o tier 2 nunca executado. O
+    verde escondia a metade, e o JUDGE reexecutava o mesmo comando quebrado.
+    """
+
+    @pytest.mark.parametrize("operador", ["&&", "||", "|", ";", ">", ">>", "<", "<<"])
+    def test_operador_solto_reprova(self, tmp_path, operador: str) -> None:
+        _escreve(tmp_path, f'verify:\n  test: "npm run check {operador} npm run test:db"\n')
+        with pytest.raises(ConfigError, match="não é interpretado"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_operador_em_lista_tambem_reprova(self, tmp_path) -> None:
+        _escreve(tmp_path, 'verify:\n  test: ["npm", "run", "check", "&&", "npm", "test"]\n')
+        with pytest.raises(ConfigError, match="não é interpretado"):
+            load_verify_config(cwd=tmp_path)
+
+    def test_shell_explicito_e_aceito(self, tmp_path) -> None:
+        """Quem interpreta o `&&` é o bash, não o kata — e isso é explícito."""
+        _escreve(tmp_path, 'verify:\n  test: bash -c "npm run check && npm run test:db"\n')
+        cfg = load_verify_config(cwd=tmp_path)
+        assert cfg.test == ["bash", "-c", "npm run check && npm run test:db"]

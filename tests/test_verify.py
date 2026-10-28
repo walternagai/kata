@@ -699,6 +699,17 @@ class TestConsistencyFailures:
         data = {"status": "rejected", "done": "", "verify": {"success_criteria_met": False}}
         assert consistency_failures(data) == []
 
+    def test_typecheck_falho_torna_a_tarefa_inconsistente(self) -> None:
+        """Um typecheck reprovado junto de `status: approved` é a mesma
+        contradição que lint/testes/coverage reprovados: o arquivo afirma
+        aprovado sobre uma verificação que falhou."""
+        data = {
+            "status": "approved",
+            "done": "x",
+            "verify": {"success_criteria_met": True, "typecheck_clean": False},
+        }
+        assert "typecheck falhou" in consistency_failures(data)
+
     def test_verify_nao_mapa_nao_crasha(self) -> None:
         data = {"status": "approved", "done": "x", "verify": True}
         assert "critério de sucesso não registrado" in consistency_failures(data)
@@ -919,6 +930,52 @@ class TestRunAllComConfig:
         comandos = [" ".join(c.args[0]) for c in mock_run.call_args_list]
         assert comandos[0] == "flake8 src"
         assert "pytest" in comandos[1]
+
+    @patch("kata.verify._run")
+    def test_typecheck_roda_entre_o_lint_e_o_teste(self, mock_run: MagicMock) -> None:
+        """Ordem importa para o relatório: lint → typecheck → teste → coverage."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="All files |  90.0 |", stderr="")
+        cfg = VerifyConfig(
+            lint=["npx", "eslint", "src"],
+            typecheck=["npx", "tsc", "--noEmit"],
+            test=["npx", "vitest", "run"],
+            coverage=["npx", "vitest", "run", "--coverage"],
+            coverage_pattern=r"All files\s+\|\s+([\d.]+)",
+        )
+        results = run_all(config=cfg)
+
+        comandos = [" ".join(c.args[0]) for c in mock_run.call_args_list]
+        assert comandos == [
+            "npx eslint src",
+            "npx tsc --noEmit",
+            "npx vitest run",
+            "npx vitest run --coverage",
+        ]
+        assert results["typecheck"].ok is True
+
+    @patch("kata.verify._run")
+    def test_sem_typecheck_declarado_a_chave_nao_existe(self, mock_run: MagicMock) -> None:
+        """Ausente é "não há gate de tipos" — não `True`, que seria afirmar
+        uma verificação que ninguém pediu."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="TOTAL 90%", stderr="")
+        results = run_all(config=VerifyConfig())
+        assert "typecheck" not in results
+
+    @patch("kata.verify._run")
+    def test_typecheck_reprovado_nao_impede_o_resto(self, mock_run: MagicMock) -> None:
+        """Só o coverage é curto-circuitado pelo teste; o typecheck reprovado
+        aparece no resultado para o relatório poder reprovar o ciclo."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="TOTAL 90%", stderr="")
+        cfg = VerifyConfig(
+            typecheck=["npx", "tsc", "--noEmit"],
+            lint=["true"],
+            test=["true"],
+            coverage=["true"],
+            coverage_pattern=r"(\d+)%",
+        )
+        results = run_all(config=cfg)
+        assert results["typecheck"].ok is True
+        assert results["coverage"].ok is True
 
     @patch("kata.verify._run")
     def test_teste_declarado_que_falha_pula_o_coverage(self, mock_run: MagicMock) -> None:

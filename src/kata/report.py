@@ -35,7 +35,7 @@ def _print_header(text: str) -> None:
 # por serem o mesmo vocabulário que o schema da tarefa persiste (`ruff_clean`,
 # `tests_pass`). Renomear o schema é migração à parte; exibir o papel não é, e
 # "✅ ruff" num projeto JS é ruído que confunde quem lê o veredito.
-_ROLE_LABELS = {"ruff": "lint", "pytest": "teste", "coverage": "coverage"}
+_ROLE_LABELS = {"ruff": "lint", "typecheck": "typecheck", "pytest": "teste", "coverage": "coverage"}
 
 
 def _print_judge_verdict(result: JudgeResult) -> None:
@@ -238,7 +238,10 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
 
     verify = bloco("verify")
     consistencia = consistency_failures(data)
-    evidencias = [verify.get(chave) for chave in ("ruff_clean", "tests_pass", "coverage_pass")]
+    evidencias = [
+        verify.get(chave)
+        for chave in ("ruff_clean", "typecheck_clean", "tests_pass", "coverage_pass")
+    ]
     if consistencia:
         achados.append(
             {

@@ -46,7 +46,7 @@ FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK →
 | TWIN CHECK | Se um defeito foi corrigido, buscar o mesmo padrão no projeto inteiro |
 | ARTIFACT | Verificar que todas as linhas devidas (INTENT/AUTH/PENDING/TWINS) estão presentes |
 | REPORT | Relatório outcome-first: resultado na primeira linha, verificações, caveats honestos, INTENT/AUTH/PENDING/TWINS lines |
-| JUDGE *(opcional)* | Verificação adversarial — re-executa verificações, caça 7 tipos de fraude, entrega veredito VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED |
+| JUDGE *(opcional)* | Verificação adversarial — re-executa verificações, caça 8 tipos de fraude, entrega veredito VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED |
 
 A fase FIT é inspirada no **triviality gate** e **fit gate**; a fase JUDGE
 é inspirada no **fable-judge** do
@@ -140,6 +140,10 @@ domain: coding        # coding | devops | data-analysis | research | docs
                       # default: coding; outras domains carregam um adapter
 done: ""              # Fable Step 1: critério de sucesso declarado no THINK,
                       # ANTES da evidência; exibido no VERIFY e no relatório
+kata_version: ""      # versão do kata que gravou a evidência (o VERIFY
+                      # estampa). O JUDGE compara com a que está rodando e,
+                      # se divergir, ressalva que o reexecutado não é o mesmo
+                      # código que verificou
 base_commit: ""       # HEAD do git no início da tarefa; usado pelo JUDGE
                         # para comparar mesmo depois que a tarefa é commitada.
                         # O CLI também ancora este SHA em refs/kata/base/*;
@@ -192,6 +196,9 @@ surgical:
   skipped: false        # true só no modo não-interativo
 verify:
   ruff_clean: true
+  typecheck_clean: null  # só existe quando o projeto declara
+                       # `verify.typecheck` em .kata/config.yaml; null é
+                       # "não há gate de tipos", não "passou"
   tests_pass: true
   coverage_pct: 0.0
   coverage_pass: false
@@ -201,6 +208,13 @@ verify:
   hand_back: false     # true quando N tentativas falharam — tarefa devolvida
                        # ao usuário com o que foi tentado, o output real e a
                        # hipótese atual
+  gate_used: null      # gate em vigor quando o VERIFY aprovou. Sem ele,
+                       # aprovar com --gate 38 e com --gate 5 produzia
+                       # arquivos indistinguíveis
+  commands: {}         # papel → comando que rodou ("lint", "typecheck",
+                       # "test", "coverage"): a evidência do que foi
+                       # executado, não só do resultado
+  ran_at: ""           # instante UTC da execução (ISO 8601)
 preflight:
   skills_missing: []    # skills de fase que não carregaram nesta execução.
                         # Fase rodada sem a instrução dela é fase degradada,

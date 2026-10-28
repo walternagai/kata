@@ -13,6 +13,7 @@ exatamente o comportamento anterior — nenhum projeto Python existente muda.
 ```yaml
 verify:
   lint: npx eslint src tests
+  typecheck: npx tsc --noEmit
   test: npx vitest run
   coverage: npx vitest run --coverage
   coverage_pattern: 'All files\\s+\\|\\s+([\\d.]+)'
@@ -20,7 +21,15 @@ verify:
 ```
 
 Cada comando aceita string (dividida como o shell dividiria) ou lista já
-dividida. Um papel não declarado cai no default Python daquele papel.
+dividida. Um papel não declarado cai no default Python daquele papel —
+exceto `typecheck`, que não tem default: não existe verificador de tipos
+universal, e inventar um faria o kata reportar como verificada uma checagem
+que o projeto nunca pediu.
+
+Chave desconhecida em `verify` é erro, não default silencioso: alguém que
+escreve `typecheck` num kata antigo acreditava ter declarado o gate de tipos.
+Ignorar a chave fazia o ciclo aprovar sem nunca tê-lo rodado — a mesma classe
+de mentira que o `ConfigError` acima existe para impedir.
 """
 
 from __future__ import annotations
@@ -47,7 +56,21 @@ DEFAULT_COVERAGE_PATTERN = r"^TOTAL\s+.*?(\d+(?:\.\d+)?)%"
 
 DEFAULT_GATE = 70.0
 
-_ROLES = ("lint", "test", "coverage")
+# Papéis de verificação. `typecheck` não tem default Python: quem declara, roda.
+_ROLES = ("lint", "typecheck", "test", "coverage")
+
+# O que pode aparecer dentro de `verify`. Qualquer outra chave é erro nomeado
+# (ver o docstring do módulo): antes, `verify.typecheck` num kata que não
+# conhecia o papel era lido, descartado e o VERIFY aprovava sem ele.
+_VERIFY_KEYS = frozenset({*_ROLES, "coverage_pattern", "gate"})
+
+# Operadores que só existem num shell. `verify._run` executa SEM shell, então
+# `npm run check && npm run test:db` chegava ao processo como seis argumentos
+# e o npm os repassava ao script: exit 0, tier 2 nunca executado. Rejeitar no
+# carregamento troca um verde silencioso por um erro que diz o que fazer.
+# A saída legítima é um script do projeto (`npm run check:all`) ou um shell
+# explícito (`bash -c "..."`), que não é token solto e continua aceito.
+_SHELL_OPERATORS = frozenset({"&&", "||", "|", ";", "&", ">", ">>", "<", "<<"})
 
 
 class ConfigError(ValueError):
@@ -86,6 +109,10 @@ class VerifyConfig:
     """
 
     lint: list[str] | None = None
+    # `typecheck` fica sem default de propósito: ao contrário de ruff e
+    # pytest, não existe verificador de tipos universal. Papel não declarado
+    # simplesmente não roda — e não entra como True no YAML.
+    typecheck: list[str] | None = None
     test: list[str] | None = None
     coverage: list[str] | None = None
     coverage_pattern: str = DEFAULT_COVERAGE_PATTERN
@@ -104,6 +131,11 @@ def _parse_command(value: Any, role: str) -> list[str] | None:
     shlex — antes escapavam do `except ConfigError` do main e viravam
     traceback. Config ilegível é erro nomeado, nunca traceback (mesma
     doutrina do docstring de ConfigError).
+
+    Operador de shell virado token é erro nomeado. O comando é executado sem
+    shell (`verify._run`), então `a && b` não encadeia: o segundo vira
+    argumento do primeiro. No npm isso devolve exit 0 com o primeiro script
+    só — verde que esconde a metade não executada.
     """
     if value is None:
         return None
@@ -114,14 +146,32 @@ def _parse_command(value: Any, role: str) -> list[str] | None:
             raise ConfigError(f"verify.{role}: comando inválido ({exc})") from exc
         if not cmd:
             raise ConfigError(f"verify.{role}: comando vazio")
-        return cmd
+        return _reject_shell_operators(cmd, role)
     if isinstance(value, list):
         if not value:
             raise ConfigError(f"verify.{role}: comando vazio")
         if not all(isinstance(part, str) for part in value):
             raise ConfigError(f"verify.{role}: a lista deve conter só strings")
-        return list(value)
+        return _reject_shell_operators(list(value), role)
     raise ConfigError(f"verify.{role}: esperava string ou lista, veio {type(value).__name__}")
+
+
+def _reject_shell_operators(cmd: list[str], role: str) -> list[str]:
+    """Recusa operador de shell como token solto no comando.
+
+    Token solto é a assinatura do encadeamento acidental. Um operador dentro
+    de um token com espaços (`bash -c "npm ci && npm test"`) é shell
+    explícito e continua válido — ali quem interpreta é o bash, não o kata.
+    """
+    for token in cmd:
+        if token in _SHELL_OPERATORS:
+            raise ConfigError(
+                f"verify.{role}: `{token}` não é interpretado — o kata executa o comando "
+                "sem shell, e o que vem depois vira argumento do primeiro. Declare um "
+                "script do projeto (`npm run check:all`) ou um shell explícito "
+                '(`bash -c "comando1 && comando2"`).'
+            )
+    return cmd
 
 
 def config_path(cwd: Path | None = None) -> Path | None:
@@ -173,6 +223,13 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
     if not isinstance(verify, dict):
         raise ConfigError(f"{caminho}: `verify` deve ser um mapa")
 
+    desconhecidas = sorted(str(k) for k in verify if str(k) not in _VERIFY_KEYS)
+    if desconhecidas:
+        raise ConfigError(
+            f"{caminho}: chave(s) desconhecida(s) em `verify`: {', '.join(desconhecidas)} "
+            f"(conhecidas: {', '.join(sorted(_VERIFY_KEYS))})"
+        )
+
     gate = verify.get("gate")
     if gate is not None and (isinstance(gate, bool) or not isinstance(gate, (int, float))):
         raise ConfigError(f"{caminho}: `verify.gate` deve ser número")
@@ -197,6 +254,7 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
 
     return VerifyConfig(
         lint=_parse_command(verify.get("lint"), "lint"),
+        typecheck=_parse_command(verify.get("typecheck"), "typecheck"),
         test=_parse_command(verify.get("test"), "test"),
         coverage=_parse_command(verify.get("coverage"), "coverage"),
         coverage_pattern=pattern,

@@ -70,7 +70,7 @@ com o que o relatório afirma.
 O kata consome as 10 skills de fase (FIT, QUESTION, THINK, SIMPLIFY, INTENT,
 SURGICAL, VERIFY, ARTIFACT, REPORT, JUDGE) e **gera** skills para dois
 frontends a partir de uma fonte única (`phases/*.md` → `make build-skills` →
-`opencode/` e `claude-code/`). 92,5% das linhas renderizadas são
+`opencode/` e `claude-code/`). 92,8% das linhas renderizadas são
 compartilhadas (93% arredondado; `scripts/build_skills.py --stats`); o
 restante é diferença declarada (nomes de ferramenta do host), não acidental.
 Nenhuma skill faz isso.

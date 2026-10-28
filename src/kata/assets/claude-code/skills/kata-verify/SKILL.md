@@ -12,9 +12,11 @@ Fase 4 do Karpathy Development Cycle — **GOAL-DRIVEN**.
 
 Verificar a qualidade do código com critérios objetivos:
 1. **Lint** — limpo
-2. **Teste** — todos passam
-3. **Coverage** — ≥ gate (default 70%)
-4. **Critério de sucesso** — a tarefa resolve o problema declarado na fase THINK
+2. **Typecheck** — quando o projeto declara o comando (não há default: não
+   existe verificador de tipos universal)
+3. **Teste** — todos passam
+4. **Coverage** — ≥ gate (default 70%)
+5. **Critério de sucesso** — a tarefa resolve o problema declarado na fase THINK
 
 ## Antes de tudo: que comandos verificam ESTE projeto?
 
@@ -24,6 +26,7 @@ comandos declarados ali são os do projeto e devem ser usados verbatim:
 ```yaml
 verify:
   lint: npx eslint src tests
+  typecheck: npx tsc --noEmit
   test: npx vitest run
   coverage: npx vitest run --coverage
   coverage_pattern: 'All files\s+\|\s+([\d.]+)'
@@ -31,8 +34,20 @@ verify:
 ```
 
 Cada papel aceita string ou lista. Papel omitido cai no default Python
-(ruff/pytest/pytest-cov). `python -m kata --check-only` já lê esse arquivo
-sozinho — prefira-o a montar os comandos à mão.
+(ruff/pytest/pytest-cov) — exceto `typecheck`, que não tem default: sem
+declaração, não existe gate de tipos. `python -m kata --check-only` já lê
+esse arquivo sozinho — prefira-o a montar os comandos à mão.
+
+**Sem shell.** O comando é executado sem shell, então `&&`, `||`, `|`, `;`,
+`>` e `<` viram argumento do primeiro processo. `verify.test: "npm run check
+&& npm run test:db"` devolve **exit 0 com o tier 2 não executado** — verde
+que esconde a metade. O kata recusa esses operadores como token solto e diz
+o que fazer: declare um script do projeto (`npm run check:all`) ou um shell
+explícito (`bash -c "npm run check && npm run test:db"`).
+
+**Chave desconhecida em `verify` é erro**, não default: `typechek` (typo) ou
+uma chave de um kata mais novo reprovam o carregamento em vez de sumir em
+silêncio.
 
 Sem `.kata/config.yaml`, valem os defaults Python descritos abaixo. **Se o
 projeto não for Python e não houver config**, não invente um comando nem
@@ -69,6 +84,27 @@ python -m ruff check app/ services/ tests/
 - `F401` — import não utilizado → remover ou adicionar `# noqa: F401`
 - `E501` — linha longa → quebrar ou aumentar `line-length` no ruff config
 - `I001` — import desordenado → `ruff format` ou `ruff check --fix`
+
+### Typecheck
+
+Só existe quando o projeto declara `verify.typecheck`. Não há default: sem
+declaração, o passo não roda e `verify.typecheck_clean` fica `null` — que é
+"não há gate de tipos", nunca "passou".
+
+```bash
+npx tsc --noEmit          # TypeScript (o que o `npm run typecheck` faz)
+mypy src                  # Python tipado
+go vet ./...              # Go
+cargo check               # Rust
+```
+
+**Interpretando resultado:**
+- `returncode == 0` → ✅ passou
+- `returncode != 0` → ❌ falhou — mostrar output completo e reprovar o ciclo
+
+Não declare a implementação validada sem este passo quando o projeto tem um
+typechecker: um lint limpo em projeto tipado convive com erros de tipo, e o
+`schema_version` do YAML não muda por isso.
 
 ### Pytest
 
@@ -180,20 +216,36 @@ Ou:
 ```yaml
 status: approved
 done: "warn no startup + /health degraded quando misconfig (verificado via curl)"
+kata_version: "0.7.5"
 verify:
   ruff_clean: true
+  typecheck_clean: true   # null quando o projeto não declara o papel
   tests_pass: true
   coverage_pct: 87.0
   coverage_pass: true
   success_criteria_met: true
   attempts: 1          # contador de execuções do VERIFY (hard bound)
   hand_back: false     # true após 3 tentativas falhas — tarefa devolvida
+  gate_used: 70        # gate em vigor na aprovação
+  commands:            # o que rodou, por papel
+    lint: "python -m ruff check src/ tests/"
+    typecheck: "npx tsc --noEmit"
+    test: "python -m pytest tests/ --tb=short -q"
+    coverage: "python -m pytest tests/ --cov=src --cov-fail-under=70 -q"
+  ran_at: "2026-10-28T12:34:56+00:00"
 ```
+
+`gate_used`, `commands` e `ran_at` são a evidência de execução: sem eles o
+arquivo diz que passou, mas não diz com que gate, com que comandos nem
+quando — e o relatório do Fable Step 6 pede exatamente isso. O CLI grava os
+três sozinho; preencha à mão só se estiver rodando as verificações fora
+dele.
 
 ## Modo --check-only (CI)
 
 Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
-só as 3 verificações objetivas (ruff + pytest + coverage). O critério de
+só as verificações objetivas (lint + typecheck quando declarado + teste +
+coverage). O critério de
 sucesso é assumido satisfeito. Útil para CI/CD pipelines — nesse modo, a
 skill nem precisa ser carregada: chame o CLI diretamente via `Bash`.
 

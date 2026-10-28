@@ -61,6 +61,7 @@ def consistency_failures(task_data: dict[str, Any]) -> list[str]:
 
     for chave, rotulo in (
         ("ruff_clean", "lint"),
+        ("typecheck_clean", "typecheck"),
         ("tests_pass", "testes"),
         ("coverage_pass", "coverage"),
     ):
@@ -609,9 +610,14 @@ def run_all(
     cwd: Path | None = None,
     config: VerifyConfig | None = None,
 ) -> dict[str, VerifyResult]:
-    """Executa todas as verificações: lint → test → coverage.
+    """Executa todas as verificações: lint → typecheck → test → coverage.
 
     Otimização: coverage só roda se o teste passar (short-circuit).
+
+    `typecheck` só existe quando o projeto declara o comando: não há default
+    Python para ele, e entrar no dicionário com `ok=True` sem ter rodado nada
+    seria registrar como verificada uma checagem que ninguém pediu. A chave
+    ausente é o que o CLI e o JUDGE leem como "este projeto não tem esse gate".
 
     `config` traz os comandos que o projeto alvo declarou em
     `.kata/config.yaml`. Cada papel declarado é executado verbatim; cada
@@ -638,6 +644,9 @@ def run_all(
         results["ruff"] = run_command(cfg.lint, cwd=cwd)
     else:
         results["ruff"] = run_ruff(paths=ruff_paths, cwd=cwd)
+
+    if cfg.typecheck is not None:
+        results["typecheck"] = run_command(cfg.typecheck, cwd=cwd)
 
     if cfg.test is not None:
         results["pytest"] = run_command(cfg.test, cwd=cwd)

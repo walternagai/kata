@@ -27,6 +27,15 @@ ORQUESTRADORES = [
     "claude-code/skills/kata/SKILL.md",
 ]
 
+# Módulos que leem o YAML da tarefa. `report.py` entrou no A3 da revisão
+# estrutural: enquanto ficou de fora, 5 das 11 seções tinham zero leituras
+# vistas e o contrato aprovava.
+# `verify.py` entrou junto com o guarda de recorrência: `consistency_failures`
+# lê `status`, `done` e o bloco `verify` do YAML da tarefa, e nunca esteve na
+# varredura. `install.py` fica de fora de propósito — o `data.get("files")`
+# dele é o marcador `.kata-managed`, não a tarefa.
+FONTES_DE_LEITURA = ("cli.py", "judge.py", "report.py", "verify.py")
+
 
 def _schema_documentado(arquivo: str) -> dict:
     """Extrai o bloco ```yaml do schema de tarefa."""
@@ -46,52 +55,76 @@ def _chaves(dic: dict, prefixo: str = "") -> set[str]:
 
 
 def _chaves_lidas_pelo_codigo() -> set[str]:
-    """Chaves aninhadas que cli.py e judge.py consultam no YAML da tarefa.
+    """Chaves aninhadas que o código consulta no YAML da tarefa.
 
-    Casa o padrão `.get("secao", {}).get("chave"` e as leituras via variável
-    intermediária (`twins = data.get("twins", {})` seguido de
-    `twins.get("defect_fixed")`).
+    Fontes: `cli.py`, `judge.py` e `report.py`. O terceiro entrou depois
+    (achado A3 da revisão estrutural de 2026-10): quando o I/O de relatório e
+    auditoria migrou para `report.py`, as seções que passaram a ser lidas lá
+    saíram da varredura sem ninguém notar — `auth`, `pending`, `preflight`,
+    `simplify` e `twins` ficaram com zero leituras vistas, e o teste que
+    existe para impedir "chave documentada que ninguém lê" aprovava.
 
-    As seções são descobertas pelo receptor da chamada (`data` ou
-    `task_data`), e não por uma lista escrita à mão. Enquanto a lista era
-    fixa, uma seção nova ficava invisível para este teste: `preflight` foi
-    lida pelo `--audit` e não documentada em nenhum orquestrador, e o teste
-    que existe justamente para pegar isso passou.
+    Quatro formas de leitura, todas reconhecidas:
 
-    O receptor importa: `config.get("tool", {}).get("coverage", {})`, em
-    _detect_cov_source, lê o pyproject.toml e não o YAML da tarefa.
+    1. direta: `data.get("secao").get("chave")`;
+    2. helper inline: `_secao(data, "secao").get("chave")`,
+       `bloco("secao").get("chave")`;
+    3. duas etapas: `twins = data.get("twins", {})`, `verify = bloco("verify")`,
+       `verify: dict[str, Any] = dict(_secao(data, "verify"))`, seguido de
+       `{var}.get("chave")` — o mapa var→seção é explícito, então um nome de
+       variável diferente do da seção não inventa uma seção falsa;
+    4. topo: `data.get("domain", "coding")`.
+
+    As seções são descobertas pelo receptor da chamada (`data`/`task_data`) ou
+    pelo literal do helper, nunca por lista escrita à mão. O receptor importa:
+    `config.get("tool", {}).get("coverage", {})`, em `_detect_cov_source`, lê o
+    pyproject.toml e não o YAML da tarefa.
     """
     fonte = "".join(
-        (REPO / "src" / "kata" / f).read_text(encoding="utf-8") for f in ("cli.py", "judge.py")
-    )
-    # Antes só casava aspas duplas com default exato `{}`: leituras com aspas
-    # simples ou default ≠ {} (ex.: `intent.get('code_does','')`) escapavam,
-    # e a chave `domain` nova passaria despercebida (R10-27).
-    aninhada = re.compile(
-        r'\b(?:data|task_data)\.get\(["\'](\w+)["\'](?:,\s*[^)]*)?\)\.get\(["\'](\w+)["\']'
+        (REPO / "src" / "kata" / f).read_text(encoding="utf-8") for f in FONTES_DE_LEITURA
     )
 
     lidas: set[str] = set()
-    secoes: set[str] = set()
+
+    # (1) Antes só casava aspas duplas com default exato `{}`: leituras com
+    # aspas simples ou default ≠ {} (ex.: `intent.get('code_does','')`)
+    # escapavam, e a chave `domain` nova passaria despercebida (R10-27).
+    aninhada = re.compile(
+        r'\b(?:data|task_data)\.get\(["\'](\w+)["\'](?:,\s*[^)]*)?\)\.get\(["\'](\w+)["\']'
+    )
     for secao, chave in aninhada.findall(fonte):
-        secoes.add(secao)
         lidas.add(f"{secao}.{chave}")
 
-    # Leituras em duas etapas: `twins = data.get("twins", {})` e depois
-    # `twins.get("defect_fixed")`. A seção precisa ter sido vista acima ou
-    # aqui, na atribuição.
-    for secao in re.findall(
-        r'\b(\w+)\s*=\s*(?:data|task_data)\.get\(["\']\w+["\'](?:,\s*[^)]*)?\)', fonte
-    ):
-        secoes.add(secao)
-    for secao in secoes:
-        for chave in re.findall(rf"\b{secao}\.get\(['\"](\w+)['\"]", fonte):
+    # (2) Helper inline. O `\)?` cobre `_secao(data, "x").get(` e
+    # `bloco("x").get(` sem exigir que os dois helpers tenham a mesma aridade.
+    helper_inline = re.compile(
+        r"(?:(?:\b_secao\((?:data|task_data),\s*)|(?<![\w.])bloco\()"
+        r'["\'](\w+)["\']\)?\.get\(["\'](\w+)["\']'
+    )
+    for secao, chave in helper_inline.findall(fonte):
+        lidas.add(f"{secao}.{chave}")
+
+    # (3) Duas etapas: `twins = data.get("twins", {})`,
+    # `verify = bloco("verify")`, `verify: dict[str, Any] = dict(_secao(data,
+    # "verify"))`, seguido de `{var}.get("chave")`. O mapa var→seção é
+    # explícito: antes o nome da variável era usado como nome da seção, o que
+    # funcionava só por convenção e inventava seção falsa quando divergia.
+    atrib_get = re.compile(
+        r"\b(\w+)\s*(?::\s*[^=\n]+)?=\s*(?:data|task_data)\.get\([\"\'](\w+)[\"\']"
+    )
+    atrib_helper = re.compile(
+        r"\b(\w+)\s*(?::\s*[^=\n]+)?=\s*(?:dict\(\s*)?"
+        r"(?:_secao\((?:data|task_data),\s*|(?<![\w.])bloco\()"
+        r"[\"\'](\w+)[\"\']"
+    )
+    for var, secao in atrib_get.findall(fonte) + atrib_helper.findall(fonte):
+        for chave in re.findall(rf"\b{var}\.get\(['\"](\w+)['\"]", fonte):
             lidas.add(f"{secao}.{chave}")
-    # Chaves de topo lidas de uma etapa só (`data.get("domain", "coding")`)
+
+    # (4) Chaves de topo lidas de uma etapa só (`data.get("domain", "coding")`)
     # eram invisíveis para o teste: a chave `domain` podia sumir do schema
     # documentado sem ninguém ver (R10-27).
     for secao in re.findall(r"\b(?:data|task_data)\.get\(['\"](\w+)['\"]", fonte):
-        secoes.add(secao)
         lidas.add(secao)
     return lidas
 
@@ -147,6 +180,41 @@ def test_schema_documentado_cobre_o_que_o_codigo_le(arquivo: str) -> None:
     )
 
 
+def _secoes_sem_leitura(schema: dict, lidas: set[str]) -> list[str]:
+    """Seções documentadas para as quais nenhuma leitura foi vista.
+
+    Separado do teste para poder ser exercitado com uma entrada falsa: um
+    invariante que só sabe dizer "passou" é indistinguível do vácuo.
+    """
+    secoes = {k for k, v in schema.items() if isinstance(v, dict)}
+    vistas = {k.split(".")[0] for k in lidas if "." in k}
+    return sorted(secoes - vistas)
+
+
+@pytest.mark.parametrize("arquivo", ORQUESTRADORES)
+def test_toda_secao_documentada_tem_leitura_vista(arquivo: str) -> None:
+    """A3: uma seção inteira pode escapar do contrato sem que nada acuse.
+
+    Até a revisão estrutural de 2026-10, `auth`, `pending`, `preflight`,
+    `simplify` e `twins` eram documentadas e nenhuma leitura delas era vista:
+    o teste de chaves passava por vacuidade, e o `--audit` consumia
+    `preflight.skills_missing` sem que nada validasse o nome.
+    """
+    schema = _schema_documentado(arquivo)
+    faltando = _secoes_sem_leitura(schema, _chaves_lidas_pelo_codigo())
+    assert not faltando, (
+        f"{arquivo} documenta seção que nenhuma leitura vista alcança: {faltando}. "
+        "Ou o módulo que a lê ficou fora de FONTES_DE_LEITURA, ou a seção virou "
+        "peso morto no schema."
+    )
+
+
+def test_invariante_de_secao_nao_e_vacuo() -> None:
+    """Prova que o invariante acima reprova de fato — com entrada falsa."""
+    schema = {"fit": {"trivial": False}, "twins": {"searched": False}}
+    assert _secoes_sem_leitura(schema, {"fit.trivial"}) == ["twins"]
+
+
 @pytest.mark.parametrize("arquivo", ORQUESTRADORES)
 def test_schema_documentado_cobre_o_que_o_cli_escreve(arquivo: str) -> None:
     """Direção de escrita (R10-32): chaves que o CLI grava no YAML da tarefa
@@ -200,3 +268,30 @@ def test_twin_check_esta_documentado_como_fase(arquivo: str) -> None:
     texto = (REPO / arquivo).read_text(encoding="utf-8")
     assert "TWIN CHECK" in texto
     assert "defect_fixed" in texto
+
+
+def test_nenhum_modulo_fora_das_fontes_le_o_yaml_da_tarefa() -> None:
+    """A lista de fontes é manual — e foi assim que `report.py` escapou.
+
+    O A3 da revisão estrutural nasceu disto: quando o I/O de relatório e
+    auditoria migrou do `cli.py` para o `report.py`, as seções que passaram a
+    ser lidas lá saíram da varredura sem nenhum teste reclamar. Este guarda
+    fecha a recorrência: módulo que leia o YAML da tarefa fora de
+    `FONTES_DE_LEITURA` reprova, em vez de virar ponto cego silencioso.
+    """
+    # `data.get(` sozinho é largo demais: `install.py` lê o marcador
+    # `.kata-managed` com a mesma forma. O padrão exige uma seção do schema.
+    padrao = re.compile(
+        r"_secao\(|\bbloco\(|\btask_data\.get\("
+        r'|\bdata\.get\(\s*["\']'
+        r"(?:verify|fit|think|simplify|intent|surgical|twins|auth|pending|preflight|artifact)[\"\']"
+    )
+    suspeitos = sorted(
+        arq.name
+        for arq in (REPO / "src" / "kata").glob("*.py")
+        if arq.name not in FONTES_DE_LEITURA and padrao.search(arq.read_text(encoding="utf-8"))
+    )
+    assert not suspeitos, (
+        f"módulo(s) leem o YAML da tarefa fora de FONTES_DE_LEITURA: {suspeitos}. "
+        "Acrescente à lista — senão as chaves que eles leem ficam fora do contrato."
+    )

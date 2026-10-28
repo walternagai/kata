@@ -1267,6 +1267,33 @@ class TestDetectCovSource:
             assert cli._detect_cov_source() == "src"
         assert any("pyproject.toml ilegível" in r.message for r in caplog.records)
 
+    def test_include_sem_source_usa_a_superficie_do_projeto(self, tmp_path, monkeypatch) -> None:
+        """A16: `source` recusa caminho de arquivo (CR-006/S4), então projetos
+        que querem medir arquivos declaram `include`. Cair no fallback `src`
+        media 97,0% onde o gate do projeto media 95,0%."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.coverage.run]\ninclude = ["src/kata/*", "scripts/build_skills.py"]\n',
+            encoding="utf-8",
+        )
+        assert cli._detect_cov_source() == "."
+
+    def test_source_tem_precedencia_sobre_include(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.coverage.run]\nsource = ["kata"]\ninclude = ["src/kata/*"]\n',
+            encoding="utf-8",
+        )
+        assert cli._detect_cov_source() == "kata"
+
+    def test_omit_sem_include_mantem_o_fallback(self, tmp_path, monkeypatch) -> None:
+        """Só `omit` não define superfície: o default `src` continua certo."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.coverage.run]\nomit = ["tests/*"]\n', encoding="utf-8"
+        )
+        assert cli._detect_cov_source() == "src"
+
 
 class TestCwdHelper:
     """Testa _cwd e _kata_dir."""

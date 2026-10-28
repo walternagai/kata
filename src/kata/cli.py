@@ -205,7 +205,13 @@ def _detect_cov_source() -> str | list[str]:
     só, ou a lista completa quando há vários — o `--cov` do pytest-cov aceita
     múltiplas fontes via flags repetidas, e medir apenas a primeira (como
     antes) reportava um gate baseado num subconjunto do que o projeto
-    declarou. Se não encontrar, cai no fallback "src".
+    declarou.
+
+    Sem `source` mas com `include`, devolve "." (A16): é a forma de deixar o
+    filtro do próprio projeto definir a superfície, exatamente como o
+    `--cov` sem valor. Antes caía no fallback "src" e media menos do que o
+    projeto gateia. Sem configuração de coverage nenhuma, o fallback "src"
+    continua valendo.
     """
     pyproject = _cwd() / "pyproject.toml"
     if pyproject.exists():
@@ -214,13 +220,23 @@ def _detect_cov_source() -> str | list[str]:
 
             text = pyproject.read_text(encoding="utf-8")
             config = tomllib.loads(text)
-            sources = config.get("tool", {}).get("coverage", {}).get("run", {}).get("source", [])
+            run_cfg = config.get("tool", {}).get("coverage", {}).get("run", {})
+            sources = run_cfg.get("source", [])
             if isinstance(sources, str):
                 return sources
             if len(sources) == 1:
                 return sources[0]
             if sources:
                 return list(sources)
+            # A16: projeto que declara `include` e não `source` — o caso deste
+            # repositório — era medido só em `src`, e o número do CLI (97,0%)
+            # não era o do gate do projeto (95,0% sobre src + scripts + eval).
+            # `source` recusa caminho de arquivo (CR-006/S4 foi exatamente
+            # isso), então o equivalente fiel é deixar a config do próprio
+            # projeto filtrar: `--cov=.`, o mesmo que o `make test` faz com
+            # `--cov` sem valor.
+            if run_cfg.get("include"):
+                return "."
         except (tomllib.TOMLDecodeError, OSError, UnicodeDecodeError) as exc:
             # CR-009/S4: pyproject malformado ou ilegível não pode ser
             # engolido em silêncio — o --cov rodaria contra um source que o

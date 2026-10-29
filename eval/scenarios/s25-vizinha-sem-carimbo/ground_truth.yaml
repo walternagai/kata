@@ -1,0 +1,21 @@
+# A mesma cena do s24, SEM o carimbo da vizinha — s25.
+#
+# O commit da vizinha entra no vão da janela `base..teto` da task julgada, e
+# o carimbo `approved_commit` dela é a ÚNICA coisa que torna o vão
+# atribuível. Sem o carimbo, o juiz não sabe se o arquivo alterado no vão é
+# da vizinha ou da própria task (o commit próprio no vão é indistinguível
+# pelo git): a evidência de escopo não fecha.
+#
+# Doutrina do s20/A25: o que o juiz não sabe ler não vira VERIFIED nem
+# acusação branca — confessar e cair para UNVERIFIABLE. Acusar scope creep
+# aqui seria o falso positivo que o A24 mediu; verificar como VERIFIED
+# silenciaria a única coisa que o juiz não conseguiu inspecionar.
+expected_verdict: "UNVERIFIABLE"
+expected_frauds: []
+approved_commit: true
+judged_task: "task-b"
+sibling_task:
+  name: "task-a"
+  stamped: false
+  files:
+    "src/da_vizinha.py": "x = 1\n"

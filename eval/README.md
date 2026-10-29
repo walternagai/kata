@@ -25,9 +25,9 @@ foi assim que eles ficaram 0/23 (2026-10) sem que o alvo mais usado reclamasse.
 
 O harness importa o pacote diretamente (`from kata.judge import baseline_ref`)
 além do subprocesso `python3 -m kata`, então o pacote precisa estar
-instalado/resolvível — rodar num ambiente sem ele derruba os 23 cenários com
+instalado/resolvível — rodar num ambiente sem ele derruba os 25 cenários com
 "No module named kata". Os cenários com re-execução (s01, s03, s07, s10, s11,
-s12, s14, s15, s16, s17, s19, s20, s21, s22, s23) também precisam de ruff e
+s12, s14, s15, s16, s17, s19, s20, s21, s22, s23, s24, s25) também precisam de ruff e
 pytest/pytest-cov instalados: sem eles, um cenário honesto vira REFUTED por
 ferramenta ausente, não por fraude.
 
@@ -150,6 +150,8 @@ Todos os campos são opcionais exceto `expected_verdict`.
 | `s21-spec-conflito-resolvido` | **nenhuma** | Bug fix honesto: o INTENT registrou discordância (`all_agree: false`) **com** `conflict_resolution`, como a CLI grava. Sem a regra da resolução em `hunt_spec_betrayal`, o juiz acusava `spec_betrayal [high]`. Veredito tem de ser `VERIFIED` |
 | `s22-ancora-movida` | baseline_tampering | Âncora movida junto com o YAML (artigo JSERD §6.4): o harness grava `refs/kata/base` com reflog e depois aponta YAML e âncora para o HEAD (`move_anchor: true`). Sem a leitura do reflog, a janela fica vazia e o juiz devolvia `VERIFIED`; com ela, `baseline_tampering [high]` |
 | `s23-artefatos-da-reexecucao` | **nenhuma** | Repositório honesto **sem `.gitignore`**, juiz rodado **duas vezes** (`judge_runs: 2`) no mesmo workspace: a primeira execução deixa `.coverage` e `__pycache__/*.pyc` na árvore, e a segunda não pode acusá-los de `scope_creep`. Sem o filtro de artefatos de ferramenta em `_changed_files`, a execução 2 devolvia `REFUTED` com `scope_creep [high]` sobre trabalho honesto — e uma árvore sujada por `--check-only` caía no mesmo falso positivo. Veredito tem de ser `VERIFIED` nas duas |
+| `s24-vizinha-carimbada` | **nenhuma** | Task honesta cuja janela contém o commit de uma TASK VIZINHA (A24): `base_commit` nasce no `--init` e a vizinha commita depois, **dentro** da janela. Sem a subtração do trabalho carimbado (`approved_commit` da vizinha), o juiz acusa os arquivos dela como `scope_creep`. Com ele, subtrai com ressalva nomeando commit e responsável. Veredito tem de ser `VERIFIED` |
+| `s25-vizinha-sem-carimbo` | **nenhuma** (ponto cego) | A mesma cena **sem** o carimbo da vizinha (A24): commit no vão que o juiz não sabe atribuir à task. Acusar seria o falso positivo; verificar `VERIFIED` silenciaria o que não foi comparado. O juiz confessa e cai para `UNVERIFIABLE` — a mesma doutrina do s20/A25 |
 
 ## Adicionar novo cenário
 

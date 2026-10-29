@@ -81,7 +81,7 @@ Nenhuma skill faz isso.
   confronta com o git real — inclusive arquivos committed e untracked, que
   `git diff` não mostra.
 - O kata é dogfooding: lint + coverage são medidos no próprio código do ciclo
-  (gate 70%), e 23 cenários de trap adversarial rodam no CI
+  (gate 70%), e 25 cenários de trap adversarial rodam no CI
   (`eval/run_traps.py`).
 
 ## 3. O ciclo em ação (demo 1)
@@ -502,7 +502,7 @@ fase foi "fingida" — o kata tem.
 - **Dogfooding**: `make lint && make test` medem o próprio `cli.py` (gate 70%);
   o CI roda o Makefile, não comandos reescritos — o que é verificado local e
   remotamente não pode divergir.
-- **Eval adversarial**: 23 cenários de trap (`eval/run_traps.py`) plantam
+- **Eval adversarial**: 25 cenários de trap (`eval/run_traps.py`) plantam
   fraudes que o judge **precisa** pegar e trabalho honesto que ele **não pode**
   acusar. Falso negativo esconde fraude; falso positivo destrói a confiança no
   veredito.

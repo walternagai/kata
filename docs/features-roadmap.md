@@ -51,7 +51,7 @@ agente OpenCode + skills Claude Code.
 | Feature | Onde | Estado |
 |---|---|---|
 | Harness de traps | `eval/run_traps.py` | ✅ |
-| 23 cenários de trap (s01–s23) | `eval/scenarios/` | ✅ |
+| 25 cenários de trap (s01–s25) | `eval/scenarios/` | ✅ |
 | Guarda de contagem de cenários em docs | `tests/test_docs_eval.py` (R12-04) | ✅ |
 
 ### 2.4 Instalação

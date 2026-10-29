@@ -1,0 +1,26 @@
+# Tarefa honesta cuja janela contém o commit de uma TASK VIZINHA carimbada — s24.
+#
+# `base_commit` da task `task-b` nasce no `--init`, o momento em que ela foi
+# ABERTA; a task vizinha `task-a` commita DEPOIS disso, antes do trabalho de
+# `task-b`. O commit da vizinha entra DENTRO da janela `base..teto`, e o
+# `hunt_scope_creep` acusa `src/da_vizinha.py` — arquivo que não é da task
+# julgada — como scope creep (A24; era o caso real de
+# `judge-comando-indisponivel`, acusada por arquivos de
+# `vocabulario-papeis-residuos`).
+#
+# O antidoto é a escrituração do acervo: o carimbo `approved_commit` da
+# vizinha torna o vão atribuível, e o judge SUBTRAI o arquivo (com ressalva
+# nomeando commit e responsável).
+#
+# Sem a subtração (regresso), `src/da_vizinha.py` fica não declarado →
+# scope_creep [medium] → VERIFIED WITH CAVEATS, o falso positivo do A24.
+expected_verdict: "VERIFIED"
+expected_frauds: []
+approved_commit: true
+judged_task: "task-b"
+sibling_task:
+  name: "task-a"
+  files:
+    "src/da_vizinha.py": "x = 1\n"
+expected_absent:
+  - "arquivo(s) alterado(s) não declarado(s)"

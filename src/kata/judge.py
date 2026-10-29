@@ -26,6 +26,11 @@ from typing import Any
 from kata import __version__
 from kata.config import VerifyConfig
 from kata.fit import TRIVIAL_MAX_LINES
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover — PyYAML é dependência dura do pacote
+    yaml = None
 from kata.verify import (
     COMMAND_LABELS,
     ROLE_LABELS,
@@ -1219,6 +1224,121 @@ def hunt_scope_creep(task_data: dict[str, Any], changed: list[str]) -> list[Judg
     return frauds
 
 
+# ── vizinhas carimbadas: a janela da tarefa não é só dela ────────────────
+
+# A24. `base_commit` nasce no `--init` — o momento em que a TAREFA FOI ABERTA,
+# não o em que o trabalho dela começou. Quando outra task commita nesse vão, a
+# janela `base..teto` contém os arquivos dela, e o `hunt_scope_creep` acusa
+# trabalho honesto de escopo extra: foi o que aconteceu com
+# `judge-comando-indisponivel`, acusada por dois arquivos de
+# `vocabulario-papeis-residuos`. O antidoto é a escrituração do próprio
+# acervo: um commit de vizinha é reconhecível pelo `approved_commit` carimbado
+# no YAML `approved` dela — leitura de metadado PARA SUBTRAIR, nunca para
+# acusar; a subtração é sempre ressalva, com commit e responsável nomeados.
+#
+# Limite declarado: um commit carimbado que o agente fabricar para "lavar"
+# escopo fica visível nessa ressalva — e a prova definitiva de atribuição
+# continua sendo `--trusted-base`, que o agente não controla.
+
+
+def _carimbos_vizinhas(cwd: Path | None = None) -> dict[str, str]:
+    """`approved_commit` → nome da task, lido dos YAMLs `approved` de `.kata/`."""
+    if yaml is None:  # pragma: no cover — PyYAML é dependência dura do pacote
+        return {}
+    base = (Path(cwd) if cwd else Path.cwd()) / ".kata"
+    mapa: dict[str, str] = {}
+    for caminho in sorted(base.glob("*.yaml")):
+        try:
+            dados = yaml.safe_load(caminho.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(dados, dict) or dados.get("status") != "approved":
+            continue
+        teto = dados.get("approved_commit")
+        if isinstance(teto, str) and teto.strip():
+            mapa[teto.strip()] = caminho.stem
+    return mapa
+
+
+def _commits_do_vao(cwd: Path | None, base_commit: str, teto: str) -> list[str]:
+    """Commits entre o piso e o teto, exclusive o teto — do mais novo ao mais antigo.
+
+    `git rev-list base..teto` inclui o teto: o commit da própria tarefa, único
+    que o juiz sabe ser dela sem consultar ninguém.
+    """
+    try:
+        result = _run(["git", "rev-list", f"{base_commit}..{teto}"], cwd=cwd)
+    except OSError:
+        return []
+    shas = [s for s in result.stdout.split("\n") if s.strip()]
+    return shas[1:] if shas else []
+
+
+def _arquivos_do_commit(cwd: Path | None, sha: str) -> list[str]:
+    """Arquivos que um único commit mudou."""
+    try:
+        result = _run(["git", "show", "--pretty=format:", "--name-only", sha], cwd=cwd)
+    except OSError:
+        return []
+    return [f for f in result.stdout.split("\n") if f.strip()]
+
+
+def window_scope(
+    cwd: Path | None,
+    base_commit: str,
+    teto: str,
+    changed: list[str],
+    declared: set[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """A24: separa o trabalho da tarefa do trabalho carimbado das vizinhas.
+
+    Devolve `(janela_reduzida, avisos, confessiones)`.
+
+    Regra por arquivo que mudou na janela e ninguém declarou:
+
+    - o último commit que o tocou é o teto (ou nenhum commit o tocou, caso da
+      árvore de trabalho): é da tarefa — fica, e a acusação de escopo vale;
+    - só foi tocado por commit(s) carimbado(s) por task vizinha aprovada: sai
+      da janela, e o aviso nomeia o commit e a responsável;
+    - foi tocado por commit sem dono no vão: a evidência de escopo não fecha —
+      o juiz não sabe separar o trabalho da tarefa do de quem commitou ali.
+      Confessar é a doutrina do s20/A25: janela que o juiz não sabe ler não
+      vira VERIFIED, e o downgrade não abre passagem para o escopo real — ele
+      também não é verificado.
+    """
+    carimbos = _carimbos_vizinhas(cwd)
+    extras = [f for f in changed if f not in declared]
+    if not extras:
+        return changed, [], []
+
+    vao = _commits_do_vao(cwd, base_commit, teto)
+    if not vao:
+        return changed, [], []
+
+    arquivos_por_commit = {sha: _arquivos_do_commit(cwd, sha) for sha in vao}
+
+    reste: list[str] = []
+    avisos: list[str] = []
+    confessoes: list[str] = []
+    for arquivo in extras:
+        tocado = [sha for sha in vao if arquivo in arquivos_por_commit[sha]]
+        if not tocado:
+            # Mudou só no teto (ou só na árvore de trabalho): é da tarefa.
+            reste.append(arquivo)
+            continue
+        if all(sha in carimbos for sha in tocado):
+            sha = tocado[0]
+            avisos.append(f"subtraído: {arquivo} — commit {sha[:7]} carimbado por {carimbos[sha]}")
+            continue
+        confessoes.append(
+            f"{arquivo} mudou em commit(s) do vão sem carimbo "
+            f"({', '.join(s[:7] for s in tocado)}): o trabalho da tarefa não é "
+            "separável do de quem commitou ali"
+        )
+    janela = [f for f in changed if f in declared or f in reste]
+    return janela, avisos, confessoes
+
+
 # Tolerância da alegação de trivialidade. S2/CR-002 decidiu que
 # `fit.trivial=true` com `surgical.files=[]` é decisão legítima do gate, e o
 # cenário s16 do eval prova que 3 arquivos pequenos devem sair VERIFIED. O
@@ -1663,7 +1783,8 @@ def judge_task(
     # nenhum. Doutrina do cenário s20: janela vazia é UNVERIFIABLE, nunca
     # VERIFIED — e isso vale para a janela efetivamente calculada, não só para
     # os campos que a produziram.
-    if janela_confiavel is not None and not diff.strip() and not changed:
+    janela_vazia = not diff.strip() and not changed
+    if janela_confiavel is not None and janela_vazia:
         blind_spots.append(
             "janela de diff vazia: a base confiável já contém o HEAD e a árvore de "
             "trabalho está limpa — não há diff a comparar"
@@ -1679,6 +1800,38 @@ def judge_task(
                 f"{len(arquivos_declarados)} arquivo(s) alterado(s) cirurgicamente "
                 "(necessários) — janela de diff vazia: o juiz não comparou arquivo nenhum"
             )
+
+    # A24: a janela pode conter trabalho de vizinhas — os commits no vão entre
+    # o piso (base_commit, captado no --init) e o teto (approved_commit). Só a
+    # janela fechada entra: na aberta, o diff é a árvore de trabalho, que é o
+    # trabalho da tarefa, e os commits que lá estão não são atribuíveis.
+    avisos_de_scopo: list[str] = []
+    if diff_end is not None and diff_base is not None and changed:
+        declared = {
+            f["path"]
+            for f in task_data.get("surgical", {}).get("files", [])
+            if isinstance(f, dict) and f.get("necessary")
+        }
+        changed, subtracoes, confessoes = window_scope(
+            cwd, str(diff_base), str(diff_end), changed, declared
+        )
+        avisos_de_scopo.extend(subtracoes)
+        if confessoes:
+            # A evidência de escopo não fecha: confessar deixa de ser acusação
+            # (nunca veredito brando). E a claim cirúrgica sai das verificadas.
+            blind_spots.append("escopo não verificável: " + "; ".join(confessoes))
+            files_cirurgicas = [
+                f
+                for f in task_data.get("surgical", {}).get("files", [])
+                if isinstance(f, dict) and f.get("necessary")
+            ]
+            if files_cirurgicas:
+                claims = [c for c in claims if "cirurgicamente" not in c]
+                unverifiable.append(
+                    f"{len(files_cirurgicas)} arquivo(s) alterado(s) cirurgicamente "
+                    "(necessários) — a janela contém commit(s) no vão sem carimbo: "
+                    "o escopo não é comparável"
+                )
 
     verify = task_data.get("verify", {})
     claimed_checks: list[str] = []
@@ -1725,6 +1878,9 @@ def judge_task(
     caveats: list[str] = []
     for label, motivo in nao_executados:
         caveats.append(f"{label} não pôde ser re-executado: {motivo}")
+    # A24: a subtração nunca é silenciosa — o jogo de task-sombra carimbada
+    # fica visível aqui, com commit e responsável nomeados.
+    caveats.extend(avisos_de_scopo)
     frauds.extend(hunt_weakened_checks(diff))
     frauds.extend(hunt_false_completion(task_data, verify_results))
     frauds.extend(hunt_scope_creep(task_data, changed))

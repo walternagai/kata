@@ -87,6 +87,7 @@ def _aplica_baseline(
     task: str,
     git,
     leave_untracked: list[str] | None = None,
+    vizinha: dict | None = None,
 ) -> None:
     """Commita um estado limpo, reaplica o fixture por cima e commita também.
 
@@ -113,6 +114,12 @@ def _aplica_baseline(
     # --create-reflog: é como a CLI grava a âncora (record_baseline_ref), e o
     # reflog é o que deixa uma âncora movida visível ao juiz (s22).
     git("update-ref", "--create-reflog", baseline_ref(task), sha)
+
+    # A24: o commit da vizinha entra ENTRE o baseline e o commit da tarefa —
+    # é ele que contamina a janela, e o que o judge tem de saber subtrair
+    # (carimbo) ou confessar (sem carimbo).
+    if vizinha:
+        _aplica_vizinha_no_vao(path, vizinha)
 
     for arquivo, conteudo in posterior.items():
         arquivo.write_bytes(conteudo)
@@ -157,6 +164,43 @@ def _aplica_baseline(
     dados = yaml.safe_load(caminho_task.read_text(encoding="utf-8"))
     dados["base_commit"] = sha
     caminho_task.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def _aplica_vizinha_no_vao(path: Path, vizinha: dict) -> None:
+    """Planta a TASK VIZINHA entre o baseline e o commit da tarefa (s24/s25).
+
+    `base_commit` da tarefa julgada nasce no `--init` — e a vizinha commita
+    DEPOIS disso, antes do trabalho da tarefa: o commit dela entra DENTRO da
+    janela `base..teto`. Sem conserto, o judge acusa os arquivos da vizinha
+    como scope creep (A24); com carimbo, eles são subtraídos; sem carimbo, a
+    janela é confessada (A24) — e é isso que os dois cenários provam.
+
+    O YAML da vizinha é escrito aqui e não no fixture porque o
+    `approved_commit` só existe em tempo de execução — mesmo motivo de
+    `_aplica_baseline` regravar `base_commit`.
+    """
+    git = _git_em(path)
+    for rel, conteudo in vizinha["files"].items():
+        caminho = path / rel
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_text(conteudo, encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "tarefa vizinha")
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    dados = {
+        "task": vizinha["name"],
+        "status": "approved",
+        "done": "cenário de trap do eval: a vizinha está concluída e commitada",
+        "surgical": {
+            "files": [{"path": rel, "necessary": True} for rel in sorted(vizinha["files"])]
+        },
+    }
+    if vizinha.get("stamped", True):
+        dados["approved_commit"] = sha
+    caminho = path / ".kata" / f"{vizinha['name']}.yaml"
+    caminho.write_text(yaml.dump(dados, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
 def init_git_repo(
@@ -357,6 +401,25 @@ def load_ground_truth(scenario_dir: Path) -> dict:
             )
         if data.get("posterior") is not None and not isinstance(data.get("posterior"), list):
             raise ScenarioError("ground_truth.yaml: posterior deve ser uma lista")
+        vizinha = data.get("sibling_task")
+        if vizinha is not None and (
+            not isinstance(vizinha, dict)
+            or not isinstance(vizinha.get("name"), str)
+            or not isinstance(vizinha.get("files"), dict)
+            or not all(
+                isinstance(caminho, str) and isinstance(texto, str)
+                for caminho, texto in vizinha["files"].items()
+            )
+            or not isinstance(vizinha.get("stamped", True), bool)
+        ):
+            raise ScenarioError(
+                "sibling_task deve ser um mapa com name (str), files (str→str) e "
+                f"stamped (bool, default true) — recebido {vizinha!r}"
+            )
+        if data.get("judged_task") is not None and (
+            not isinstance(data.get("judged_task"), str) or not data.get("judged_task")
+        ):
+            raise ScenarioError("judged_task, quando presente, deve ser o nome da task julgada")
         if data.get("ignore_file") is not None and not isinstance(data.get("ignore_file"), str):
             raise ScenarioError("ground_truth.yaml: ignore_file deve ser uma string")
         return data
@@ -513,7 +576,10 @@ def main() -> None:
                 if gt.get("ignore_file"):
                     _ignora_arquivo(work_dir, gt["ignore_file"])
 
-                tarefa = task_name(work_dir)
+                # A24: um cenário com task vizinha traz dois YAMLs em .kata/,
+                # e o julgado é o `judged_task` do ground truth; o default de
+                # uma task só continua valendo nos cenários antigos.
+                tarefa = gt.get("judged_task") or task_name(work_dir)
                 baseline = scenario / "baseline"
                 if baseline.is_dir():
                     _aplica_baseline(
@@ -522,6 +588,7 @@ def main() -> None:
                         tarefa,
                         _git_em(work_dir),
                         gt.get("leave_untracked"),
+                        gt.get("sibling_task"),
                     )
                 if gt.get("tamper_base_commit"):
                     _tampera_base_commit(work_dir, tarefa)

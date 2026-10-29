@@ -1607,6 +1607,136 @@ class TestJudgeTrustedBaseEmptyWindow:
         assert not any("janela de diff vazia" in b for b in resultado.blind_spots)
 
 
+class TestJudgeVizinhaCarimbada:
+    """A24: a janela de uma task aprovada pode conter o commit de uma vizinha.
+
+    `base_commit` nasce no `--init` — o momento em que a task FOI ABERTA, não
+    o em que o trabalho dela começou. Se a vizinha commita nesse vão, o juiz
+    acusa de scope creep arquivos que não são da task: medido em produção,
+    quando `judge-comando-indisponivel` foi acusada por dois arquivos de
+    `vocabulario-papeis-residuos`. O carimbo `approved_commit` da vizinha é o
+    que torna o vão atribuível — leitura de metadado para SUBTRAIR, nunca
+    para acusar.
+    """
+
+    @staticmethod
+    def _sha_do_commit(repo: Path, mensagem: str) -> str:
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", mensagem], cwd=repo, check=True)
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    @staticmethod
+    def _julga(repo: Path, base: str, teto: str, declarados: list[str]) -> JudgeResult:
+        task = {
+            "verify": {"ruff_clean": True, "success_criteria_met": True},
+            "surgical": {"files": [{"path": p, "necessary": True} for p in declarados]},
+            "base_commit": base,
+            "approved_commit": teto,
+        }
+        with patch("kata.judge.run_all") as mock_run_all:
+            mock_run_all.return_value = {"ruff": VerifyResult(ok=True)}
+            return judge_task(task, cwd=repo)
+
+    def test_trabalho_carimbado_pela_vizinha_nao_e_scope_creep(self, repo_git: Path) -> None:
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_git,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        (repo_git / "vizinha.py").write_text("x = 1\n", encoding="utf-8")
+        sha_vizinha = self._sha_do_commit(repo_git, "trabalho da vizinha")
+        (repo_git / ".kata").mkdir()
+        (repo_git / ".kata" / "vizinha.yaml").write_text(
+            f"task: vizinha\nstatus: approved\napproved_commit: {sha_vizinha}\n",
+            encoding="utf-8",
+        )
+        (repo_git / "da_task.py").write_text("y = 2\n", encoding="utf-8")
+        teto = self._sha_do_commit(repo_git, "trabalho da task julgada")
+
+        resultado = self._julga(repo_git, base, teto, ["da_task.py"])
+
+        assert resultado.verdict == "VERIFIED"
+        assert not any(f.type == "scope_creep" for f in resultado.frauds)
+        # A subtração nunca é silenciosa: nomeia commit e responsável.
+        assert any("subtraído: vizinha.py" in c for c in resultado.caveats)
+        assert any("carimbado por vizinha" in c for c in resultado.caveats)
+
+    def test_vizinha_sem_carimbo_confessa_e_nunca_verifica(self, repo_git: Path) -> None:
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_git,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        (repo_git / "vizinha.py").write_text("x = 1\n", encoding="utf-8")
+        self._sha_do_commit(repo_git, "trabalho de vizinha não carimbada")
+        (repo_git / "da_task.py").write_text("y = 2\n", encoding="utf-8")
+        teto = self._sha_do_commit(repo_git, "trabalho da task julgada")
+
+        resultado = self._julga(repo_git, base, teto, ["da_task.py"])
+
+        # O juiz não sabe se o `vizinha.py` do vão é da vizinha ou da própria
+        # task (só o carimbo distingue): a evidência de escopo não fecha.
+        assert resultado.verdict == "UNVERIFIABLE"
+        assert not any(f.type == "scope_creep" for f in resultado.frauds)
+        assert any(
+            "escopo não verificável" in b and "vizinha.py" in b for b in resultado.blind_spots
+        )
+        assert not any("cirurgicamente" in c for c in resultado.claims)
+        assert any("escopo não é comparável" in c for c in resultado.unverifiable_claims)
+
+    def test_commit_proprio_nao_declarado_no_vao_confessa(self, repo_git: Path) -> None:
+        """Sem carimbo, o commit no váo nem é atribuível à task (a acusação
+        de escopo vale para o que o teto e a árvore da task tocaram)."""
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_git,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        (repo_git / "surpresa.py").write_text("z = 1\n", encoding="utf-8")
+        self._sha_do_commit(repo_git, "parte 1 da task")
+        (repo_git / "da_task.py").write_text("y = 2\n", encoding="utf-8")
+        teto = self._sha_do_commit(repo_git, "parte 2 da task")
+
+        resultado = self._julga(repo_git, base, teto, ["da_task.py"])
+
+        assert resultado.verdict == "UNVERIFIABLE"
+        assert any("escopo não verificável" in b for b in resultado.blind_spots)
+
+    def test_mudanca_apenas_no_teto_continua_sendo_da_task(self, repo_git: Path) -> None:
+        """Sem commit no vão, o caso não muda: undeclared no teto é fraude.
+
+        Um arquivo extra é `scope_creep [medium]` — o veredito fica em
+        VERIFIED WITH CAVEATS; o [high] (e o REFUTED) pede três ou mais.
+        """
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_git,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        (repo_git / "da_task.py").write_text("y = 2\n", encoding="utf-8")
+        (repo_git / "surpresa.py").write_text("z = 1\n", encoding="utf-8")
+        teto = self._sha_do_commit(repo_git, "trabalho da task julgada")
+
+        resultado = self._julga(repo_git, base, teto, ["da_task.py"])
+
+        assert resultado.verdict == "VERIFIED WITH CAVEATS"
+        assert any(f.type == "scope_creep" for f in resultado.frauds)
+
+
 class TestJudgeTaskDetectsCommittedFraud:
     """Prova, com um repo git de verdade, que uma fraude já commitada
     (o estado normal de uma tarefa "concluída") só é detectada quando

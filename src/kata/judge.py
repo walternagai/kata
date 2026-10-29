@@ -1656,6 +1656,30 @@ def judge_task(
     claims = collect_claims(task_data)
     unverifiable = collect_unverifiable_claims(task_data)
 
+    # A25: janela que veio vazia É uma janela vazia. A checagem (d) acima mede
+    # os campos do YAML; quando o piso vem de base confiável e a base coincide
+    # com o HEAD, o diff sai vazio por outro caminho e o guarda não dispara —
+    # o juiz então afirma as claims cirúrgicas sem ter comparado arquivo
+    # nenhum. Doutrina do cenário s20: janela vazia é UNVERIFIABLE, nunca
+    # VERIFIED — e isso vale para a janela efetivamente calculada, não só para
+    # os campos que a produziram.
+    if janela_confiavel is not None and not diff.strip() and not changed:
+        blind_spots.append(
+            "janela de diff vazia: a base confiável já contém o HEAD e a árvore de "
+            "trabalho está limpa — não há diff a comparar"
+        )
+        arquivos_declarados = [
+            f
+            for f in task_data.get("surgical", {}).get("files", [])
+            if isinstance(f, dict) and f.get("necessary")
+        ]
+        if arquivos_declarados:
+            claims = [c for c in claims if "cirurgicamente" not in c]
+            unverifiable.append(
+                f"{len(arquivos_declarados)} arquivo(s) alterado(s) cirurgicamente "
+                "(necessários) — janela de diff vazia: o juiz não comparou arquivo nenhum"
+            )
+
     verify = task_data.get("verify", {})
     claimed_checks: list[str] = []
     if verify.get("ruff_clean"):

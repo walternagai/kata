@@ -1553,6 +1553,60 @@ class TestChangedFiles:
         assert _resolve_commit("deadbeef") is None
 
 
+class TestJudgeTrustedBaseEmptyWindow:
+    """A25: janela efetivamente vazia é UNVERIFIABLE, nunca VERIFIED.
+
+    `--trusted-base` usa `merge-base(ref, HEAD)` como piso e ignora o teto do
+    YAML. Quando a ref confiável já contém o HEAD (a task foi commitada e
+    enviada), o piso é o próprio HEAD e o diff sai vazio por um caminho que a
+    checagem (d) do teto não enxerga — ela mede os campos do YAML, não a
+    janela calculada. O s20 fixa o que vale para janela vazia: confessar,
+    nunca VERIFIED.
+    """
+
+    def test_base_confivel_no_head_com_arvore_limpa_confessa(
+        self, repo_git: Path, monkeypatch
+    ) -> None:
+        task_data = {
+            "verify": {"ruff_clean": True, "success_criteria_met": True},
+            "surgical": {"files": [{"path": "base.txt", "necessary": True}]},
+        }
+        with patch("kata.judge.run_all") as mock_run_all:
+            mock_run_all.return_value = {"ruff": VerifyResult(ok=True)}
+            resultado = judge_task(task_data, cwd=repo_git, trusted_base="HEAD")
+
+        assert resultado.verdict == "UNVERIFIABLE"
+        assert any("janela de diff vazia" in b for b in resultado.blind_spots)
+        # A claim cirúrgica não pode ficar entre as verificadas: nada foi
+        # comparado. Ela vai para as aceitas sem verificação, com o motivo.
+        assert not any("cirurgicamente" in c for c in resultado.claims)
+        assert any("janela de diff vazia" in c for c in resultado.unverifiable_claims)
+
+    def test_base_confivel_ancestral_mantem_a_janela(self, repo_git: Path, monkeypatch) -> None:
+        """Um piso ancestral tem o que comparar: o comportamento fica intacto."""
+        (repo_git / "novo.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=repo_git, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "tarefa"], cwd=repo_git, check=True)
+        piso = subprocess.run(
+            ["git", "rev-parse", "HEAD~1"],
+            cwd=repo_git,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        task_data = {
+            "verify": {"ruff_clean": True, "success_criteria_met": True},
+            "surgical": {"files": [{"path": "novo.py", "necessary": True}]},
+        }
+        with patch("kata.judge.run_all") as mock_run_all:
+            mock_run_all.return_value = {"ruff": VerifyResult(ok=True)}
+            resultado = judge_task(task_data, cwd=repo_git, trusted_base=piso)
+
+        assert resultado.verdict == "VERIFIED"
+        assert not any("janela de diff vazia" in b for b in resultado.blind_spots)
+
+
 class TestJudgeTaskDetectsCommittedFraud:
     """Prova, com um repo git de verdade, que uma fraude já commitada
     (o estado normal de uma tarefa "concluída") só é detectada quando

@@ -1164,6 +1164,10 @@ def hunt_false_completion(
     for claim_key, result_key, label in checks:
         if verify.get(claim_key) and result_key in verify_results:
             result = verify_results[result_key]
+            if not result.executed:
+                # "Não consegui rodar" não é "rodei e falhou". Acusar fraude
+                # aqui transforma ambiente em desonestidade (A23).
+                continue
             if not result.ok:
                 frauds.append(
                     JudgeFraud(
@@ -1665,6 +1669,7 @@ def judge_task(
 
     verify_results: dict[str, VerifyResult] = {}
     re_ran: dict[str, bool] = {}
+    nao_executados: list[tuple[str, str]] = []
 
     if claimed_checks:
         results = run_all(
@@ -1678,11 +1683,24 @@ def judge_task(
         )
         for key in claimed_checks:
             if key in results:
-                verify_results[key] = results[key]
-                re_ran[key] = results[key].ok
+                resultado = results[key]
+                # Comando que não chegou a rodar não é evidência contra a
+                # task: fica fora da re-execução e vira ressalva de ambiente.
+                # Contá-lo como `False` faria o juiz dizer "re-execução falhou"
+                # sobre algo que nunca rodou (A23).
+                if not resultado.executed:
+                    motivo = resultado.output.strip().splitlines()
+                    nao_executados.append(
+                        (ROLE_LABELS.get(key, key), motivo[0][:160] if motivo else "sem detalhe")
+                    )
+                    continue
+                verify_results[key] = resultado
+                re_ran[key] = resultado.ok
 
     frauds: list[JudgeFraud] = [*baseline_frauds]
     caveats: list[str] = []
+    for label, motivo in nao_executados:
+        caveats.append(f"{label} não pôde ser re-executado: {motivo}")
     frauds.extend(hunt_weakened_checks(diff))
     frauds.extend(hunt_false_completion(task_data, verify_results))
     frauds.extend(hunt_scope_creep(task_data, changed))
@@ -1714,6 +1732,14 @@ def judge_task(
         blind_spots.append(
             "nenhuma verificação re-executada — o relatório não afirma nenhum "
             "check que o juiz saiba reproduzir"
+        )
+    elif not re_ran:
+        # Havia o que reexecutar e nada rodou: é o mesmo nada observado, dito
+        # pelo motivo certo. Sem isto o veredito seria VERIFIED limpo com uma
+        # ressalva escondida (A23).
+        blind_spots.append(
+            "nenhuma verificação pôde ser re-executada — os comandos declarados "
+            "não rodaram neste ambiente"
         )
     unreadable = _unreadable_test_files(changed)
     if unreadable:

@@ -1024,6 +1024,38 @@ class TestJudgeTask:
             "coverage ≥ gate (?%)",
         }
 
+    def test_comando_inexistente_nao_e_fraude(
+        self,
+        mock_run_all: MagicMock,
+        mock_diff: MagicMock,
+        mock_files: MagicMock,
+        mock_ignored_files: MagicMock,
+        mock_untracked: MagicMock,
+    ) -> None:
+        """A23: executável ausente é ambiente, não desonestidade.
+
+        Antes, `ok=False` virava `false_completion [high]` e o veredito saía
+        REFUTED — a acusação mais grave da ferramenta — contra uma task cujo
+        relatório estava correto. Basta o projeto declarar `npm test` e o juiz
+        rodar onde não há node.
+        """
+        mock_diff.return_value = ""
+        mock_files.return_value = []
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(
+                ok=False,
+                output="não foi possível executar npm run lint: [Errno 2] No such file",
+                executed=False,
+            ),
+        }
+        result = judge_task({"verify": {"ruff_clean": True}})
+
+        assert result.verdict == "UNVERIFIABLE"
+        assert not any(f.type == "false_completion" for f in result.frauds)
+        assert any("não pôde ser re-executado" in c for c in result.caveats)
+        assert any("não rodaram neste ambiente" in b for b in result.blind_spots)
+        assert result.re_ran_checks == {}
+
     def test_false_completion_refuted(
         self,
         mock_run_all: MagicMock,

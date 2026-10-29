@@ -1061,6 +1061,51 @@ def test_comando_gravado_nao_tem_caminho_absoluto() -> None:
     assert sys.executable not in comando
 
 
+def test_comando_inexistente_nao_e_reprovacao() -> None:
+    """A23: `ok=False` dizia duas coisas; executável ausente é a segunda.
+
+    O juiz lia o `False` como prova de que o relatório mentiu e emitia
+    `false_completion [high]`. O lint nunca havia rodado.
+    """
+    with patch("kata.verify._run", side_effect=FileNotFoundError(2, "No such file")):
+        resultado = run_command(["comando-que-nao-existe"])
+
+    assert resultado.ok is False
+    assert resultado.executed is False
+    assert "não foi possível executar" in resultado.output
+
+
+def test_rc_de_comando_nao_encontrado_marca_nao_executado() -> None:
+    """O shell devolve 127 no POSIX e 9009 no Windows quando não acha o comando."""
+    for codigo in (127, 9009):
+        with patch("kata.verify._run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=codigo, stdout="", stderr="")
+            resultado = run_command(["comando-que-nao-existe"])
+
+        assert resultado.ok is False
+        assert resultado.executed is False
+
+
+def test_rc_de_reprovacao_real_continua_executado() -> None:
+    """A23 não vira escape hatch: rc=1 é check reprovado, não ambiente."""
+    with patch("kata.verify._run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=1, stdout="E501", stderr="")
+        resultado = run_command(["ruff", "check"])
+
+    assert resultado.ok is False
+    assert resultado.executed is True
+
+
+def test_coverage_sem_comando_nao_vira_gate_reprovado() -> None:
+    """Sem executável não há medição: o resultado sai como não executado."""
+    with patch("kata.verify._run", side_effect=FileNotFoundError(2, "No such file")):
+        resultado = run_command_coverage(["cobertura-inexistente"])
+
+    assert resultado.ok is False
+    assert resultado.executed is False
+    assert "não foi possível executar" in resultado.output
+
+
 def test_tabelas_de_rotulo_cobrem_os_mesmos_papeis() -> None:
     """A20: gravação e exibição saem da mesma tabela, com uma exceção só.
 

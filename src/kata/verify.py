@@ -40,14 +40,28 @@ ROLE_LABELS: dict[str, str] = {
 # primeira (A20 da revisão estrutural de 2026-10).
 COMMAND_LABELS: dict[str, str] = {**ROLE_LABELS, "pytest": "test"}
 
+# Códigos de saída que significam "o shell não achou o comando", e não "o check
+# reprovou": 127 no POSIX, 9009 no Windows. Só aparecem quando o comando
+# declarado é executado por um shell (`sh -c`, `cmd /c`); com argv direto o
+# executável ausente levanta OSError antes de existir returncode.
+_NAO_ENCONTRADO: frozenset[int] = frozenset({127, 9009})
+
 
 @dataclass
 class VerifyResult:
-    """Resultado de uma verificação individual (ruff, pytest, ou coverage)."""
+    """Resultado de uma verificação individual (ruff, pytest, ou coverage).
+
+    `executed` separa duas falhas que `ok=False` confundia: o check rodou e
+    reprovou (`executed=True`), ou o comando nunca chegou a rodar porque o
+    executável não existe nesta máquina (`executed=False`). Sem a distinção o
+    JUDGE acusa fraude de alta severidade contra quem não mentiu — basta o
+    projeto declarar `npm test` e o juiz rodar onde não há node.
+    """
 
     ok: bool
     output: str = ""
     details: dict[str, Any] = field(default_factory=dict)
+    executed: bool = True
 
 
 def consistency_failures(task_data: dict[str, Any]) -> list[str]:
@@ -439,6 +453,10 @@ def run_command(cmd: list[str], cwd: Path | None = None) -> VerifyResult:
     test`. Comando inexistente vira falha com a mensagem do SO, e não
     exceção: no VERIFY isso tem de aparecer como verificação reprovada,
     para o ciclo poder reportá-lo; estourar aqui derrubaria a fase inteira.
+
+    Mas "não consegui executar" não é "executei e reprovou": esses casos saem
+    com `executed=False`, e é o que impede o JUDGE de tratá-los como prova de
+    que o relatório mentiu.
     """
     try:
         result = _run(cmd, cwd=cwd)
@@ -447,11 +465,13 @@ def run_command(cmd: list[str], cwd: Path | None = None) -> VerifyResult:
             ok=False,
             output=f"não foi possível executar {' '.join(cmd)}: {exc}",
             details={"command": " ".join(cmd)},
+            executed=False,
         )
     return VerifyResult(
         ok=result.returncode == 0,
         output=result.stdout + result.stderr,
         details={"command": " ".join(cmd)},
+        executed=result.returncode not in _NAO_ENCONTRADO,
     )
 
 
@@ -470,6 +490,15 @@ def run_command_coverage(
     porque "não consegui medir" não é "mediu e passou".
     """
     result = run_command(cmd, cwd=cwd)
+    if not result.executed:
+        # O comando não rodou: não há percentual a procurar, e "não medi" não
+        # pode virar "mediu 0,0%" nem "reprovou o gate".
+        return VerifyResult(
+            ok=False,
+            output=result.output,
+            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
+            executed=False,
+        )
     try:
         match = re.search(pattern, result.output, re.MULTILINE)
     except re.error as exc:

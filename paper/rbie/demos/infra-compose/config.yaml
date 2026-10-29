@@ -1,0 +1,6 @@
+verify:
+  lint: python3 verifica_infra.py lint
+  test: python3 verifica_infra.py test
+  coverage: python3 verifica_infra.py cobertura
+  coverage_pattern: 'HEALTH\s+([\d.]+)%'
+  gate: 100

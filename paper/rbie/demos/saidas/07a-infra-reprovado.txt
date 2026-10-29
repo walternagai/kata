@@ -1,0 +1,26 @@
+▶ verificações de /tmp/tmp.0UxaXpgaro/infra/.kata/config.yaml (declaradas pelo projeto)
+
+┌──────────────────────────────────────────────────────────┐
+│ 4. GOAL-DRIVEN — Verificação de qualidade                │
+└──────────────────────────────────────────────────────────┘
+
+▶ python3 verifica_infra.py lint
+  ✅ limpo
+
+▶ python3 verifica_infra.py test
+  ❌ falhou — últimas linhas:
+     web: imagem sem versão fixa (nginx:latest); web: healthcheck ausente ou desativado
+     
+
+▶ coverage (gate ≥ 100%)
+  ❌ falhou (0.0% — gate: 100%)
+     (skipped — tests failed)
+
+▶ Critério de sucesso da tarefa
+  (modo check-only — assumido satisfeito)
+
+┌──────────────────────────────────────────────────────────┐
+│  ❌  KATA CYCLE — REJEITADO                            │
+│     Corrija os problemas e rode novamente.              │
+└──────────────────────────────────────────────────────────┘
+exit=1

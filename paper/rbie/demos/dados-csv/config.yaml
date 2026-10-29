@@ -1,0 +1,6 @@
+verify:
+  lint: python3 verifica_dados.py lint
+  test: python3 verifica_dados.py test
+  coverage: python3 verifica_dados.py cobertura
+  coverage_pattern: 'USO\s+([\d.]+)%'
+  gate: 70

@@ -1,0 +1,35 @@
+
+┌──────────────────────────────────────────────────────────┐
+│ 4. GOAL-DRIVEN — Verificação de qualidade                │
+└──────────────────────────────────────────────────────────┘
+
+▶ python -m ruff check src/ tests/
+  ❌ falhou — saída:
+     F401 [*] `pytest` imported but unused
+      --> tests/test_calculadora.py:1:8
+       |
+     1 | import pytest
+       |        ^^^^^^
+     2 |
+     3 | from src.calculadora import dividir
+       |
+     help: Remove unused import: `pytest`
+     
+     Found 1 error.
+     [*] 1 fixable with the `--fix` option.
+     
+
+▶ python -m pytest tests/ --tb=short -q
+  ✅ passou
+
+▶ coverage (gate ≥ 70%)
+  ✅ passou (75.0%)
+
+▶ Critério de sucesso da tarefa
+  (modo check-only — assumido satisfeito)
+
+┌──────────────────────────────────────────────────────────┐
+│  ❌  KATA CYCLE — REJEITADO                            │
+│     Corrija os problemas e rode novamente.              │
+└──────────────────────────────────────────────────────────┘
+exit=1

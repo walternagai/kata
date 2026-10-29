@@ -1,0 +1,40 @@
+\documentclass[tikz,border=2pt]{standalone}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Termes}
+\setsansfont{Roboto}
+\begin{document}
+\begin{tikzpicture}[
+  font=\sffamily\scriptsize, >={Stealth[length=4pt]},
+  proc/.style={draw, thin, rounded corners=1.5pt, align=center, fill=white, minimum height=0.5cm, inner sep=2pt},
+  dec/.style={draw, thin, diamond, aspect=2.4, align=center, fill=black!4, inner sep=0.5pt, font=\sffamily\scriptsize},
+  nota/.style={font=\sffamily\scriptsize, align=center, text=black!80},
+  lbl/.style={font=\sffamily\scriptsize, inner sep=1pt}
+]
+\node[proc] (a) {SIMPLIFY};
+\node[dec, below=0.26cm of a] (g1) {\texttt{answered}?};
+\node[proc, right=0.35cm of g1] (r1) {retorna};
+\node[dec, below=0.26cm of g1] (g2) {TTY?};
+\node[proc, right=0.35cm of g2] (r2) {padrões;\\ \texttt{skipped: true}};
+\node[proc, below=0.26cm of g2] (d) {mostra o \textit{diff} (HEAD, indexado\\ e não versionados)};
+\node[dec, below=0.26cm of d] (ch) {há mudanças?};
+\node[proc, right=0.35cm of ch] (r3) {não: as três\\ respondem sim};
+\node[proc, below=0.26cm of ch] (q) {mínimo? $\bullet$ sem abstração\\
+  de uso único? $\bullet$ sem configuração\\ especulativa?};
+\node[proc, below=0.26cm of q] (rec) {grava \texttt{simplify}};
+\node[proc, below=0.26cm of rec] (n) {INTENT};
+\coordinate (chan) at ($(r3.east)+(0.30,0)$);
+\draw[->] (a) -- (g1);
+\draw[->] (g1) -- node[lbl,above]{sim} (r1);
+\draw[->] (g1) -- node[lbl,left]{não} (g2);
+\draw[->] (g2) -- node[lbl,above]{não} (r2);
+\draw[->] (g2) -- node[lbl,left]{sim} (d);
+\draw[->] (d) -- (ch);
+\draw[->] (ch) -- node[lbl,above]{não} (r3);
+\draw[->] (ch) -- node[lbl,left]{sim} (q);
+\draw[->] (r3.south) |- (q.east);
+\draw[->] (q) -- (rec);
+\draw[->] (rec) -- (n);
+\draw[->] (r2.south) -- (r2.south -| chan) -- (n -| chan) -- (n.east);
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,20 @@
+.nova/
+
+# Auxiliares das figuras TikZ de img/. O fig_ciclo.aux e .log entraram por
+# descuido num commit; os novos não entram. Só o .tex (fonte) e o .pdf
+# (artefato que o main.tex inclui) são versionados.
+img/*.aux
+img/*.log
+img/*.out
+
+# Auxiliares de build do artigo. Entraram por descuido no commit "chore:
+# empty commit"; o .bbl fica (é comum versionar a bibliografia compilada),
+# mas .aux, .log e .blg são regerados a cada build e só sujam o diff.
+main.aux
+main.log
+main.blg
+main.out
+main.toc
+
+# Cache do minted (código realçado por pygmentize), regerado a cada build.
+_minted-main/

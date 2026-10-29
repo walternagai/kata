@@ -1,0 +1,66 @@
+{
+ "Ferreira2025": {
+  "doi": "10.5753/sbie.2025.12361",
+  "title": "Generative AI Assisting Programming Learning: Functional Roles, Comparative Analysis, and Emerging Challenges",
+  "authors": "Bedin, Heloise Acco Tives and Marioti, Madianita Bogo and Jaques, Patricia",
+  "venue": "Anais do XXXVI Simpósio Brasileiro de Informática na Educação (SBIE 2025)",
+  "pages": "409-426",
+  "year": 2025
+ },
+ "Mendes2026": {
+  "doi": "10.5753/wei.2026.20394",
+  "title": "Aplicações de LLMs no ensino de Programação Orientada a Objetos: Um Mapeamento Sistemático da Literatura",
+  "authors": "Camilo, Hudson Teles and Hauck, Jean Carlo Rossa",
+  "venue": "Anais do XXXIV Workshop sobre Educação em Computação (WEI 2026)",
+  "pages": "36-49",
+  "year": 2026
+ },
+ "Passar2023": {
+  "doi": "10.5753/educomp.2023.228346",
+  "title": "Passar nos casos de teste é suficiente? Identificação e análise de problemas de compreensão em códigos corretos",
+  "authors": "Silva, Eryck Pedro da and Caceffo, Ricardo Edgard and Azevedo, Rodolfo",
+  "venue": "Anais do III Simpósio Brasileiro de Educação em Computação (EDUCOMP 2023)",
+  "pages": "119-129",
+  "year": 2023
+ },
+ "Feedback2025": {
+  "doi": "10.5753/sbie.2025.12543",
+  "title": "Abordagem com LLM para Geração Automatizada de Feedback no Ensino de Programação de Computadores",
+  "authors": "Pimentel, Edson P. and Silva, Lucas D. Lima da and Takeuti, Rodrigo H. and Braga, Juliana C.",
+  "venue": "Anais do XXXVI Simpósio Brasileiro de Informática na Educação (SBIE 2025)",
+  "pages": "591-603",
+  "year": 2025
+ },
+ "Delgado2026": {
+  "doi": "10.5753/educomp_estendido.2026.19666",
+  "title": "Uso de juízes online no ensino de programação: desafios e oportunidades",
+  "authors": "Delgado, Carla A. D. M. and Carvalho, Leandro S. Galvão de and Fortes, Reinaldo Silva",
+  "venue": "Anais Estendidos do VI Simpósio Brasileiro de Educação em Computação (EDUCOMP 2026)",
+  "pages": "139-143",
+  "year": 2026
+ },
+ "Almeida2025": {
+  "doi": "10.5753/sbie.2025.12058",
+  "title": "Avaliando o Efeito da Criação de Testes na Aprendizagem e no Desempenho de Estudantes de Programação",
+  "authors": "Almeida, André and Guerrero, Dalton D. S. and Andrade, Wilkerson L.",
+  "venue": "Anais do XXXVI Simpósio Brasileiro de Informática na Educação (SBIE 2025)",
+  "pages": "140-152",
+  "year": 2025
+ },
+ "Deus2024": {
+  "doi": "10.5753/sbie.2024.242283",
+  "title": "Avaliando resoluções de exercícios introdutórios de programação na era das IAs Generativas: Um Estudo de Caso com o ChatGPT",
+  "authors": "Deus, William Simão de and Marcolino, Anderson Da Silva and Avellar, Gustavo Martins Nunes and Oliveira, Katyeudo Karlos de Sousa and Barbosa, Ellen Francine",
+  "venue": "Anais do XXXV Simpósio Brasileiro de Informática na Educação (SBIE 2024)",
+  "pages": "1645-1657",
+  "year": 2024
+ },
+ "GUIA2026": {
+  "doi": "10.5753/educomp.2026.18562",
+  "title": "Proposta de um Grau de Uso da Inteligência Artificial no Contexto Educacional: Critérios Éticos e Pedagógicos para Orientar a Prática Docente",
+  "authors": "Oliveira, Alana de A. and Teixeira, Mario Meireles",
+  "venue": "Anais do VI Simpósio Brasileiro de Educação em Computação (EDUCOMP 2026)",
+  "pages": "214-227",
+  "year": 2026
+ }
+}

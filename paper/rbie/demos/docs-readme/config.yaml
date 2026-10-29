@@ -1,0 +1,6 @@
+verify:
+  lint: python3 verifica_doc.py lint
+  test: python3 verifica_doc.py test
+  coverage: python3 verifica_doc.py cobertura
+  coverage_pattern: 'COBERTURA\s+([\d.]+)%'
+  gate: 25

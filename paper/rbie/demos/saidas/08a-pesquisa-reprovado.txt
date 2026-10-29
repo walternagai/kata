@@ -1,0 +1,26 @@
+▶ verificações de /tmp/tmp.0UxaXpgaro/pesquisa/.kata/config.yaml (declaradas pelo projeto)
+
+┌──────────────────────────────────────────────────────────┐
+│ 4. GOAL-DRIVEN — Verificação de qualidade                │
+└──────────────────────────────────────────────────────────┘
+
+▶ python3 verifica_fontes.py lint
+  ✅ limpo
+
+▶ python3 verifica_fontes.py test
+  ❌ falhou — últimas linhas:
+     DOI não resolve: 10.1145/9999999.9999999; afirmação sem fonte: A maioria dos cursos já ensina verificação de agentes de c…
+     
+
+▶ coverage (gate ≥ 100%)
+  ❌ falhou (0.0% — gate: 100%)
+     (skipped — tests failed)
+
+▶ Critério de sucesso da tarefa
+  (modo check-only — assumido satisfeito)
+
+┌──────────────────────────────────────────────────────────┐
+│  ❌  KATA CYCLE — REJEITADO                            │
+│     Corrija os problemas e rode novamente.              │
+└──────────────────────────────────────────────────────────┘
+exit=1

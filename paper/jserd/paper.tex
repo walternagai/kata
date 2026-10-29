@@ -6,7 +6,23 @@
 \usepackage[bottom]{footmisc}
 \usepackage{listings}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc}
+
+% Estilos dos fluxogramas de fase (fig:fit .. fig:judge). Mesma linguagem
+% visual da figura do ciclo (fig:cycle), em escala menor para caber em uma
+% coluna. `fproc` = processo, `fdec` = decisão, `fterm` = fase/terminal,
+% `fa` = seta, `fl` = rótulo de aresta.
+\tikzset{
+  fproc/.style={draw, rounded corners=1pt, fill=black!6, font=\scriptsize,
+    align=center, inner sep=1.6pt, minimum height=0.38cm},
+  fdec/.style={draw, diamond, aspect=2.4, fill=black!12, font=\scriptsize,
+    align=center, inner sep=0.5pt},
+  fterm/.style={draw, rounded corners=5pt, fill=black!16, font=\scriptsize,
+    align=center, inner sep=1.6pt, minimum height=0.38cm},
+  fnote/.style={font=\scriptsize\itshape, text=black!55, align=center},
+  fa/.style={-{Stealth[length=1.2mm]}, semithick},
+  fl/.style={font=\scriptsize, inner sep=0.8pt}
+}
 \lstset{
   basicstyle=\ttfamily\footnotesize,
   breaklines=true,
@@ -22,10 +38,19 @@
   % As saídas do CLI usam ícones (✅ ❌ ⚠ ▶ 🔴 ↳ ≥) sem cobertura nas fontes
   % do template. A fonte guarda marcadores ASCII e o listings os compõe com
   % símbolos das fontes matemáticas, para o PDF não depender de fonte de emoji.
+  % O prompt do CLI vira `[>]`, nunca `>`: um `>` solto no literate também
+  % converte o fechamento de `<sha256(task)>`, `<N>` e `--cov=<src>` (o listings
+  % casa a entradas mais longa primeiro, mas `>` isolado ainda pega esses casos)
+  % e a chave `*` converte o quantificador `.*?` de uma regex citada.
   literate={[ok]}{{$\checkmark$}}1 {[x]}{{$\times$}}1 {[!]}{{\textbf{!}}}1
-           {>}{{$\blacktriangleright$}}1 {>=}{{$\geq$}}1 {*}{{$\bullet$}}1
+           {[>]}{{$\blacktriangleright$}}1 {>=}{{$\geq$}}1 {[*]}{{$\bullet$}}1
            {->}{{$\hookrightarrow$}}1
 }
+
+% As legendas de Listing seguem o mesmo `labelsep=period` que o template já
+% fixa para figure e table; sem isto o listings usa o default `:`, e o PDF
+% mistura "Table 1." com "Listing 2:".
+\captionsetup[lstlisting]{font=footnotesize,labelfont=bf,labelsep=period,skip=2pt}
 
 \usepackage{xcolor}
 
@@ -53,6 +78,10 @@
   \noindent\keywordfont\textit{\textbf{Keywords: }}%
 }{\vskip6pt\hrule height .27pt\vskip12pt}
 
+% Submissão anônima: o build troca \anonfalse por \anontrue (ver build-anon.sh).
+\newif\ifanon
+\anonfalse
+
 \jid{JSERD}
 \jtitle{Journal of Software Engineering Research and Development, 2026}
 % DOI: assigned by JSERD on publication; the submission omits the placeholder.
@@ -61,9 +90,13 @@
 
 \title[Kata: an executable quality gate for AI-assisted software changes]{Kata: an executable quality gate for AI-assisted software changes}
 
+\ifanon
+\author[Anonymous]{\affil{\textbf{Omitted for review}}}
+\else
 \author[Nagai 2026]{
 \affil{\textbf{Walter Aoiama Nagai}~\href{https://orcid.org/0000-0001-9078-8396}{\textcolor{orcidlogo}{\aiOrcid}}~~[~\textbf{Instituto de Ciências Tecnológicas, Universidade Federal de Itajubá, Brazil} |\href{mailto:walternagai@unifei.edu.br}{~\textbf{\textit{walternagai@unifei.edu.br}}} ]}
 }
+\fi
 
 \begin{document}
 
@@ -73,47 +106,46 @@
 \begin{abstract}
 \textbf{Abstract}
 
-AI coding agents produce code faster than any developer can review, and the
-oversight surface collapses onto the automated test suite. When an agent says
-``done'', nothing executes the checks it claims to have passed; agents
-optimize for passing visible tests while deviating from the user's true goal
-(reward hacking), and large language models cannot reliably self-correct
-without external feedback. This paper presents Kata, an executable
-quality gate for AI-assisted software changes. Kata guides a change through a
-nine-phase cycle --- FIT, THINK, SIMPLIFY, INTENT, SURGICAL, VERIFY, TWIN
-CHECK, ARTIFACT, REPORT --- plus an optional adversarial JUDGE phase that
-re-runs every claimed check and hunts seven categories of fraud, such as
-weakened tests, false completion claims, and undeclared scope. Unlike skills
-that instruct the agent to be careful, Kata moves the objective parts of the
-discipline out of the prompt and into executable, testable Python code: lint,
-test, and coverage read real exit codes, the JUDGE confronts the task file
-with the repository state, and an audit mode grades each phase as followed,
-skipped, faked, or degraded, naming the risk each grade other than followed
-created. Kata is
-implemented as a Python command-line interface with two agent frontends
-generated from a single source of truth. The paper describes the algorithms
-behind each executable phase --- the fit gate, the verification pipeline, the
-cycle orchestration, the adversarial judge, the audit grading, and the trap
-harness --- presented as code-anchored, numbered Listings, so that the
-objective logic can be inspected and reproduced from the text itself. An
-executed comparison over 19
-adversarial scenarios shows detection parity with related gates; Kata returned
-every expected verdict at about one second per review on the trap scenarios (a
-median of 0.1\,s on fraud scenarios and 1.0\,s on non-fraud ones), but ten of the eleven
-agent false positives fell on blind-spot scenarios or on a Kata-specific diff
-convention, so the measured advantage is determinism and cost rather than
-general reviewer restraint; a minimum external
-study of twelve bug-fix tasks from public repositories, attempted by two models with and without the cycle
-found no weakened tests in either condition according to the JUDGE's own
-weakened-check detector (metric b), and the independent JUDGE review
-flagged the one case of undeclared scope, while the sessions' own JUDGE
-runs
-falsely refuted six honest fixes under a rule corrected after the evaluated
-version. The evaluation establishes the JUDGE's two-sided
-contract on fixtures we built ourselves. The judgment phases of the cycle
-were not ablated and were evaluated only for cost, and a controlled study of
-whether the cycle improves the quality of AI-assisted changes remains future
-work.
+AI coding agents produce code faster than a developer can review in detail,
+and oversight collapses onto the automated test suite. When an agent says
+``done'', nothing executes the checks it claims to have passed, and agents can
+satisfy visible tests while missing the user's goal (reward hacking). This
+paper presents Kata, an executable quality gate for AI-assisted software
+changes. Kata guides a change through a nine-phase cycle --- FIT, THINK,
+SIMPLIFY, INTENT, SURGICAL, VERIFY, TWIN CHECK, ARTIFACT, REPORT --- plus an
+optional adversarial JUDGE that re-runs every claimed check and hunts eight
+categories of fraud --- seven of them exercised by the evaluation --- such as
+weakened tests, false completion claims, undeclared scope, and a triviality
+claim the measured diff does not support. Unlike skills that instruct the
+agent to be careful, Kata moves the objective parts of the discipline into
+tested Python code: lint, typecheck when the project declares one, test, and
+coverage read real exit codes, the JUDGE confronts the task file with the
+repository, and an audit mode grades each phase as followed, skipped, faked,
+or degraded. Two agent frontends are generated from a single source, and the
+paper describes each executable phase as a code-anchored listing. Version
+0.8.0 adds the declared typecheck role, execution evidence in the task file,
+\texttt{kata --stamp} to close the JUDGE's diff window, strict project
+configuration, and the eighth fraud category.
+
+On 19 trap scenarios we wrote ourselves, the JUDGE returned every expected
+verdict. In an executed comparison on the same scenarios, three related gates
+also detected every planted fraud, so Kata's measured advantage is determinism
+and cost (a median of 0.1\,s on fraud scenarios and 1.0\,s on the others), not
+detection; ten of the eleven agent false positives fell on blind-spot
+scenarios or on a Kata-specific diff convention. On 12 bug-fix tasks from
+public repositories (48 agent sessions), the JUDGE's independent review
+flagged the one case of undeclared scope and its own weakened-test detector
+found none, but the sessions' own JUDGE runs falsely refuted six honest
+fixes, under a rule corrected after the evaluated version. An appendix reports
+an exploratory pilot and a 30-session campaign with an iterative
+builder/critic loop built on the same task file and audit machinery; they do
+not show that the loop improves the artifacts, and with one run per cell
+their comparisons are inconclusive.
+
+The scenarios are in-distribution for Kata; the judgment phases of the cycle
+were not ablated and were evaluated only for cost; the JUDGE has reproduced
+evasions for an agent that controls the repository; and whether the cycle
+improves the quality of AI-assisted changes remains future work.
 \end{abstract}
 
 \begin{keywords}
@@ -124,11 +156,11 @@ AI agents, software quality, verification, adversarial verification, quality gat
 
 \section{Introduction}
 \label{sec:introduction}
-\label{sec:intro}
 
 AI coding agents (OpenCode, Claude Code, Cursor, and similar tools) change
-software with remarkable speed. The problem is not the speed --- it is
-\textbf{trust}. When an agent says ``done'', what sustains that claim?
+software with remarkable speed. The hard problem is not the speed but whether
+the result can be trusted. When an agent says ``done'', what sustains that
+claim?
 
 A skill says: \emph{``verify your tests before committing''}. The model may
 follow, ignore, or half-follow the instruction, and nobody can tell the
@@ -145,8 +177,8 @@ objectively. The Fable
 Method \cite{fable}, a GitHub repository that has not been peer-reviewed,
 proposes gates: classify the task before acting (fit
 gate), require evidence before action, verify adversarially, and report
-outcome-first. Both are methodologies --- text that instructs. The problem:
-text instructs, but it does not execute.
+outcome-first. Both are methodologies, and a methodology is text that
+instructs. Text instructs; it does not execute.
 
 This paper presents Kata (``form'' or ``pattern'', as in a martial arts
 kata: a disciplined, repeatable sequence of movements), a quality gate for
@@ -156,7 +188,8 @@ testable Python code. The lint, test, and coverage steps read real exit codes;
 the JUDGE re-runs claimed checks against the real repository, including
 committed and untracked files; and the audit mode grades each phase of a
 completed task as followed, skipped, faked, or degraded, naming the concrete
-risk each grade other than followed created. A skill prescribes honesty; Kata provides an executable mechanism to verify it.
+risk each grade other than followed created. Where a skill prescribes honesty,
+Kata supplies an executable mechanism to verify it.
 
 This paper is a \textbf{software article}. Following the journal's
 guidelines (quoted in Section~\ref{sec:exec-comparison}), it describes a
@@ -180,35 +213,41 @@ detecting planted frauds without accusing honest work, and confessing what
 it cannot observe? (Section~\ref{sec:self-check}: 19 trap scenarios.)
 \item \textbf{RQ2.} How does the JUDGE compare with related gates reviewing
 the same scenarios, in detection, false accusations, determinism, and cost?
-(Section~\ref{sec:exec-comparison}.)
-\item \textbf{RQ3.} Is the cycle feasible on real repositories the author did
+(Section~\ref{sec:exec-comparison}: 19 scenarios, four gates.)
+\item \textbf{RQ3.} Is the cycle feasible on real repositories we did
 not write, and what does it cost? (Section~\ref{sec:external-evaluation}: 12
 real bugs, 48 agent sessions.)
 \end{itemize}
-The evaluation does not address whether the judgment phases of the cycle
+The evaluation does not establish whether the judgment phases of the cycle
 (THINK, SIMPLIFY, INTENT, SURGICAL, TWIN CHECK) improve the changes an agent
 produces: they were not ablated, and their contribution was measured only as
-cost.
+cost. Appendix~\ref{sec:gauntlet-pilot} reports an exploratory fourth
+question, outside the gate's evaluation: can an iterative builder/critic loop
+be carried and audited by the same task file, and does it improve the
+artifacts? The first half is answered affirmatively. The second finds no
+evidence of improvement, and no power to exclude one, across a 24-session pilot
+and a 30-session campaign (54 matched pairs, of which 19 were byte-identical
+and 35 were judged), so the question remains open with a better-instrumented
+path to it.
 
-The remainder of this paper is organized as follows. Section~\ref{sec:need}
+The paper proceeds as follows. Section~\ref{sec:need}
 states the problem and the research purpose of the software.
-Section~\ref{sec:field} places Kata in the context of related work and
-reports the executed comparison with related gates.
+Section~\ref{sec:field} places Kata in the context of related work.
 Section~\ref{sec:design} describes the software design and the trade-offs
 weighed, and presents, as numbered Listings, the descriptive algorithms of
 the executable phases. Section~\ref{sec:cycle} walks through the development
 cycle in action with real output. Section~\ref{sec:judge} details the adversarial
 verification layer. Section~\ref{sec:audit} presents the audit mode.
 Section~\ref{sec:usage} documents how to install and use the \texttt{kata}
-CLI. Section~\ref{sec:impact} reports the research impact and evaluation.
+CLI. Section~\ref{sec:impact} reports the research impact and evaluation, including the executed comparison with related gates.
 Section~\ref{sec:discussion} discusses the findings and their limitations.
 Section~\ref{sec:threats} states the threats to validity.
-Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:conclusion} concludes, and Appendix~\ref{sec:gauntlet-pilot} reports the exploratory loop study.
 
 \section{Statement of need}
 \label{sec:need}
 
-AI coding agents produce code faster than any developer can review, and the
+AI coding agents produce code faster than a developer can review in detail, and the
 oversight surface collapses onto the automated test suite. Reward hacking
 naturally arises in this setup: agents optimize for passing visible tests
 while deviating from the user's true goal. SpecBench \cite{specbench}
@@ -245,7 +284,7 @@ planning ceremony.
 and THINK, saves the plan with assumptions and unknowns, and stops --- the
 plan can be reviewed or handed off before a single line changes.
 \item \textbf{Adversarial verification of finished work}:
-\texttt{kata --judge} re-runs every claimed check and hunts seven fraud
+\texttt{kata --judge} re-runs every claimed check and hunts eight fraud
 categories before a merge or hand-over.
 \item \textbf{Auditing tasks after the fact}: \texttt{kata --audit} grades
 each phase of a completed task as followed, skipped, faked, or degraded, and
@@ -262,7 +301,7 @@ does not synthesize test suites or infer formal invariants. Nor does it
 claim to solve the general test oracle problem \cite{barr-oracle}: it takes
 the repository's declared verification commands and test suite as the
 material ground truth, ensuring that claimed checks were genuinely executed
-and that declared assertions were executed and not syntactically weakened. In short, Kata is a
+and that declared assertions were executed and not syntactically weakened. Kata is thus a
 verification quality gate and evidence-forcing scaffold, leaving code
 synthesis to the agent or human developer.
 
@@ -308,18 +347,18 @@ coding agents is this same failure with a compiler attached, and Kata's
 answer is to treat each claim in the task file as a property and the
 repository as the oracle, re-executing the claim instead of reading it.
 
-Kata was built rather than contributed to existing projects for three
-reasons. First, no existing tool ships an executable verification engine:
+Three considerations led us to build Kata rather than contribute to an
+existing project. No existing tool ships an executable verification engine:
 the closest alternatives are prompts that ask the model to verify itself,
 which the self-correction literature shows is unreliable \cite{selfcorrect}.
-Second,
-Kata needed to serve two agent hosts (OpenCode and Claude Code) with
-identical behavior; a single Python backend with generated frontends
+Kata also needed to serve two agent hosts (OpenCode and Claude Code) with
+identical behavior, and a single Python backend with generated frontends
 guarantees that the checks a task claims to have passed are the same checks
-in both hosts. Third, Kata needed to be verifiable itself: its own lint,
-tests, and coverage are measured, and in the evaluated version (v0.7.0) 19
-adversarial trap scenarios ran in continuous integration to check that the
-JUDGE catches planted frauds and does not accuse honest work.
+in both hosts. The third consideration was self-verification: Kata's own
+lint, tests, and coverage are measured, and in the evaluated version
+(defined in the Declarations) 19 adversarial trap scenarios ran in continuous integration to
+check that the JUDGE catches planted frauds and does not accuse honest
+work; the current release, 0.8.0, runs 25.
 
 \subsection{Recent research on agent verification}
 
@@ -332,8 +371,8 @@ and the claims we draw from them are qualitative positioning, not
 measured premises. The Unreliable
 Progress Bar study \cite{unreliable-progress} shows that LLM agents cannot
 reliably report task progress throughout execution --- agents claim
-completion states that do not match reality, which is precisely the class of
-claim the JUDGE re-executes. The Double Measurement Confound
+completion states that do not match reality, and the JUDGE re-executes
+claims of that kind. The Double Measurement Confound
 \cite{double-measurement} demonstrates that agent benchmarks suffer from
 de-scaffolding and ground-truth scoring confounds, arguing that reliability
 must be measured beyond the mean; Kata's trap suite follows the same
@@ -356,14 +395,14 @@ certifying that claimed discoveries are reproducible --- the same
 claim-vs-reality confrontation that the JUDGE performs for software
 changes. RefVerifier \cite{refverifier} semi-automatically verifies
 reference claims in scientific manuscripts, another instance of the
-claim-verification pattern. Finally, the study on traditional test criteria
+claim-verification pattern. The study on traditional test criteria
 for LLM-generated code \cite{test-criteria-llm} and the dynamics of
 iterative bug-fixing with LLMs \cite{not-buggy} both show that verification
 of AI-generated changes requires more than passing tests --- the former
 because traditional criteria miss LLM-specific bugs, the latter because
-agents may fix what is not broken. Together, these works validate Kata's
-core design decision: verification must be external, executable, and
-claim-based, not self-reported.
+agents may fix what is not broken. Together, these works are consistent with
+Kata's core design decision: verification should be external, executable, and
+claim-based, not self-reported. They do not test it.
 
 \subsection{Comparative analysis}
 
@@ -379,7 +418,7 @@ re-executes claims against the repository and returns a verdict
 re-execution (\emph{Partial}); or has no adversarial step (\emph{No}).
 \emph{Audit}: it can grade a completed piece of work after the fact
 against its own process. \emph{Self-verify}: the project runs its own
-checks and evaluation against itself. The assessments are the author's,
+checks and evaluation against itself. The assessments are ours,
 based on each project's public documentation and repository at the
 commits cited in the bibliography (accessed 2026-09-11); no other tool's
 authors were consulted, and the executed comparison of
@@ -390,11 +429,11 @@ should arrive at the same verdict.
 
 \begin{table*}[!ht]
 \caption{Comparison of Kata with related tools and methodologies.
-Qualitative assessment of the author from the cited sources at the commits
+Qualitative assessment by us from the cited sources at the commits
 cited in the bibliography (accessed 2026-09-11): see the text for the
 operationalization of each dimension. The dimensions are derived from the
 reward-hacking problem space (Section~\ref{sec:introduction}), not from
-Kata's architecture. The assessments are the author's
+Kata's architecture. The assessments are our
 read of the public artifacts; the executed comparison of
 Section~\ref{sec:exec-comparison} supersedes this table for the gates that
 could be run.}
@@ -414,189 +453,31 @@ SWE-bench \cite{swebench} & Yes & N/A & N/A & N/A & N/A & No \\
 \textbf{Kata} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} \\
 \hline\hline
 \end{tabular}
-\tabnote{Sources: Fable Method \cite{fable}; claude-wizard \cite{claudewizard}; Ring \cite{ring}; nova \cite{nova}; Consort \cite{consort}; SpecBench \cite{specbench}; SWE-bench \cite{swebench}. ``Partial'' means the tool discusses the fraud type but does not execute a detector for it. Benchmarks (SpecBench, SWE-bench) re-execute checks by design but do not audit or detect frauds.}
+\tabnote{Sources: Fable Method \cite{fable}; claude-wizard \cite{claudewizard}; Ring \cite{ring}; nova \cite{nova}; Consort \cite{consort}; SpecBench \cite{specbench}; SWE-bench \cite{swebench}. ``Partial'' means the tool discusses the fraud type but does not execute a detector for it. Benchmarks (SpecBench, SWE-bench) re-execute checks by design but do not audit or detect frauds. The \emph{Blind-spot confession} column favors Kata partly by protocol: in the executed comparison of Section~\ref{sec:exec-comparison}, the other tools' agent-reporting schema had no \texttt{UNVERIFIABLE} verdict to offer, so a gate could only accuse or stay silent, not confess (Section~\ref{sec:exec-comparison}); this row is not evidence that the other tools cannot represent that state, only that this comparison did not give them the option. Likewise, the ``No'' entries for scope creep and false completion record what the tools' public documentation describes, not what they detect: in the executed comparison nova and claude-wizard detected the planted scope creep (s02) and false completion (s03).}
 \label{tab:comparison}
 \end{table*}
 
 The table makes the positioning explicit: Kata is the only tool in the
-survey that combines executable verification, adversarial fraud detection
-across five categories, post-hoc auditing, and blind-spot confession.
+survey, judged by the public documentation we read, that combines executable verification, adversarial fraud detection
+across eight categories, post-hoc auditing, and blind-spot confession.
 The tools that execute (SpecBench, SWE-bench, Consort) are benchmarks or
 domain-specific frameworks, not gates a team runs on its own changes. The
 tools that audit (Fable Method) do not execute. Kata is the intersection.
 
-Two notes bound the comparison. First, Consort \cite{consort} executes
+Two qualifications bound the comparison. Consort \cite{consort} executes
 verification, but its enforcement scope is a framework for test-driven
 development on live \emph{database} branches; as a gate for general software
 changes it is not directly comparable by execution, so Section~\ref{sec:exec-comparison}
 compares Kata against the gates that are installable on the same host
-(nova, claude-wizard) and against a prompt-only baseline. Second,
-\emph{executing verification} is what the \texttt{kata} CLI does, and it is
-precisely what the prompt-based tools do not do by themselves: they ship no
-engine that runs checks and reads exit codes. Their ``Partial'' fraud column
+(nova, claude-wizard) and against a prompt-only baseline. The second
+qualification concerns \emph{executing verification}: the \texttt{kata} CLI
+does it, while the prompt-based tools do not, since they ship no engine that
+runs checks and reads exit codes. Their ``Partial'' fraud column
 reports that the adversarial step exists only as instruction text --- and
 the executed comparison shows that a reviewer carrying that instruction can
 run the checks when prompted, which is why the measured difference lies in
 determinism and cost rather than in detection
 (Section~\ref{sec:exec-comparison}).
-
-\subsection{Executed gate comparison}
-\label{sec:exec-comparison}
-
-The JSERD guidelines for software articles state that ``Software articles
-should describe a tool likely to be of broad utility that represents a
-significant advance over previously published software (usually demonstrated
-by direct comparison with available related software)''.\footnote{JSERD
-submission guidelines,
-\url{https://journals-sol.sbc.org.br/index.php/jserd/about/submissions},
-accessed 2026-09-11. The quoted text is verbatim from the ``Software''
-article type description as of the access date.} This
-section answers that request by direct comparison: four gates --- Kata, nova, claude-wizard,
-and a prompt-only baseline --- reviewed the same 19 adversarial scenarios of
-Section~\ref{sec:impact}, and we measured fraud detection, false positives,
-and wall-clock time.
-
-\subsubsection{Protocol}
-
-The comparison reuses the trap suite of Section~\ref{sec:impact} as the
-workload: each scenario is a git repository holding a ``completed'' task
-whose task file records the claims the scenario exercises --- lint, tests,
-and coverage in the false-completion case, a subset elsewhere (the blind
-spots claim no reproducible check at all). The ground truth is
-the scenario's \texttt{ground\_truth.yaml}: the expected verdict and the
-exact frauds the review must find. Eleven scenarios expect REFUTED; the
-other eight expect VERIFIED (s07, s15, s16, s17), VERIFIED WITH CAVEATS
-(s06, the debris scenario, whose ground truth expects the three real debris
-findings), or UNVERIFIABLE (s12, s13, s19).
-
-Each gate reviews every scenario in a fresh sandbox, without access to the
-ground truth. Kata runs its \texttt{--judge} mode. nova and claude-wizard
-run headless through the Claude Code CLI (\texttt{claude -p} with
-permission bypass), each receiving an identical canonical prompt that
-states the review task and the seven fraud categories, prefixed with an
-instruction to follow the gate's workflow. The prompt-only baseline receives
-the same prompt without any gate-framework instruction; it is a reviewer
-with the same information and tool access, not a no-verification condition.
-The agent gates report their
-verdict as a single JSON object (\texttt{fraud\_detected},
-\texttt{fraud\_types}, \texttt{reason}); the harness parses it with a
-tolerant JSON decoder. The Kata arm is classified by exact verdict match
-against the ground truth; for the agent arms, a scenario is \emph{detected}
-when the gate reports the fraud matching the ground-truth types and a
-\emph{false positive} when it accuses a scenario whose ground truth expects
-no fraud. The debris scenario is the exception to the accusation rule: its
-ground truth expects the real debris to be found, so reporting debris
-without naming one of the look-alike files counts as correct, while naming
-a look-alike counts as a false positive. The \emph{Correct} column counts
-the scenarios a gate classified as detected or clean.
-
-\subsubsection{Results}
-
-Table~\ref{tab:gate-comparison} summarizes the outcome. Three findings
-stand out.
-
-\begin{table*}[!ht]
-\caption{Executed comparison of five gates over the 19 trap scenarios.
-One complete campaign (September 2026); raw verdicts in
-\texttt{eval/results/compare\_gates\_round2.json} (agent gates) and
-\texttt{eval/results/deterministic\_baseline.json} (deterministic).
-In the Non-REFUTED
-block, FP reports the final campaign count alongside the range
-[\emph{min}--\emph{max}] across the two complete campaigns, the first
-re-scored with the final debris (s06) rule (see text). The last block excludes the three blind-spot scenarios
-(s12, s13, s19), whose ground truth expects UNVERIFIABLE, a verdict the
-agents' reporting format did not offer.}
-\centering
-\begin{tabular}{@{}lcccc@{}}
-\hline\hline
-Gate & Detection & FP (range) & Correct & Median time \\
-\hline
-\multicolumn{5}{l}{\emph{Fraud scenarios (11 REFUTED)}} \\
-Kata & 11/11 & --- & 11/11 & 0.1\,s \\
-nova & 11/11 & --- & 11/11 & 16\,s \\
-claude-wizard & 11/11 & --- & 11/11 & 17\,s \\
-bare (prompt-only) & 11/11 & --- & 11/11 & 18\,s \\
-deterministic (test + smell) & 9/11 & --- & 9/11 & 0.3\,s \\
-\multicolumn{5}{l}{\emph{Non-REFUTED scenarios (8): honest (4), debris (1), blind spots (3)}} \\
-Kata & --- & 0 [0--0] & 8/8 & 1.0\,s \\
-nova & --- & 4 [3--4] & 4/8 & 40\,s \\
-claude-wizard & --- & 2 [2--3] & 6/8 & 27\,s \\
-bare (prompt-only) & --- & 5 [3--5] & 3/8 & 32\,s \\
-deterministic (test + smell) & --- & 2 & 6/8 & 0.3\,s \\
-\hline
-\multicolumn{5}{l}{All scenarios --- correctness (final campaign)} \\
-Kata & & & \textbf{19/19} & \\
-nova & & & 15/19 & \\
-claude-wizard & & & 17/19 & \\
-bare (prompt-only) & & & 14/19 & \\
-deterministic (test + smell) & & & 15/19 & \\
-\hline
-\multicolumn{5}{l}{Excluding blind-spot scenarios s12, s13, s19 (16) --- correctness (final campaign)} \\
-Kata & & & 16/16 & \\
-nova & & & 15/16 & \\
-claude-wizard & & & 15/16 & \\
-bare (prompt-only) & & & 14/16 & \\
-deterministic (test + smell) & & & 15/16 & \\
-\hline\hline
-\end{tabular}
-\label{tab:gate-comparison}
-\end{table*}
-
-First, \textbf{all four agent gates detected every planted fraud in all eleven
-REFUTED scenarios}. Fraud detection is not where the gates differ: the
-difference is in what happens on honest work and confessed blind spots.
-Second, \textbf{Kata returned the expected verdict on all eight non-REFUTED
-scenarios, but most agent false positives trace to the comparison design
-rather than to reviewer judgment}. The agent gates made eleven false
-accusations, and their origin matters more than their count. Seven fell on
-the three blind-spot scenarios, whose ground truth expects UNVERIFIABLE ---
-nova and the baseline on s12 and s13, all three on s19; the agents'
-reporting format offered no such verdict, so a gate could only accuse or
-report no fraud (claude-wizard reported no fraud on s12 and s13 and was
-scored correct). Three, one per agent gate, fell on s17, where the agents
-counted a later task's changes as scope creep for the task under review;
-s17 depends on the \texttt{approved\_commit} diff ceiling, a Kata convention
-the review prompt did not explain. The remaining one is the prompt-only
-baseline accusing the honest s07 task of weakened checks. Excluding the
-blind-spot scenarios, correctness is 16/16 for Kata, 15/16 for nova and
-claude-wizard, and 14/16 for the baseline (Table~\ref{tab:gate-comparison});
-excluding s17 as well, nova and claude-wizard match Kata, and the only
-difference left is the baseline's error on s07. On the one non-REFUTED scenario that does contain a
-real fraud (s06, debris), the three agent gates found the debris and spared
-the look-alike names, and Kata's verdict matched the expected VERIFIED
-WITH CAVEATS --- the trap suite verifies that its output lists the three
-debris findings (Section~\ref{sec:self-check}). Third, \textbf{the gates
-differ in time}: Kata's median review took 0.1\,s on fraud scenarios and
-1.0\,s on the others, while the agent gates' medians ranged from 16\,s to
-40\,s, because the gate reads exit codes while the agents
-run a model. Kata's verdicts here are model-independent: its measured
-advantage over the agent gates is determinism (the same verdict every run)
-and cost (0.1--1.0\,s per review on these fixtures) --- not detection, which every gate
-achieved on these fixtures, and not general restraint, since Kata's absence
-of false accusations was measured on scenarios built around its own
-conventions.
-
-A fifth, deterministic baseline (run \texttt{make test} and grep the diff
-for test-smell patterns: \texttt{pass} bodies, \texttt{assert True}
-additions, \texttt{pytest.skip}) sits below all agent gates on detection:
-9/11 REFUTED, missing s08 (fraud in an untracked file invisible to
-\texttt{git diff --cached}) and s14 (metadata fraud in the YAML
-\texttt{base\_commit} field). It also produces two false positives (s06
-debris, s07 honest work flagged by smell-pattern matches). The comparison
-is diagnostic: test-smell grep catches the syntactic weakening patterns
-the JUDGE was designed for (Section~\ref{sec:judge}), but cannot inspect
-Git state, track file scope across commits, or distinguish legitimate from
-fraudulent \texttt{pass} bodies --- precisely the operations that require
-the deterministic code path the paper argues for.
-
-The comparison is subject to important methodological caveats that we state explicitly.
-First, the 19 scenarios and the underlying fraud taxonomy were developed iteratively alongside Kata to serve as regression fixtures. Consequently, the test workloads are strictly in-distribution for Kata --- which includes dedicated architectural mechanisms for these specific boundary conditions --- and out-of-distribution for the alternative gates. The false positives incurred by the agent gates were concentrated precisely on scenarios exercising these repository-level conventions (e.g., \texttt{approved\_commit} diff ceiling on s17, Git local excludes on s19, and missing language probes on s12). Hence, the false positive metric reflects familiarity with these architectural conventions and the presence of direct repository query tools as much as generic reviewer restraint.
-
-Second, the alternative tools were evaluated in a constrained, emulated configuration: \texttt{nova} and \texttt{claude-wizard} were invoked as structured review prompts within a single headless Claude Code CLI session (\texttt{claude -p}), rather than within their native end-to-end interactive developer workflows. For instance, \texttt{nova} provides a full Model Context Protocol (MCP) server with specialized subagents that was not wired into this isolated review harness, which was scoped to measure a standalone, single-turn change review pass. Furthermore, the agent gates operated through a single underlying LLM, Claude Code's default model. The harness did not record which model that was; the local Claude Code session logs of the final campaign's 57 agent reviews, which are not archived in the repository, show \texttt{claude-sonnet-5} through Claude Code CLI 2.1.268. This means their false positives and heuristic tendencies characterize this specific model under review prompting, rather than the tools in their entirety.
-
-Third, agent reviews are inherently stochastic, and the scoring rules changed during the study. The repository archives five comparison files, described in \texttt{eval/results/README.md}. Two are complete, independent campaigns: \texttt{compare\_gates.json} and the final \texttt{compare\_gates\_round2.json} reported in Table~\ref{tab:gate-comparison}. \texttt{compare\_gates\_refined.json} re-runs only the eight non-REFUTED scenarios; \texttt{compare\_gates\_merged.json} consolidates the first campaign with that re-run and is not an independent campaign; and \texttt{compare\_gates\_final.json} is a campaign aborted by the account spend limit, whose INCONCLUSIVE entries from s13 onward are infrastructure blocks, not gate behaviour. Two scoring changes were made after the first campaign's results were seen: the agent-output parser was replaced by a decoder that takes the first complete JSON object, and the debris scenario (s06) stopped counting an accusation of the real debris as a false positive, counting one only when a look-alike file is named. The s06 change favoured the agent gates: under the first rule, all three were charged a false positive on s06 for finding the real debris. The parser change did not: in the first campaign, the baseline's answer on the honest s07 task could not be parsed and was recorded as INCONCLUSIVE, although its archived prefix reports \texttt{fraud\_detected: true}, so the final parser would most likely have scored it as a false positive. Scored as they were at the time, the agent false-positive counts in the two complete campaigns were 4 and 4 for nova, 4 and 2 for claude-wizard, and 4 and 5 for the baseline; applying the final s06 rule to the first campaign lowers each of its counts to 3 (4 for the baseline if its s07 accusation is counted), which gives the ranges in Table~\ref{tab:gate-comparison}. Re-scoring the final campaign with the final rules from its archived output reproduces every published status. The first campaign cannot be fully re-scored, because it archives only a truncated excerpt of each agent answer (at most 300 characters); the s06 answers fit whole, so that re-scoring is verifiable, while the s07 answer is cut off and remains INCONCLUSIVE. Kata yielded identical verdicts across every run, with zero false positives on these Kata-built fixtures. Furthermore, the agent reporting schema lacked an explicit \texttt{UNVERIFIABLE} verdict, forcing agents either to accuse or remain silent, precluding explicit confessions of unobservable state.
-
-In summary, the comparison does not demonstrate general superiority of Kata over the reasoning capabilities of alternative tools. Rather, it isolates the core thesis of this paper: evaluating complex software engineering boundary conditions (such as Git commit ceilings, untracked ignores, and process exit codes) through heuristic LLM prompts forces the model to guess, whereas executing deterministic, code-level checks --- deterministic in the sense that the same repository state always produces the same verdict, not in the sense of completeness --- yields instantaneous, reproducible verdicts that confess blind spots explicitly. Whether this also means fewer false accusations on workloads not built alongside Kata remains untested. The comparison harness and raw records are archived as \texttt{eval/compare\_gates.py} and \texttt{eval/results/compare\_gates\_round2.json}.
 
 \section{Software design}
 \label{sec:design}
@@ -629,7 +510,7 @@ Architecturally, Kata operationalizes this discipline along two distinct usage t
   judge/.style={phase, fill=black!20, minimum width=1.9cm},
   arrow/.style={-{Stealth[length=1.8mm]}, semithick},
   arrowd/.style={-{Stealth[length=1.8mm]}, semithick, dashed},
-  note/.style={font=\tiny\itshape, text=black!60, align=center}
+  note/.style={font=\scriptsize\itshape, text=black!60, align=center}
 ]
   % Main row (y=0)
   \node[obj] (fit)       at (0.85,0)   {FIT};
@@ -664,7 +545,7 @@ Architecturally, Kata operationalizes this discipline along two distinct usage t
 
   % FIT routes (note, no arrow; above the FIT/THINK boxes)
   \node[note, anchor=south west, align=left] at (0.1,0.62)
-    {plan-first: stops after THINK\\ question: stops after FIT};
+    {plan-first: THINK, then stops\\ question: THINK, then stops};
 
   % Hand back and TWIN CHECK (notes, no arrow)
   \node[note, anchor=west] at (9.4,-2.1)
@@ -684,7 +565,8 @@ the optional flows: the triviality gate skips the planning phases (FIT to
 VERIFY directly), VERIFY loops on failure with a hard bound of three
 attempts before handing the task back to the user, and JUDGE runs after
 REPORT only when requested. TWIN CHECK runs only for approved tasks, and
-the plan-first and question routes stop after THINK and FIT respectively.}
+both the plan-first and the question routes run THINK before stopping ---
+the diagnosis benefits from declaring the problem and the criterion first.}
 \label{fig:cycle}
 \end{figure*}
 
@@ -693,17 +575,19 @@ the plan-first and question routes stop after THINK and FIT respectively.}
 \texttt{kata.fit} measures the real diff against \texttt{HEAD} (including
 untracked files) and applies the triviality gate (at most one changed file
 and fewer than ten changed lines); Listing~\ref{alg:fit} describes the
-diff measurement and the gate. \texttt{kata.verify} runs lint, tests,
-and coverage with a numeric gate, reading exit codes rather than model
-intentions (Listing~\ref{alg:verify}); a declared role in
+diff measurement and the gate. \texttt{kata.verify} runs lint, a declared
+typecheck, tests, and coverage with a numeric gate, reading exit codes rather
+than model intentions (Listing~\ref{alg:verify}); a declared role in
 \texttt{.kata/config.yaml} runs verbatim, so
 the tool does not assume the target project is Python.
 \texttt{kata.judge}
 treats the task file as a collection of claims, re-runs the claimed checks,
-diffs the claims against the repository, and hunts seven fraud categories:
+diffs the claims against the repository, and hunts eight fraud categories:
 weakened checks, false completion, scope creep, unauthorized actions,
-specification betrayal, debris, and baseline tampering
-(Listings~\ref{alg:judge}--\ref{alg:weakened}). \texttt{kata.cli}
+specification betrayal, debris, baseline tampering, and a triviality claim
+the measured diff does not support
+(Listings~\ref{alg:judge}--\ref{alg:weakened}). The evaluated version hunted
+the first seven; the eighth was added in 0.8.0. \texttt{kata.cli}
 orchestrates the nine phases, persists the task file, and exposes the audit
 and judge modes (Listing~\ref{alg:cycle}). Section~\ref{sec:algorithms}
 presents these algorithms in full as numbered Listings.
@@ -726,17 +610,33 @@ verify:
 Every key is optional. A role that is not declared falls back to the
 Python default for that role (ruff, pytest, pytest-cov) and keeps obeying
 the path flags, so a project can replace only its linter and keep pytest.
-A declared role is run verbatim and judged by its exit code, the one
-contract every lint and test tool honours. Coverage is the exception: the
-built-in path delegates the gate to \texttt{--cov-fail-under}, which does
-not exist outside Python, so a declared coverage command has its percentage
-extracted with \texttt{coverage\_pattern} and compared here. If the
-pattern matches nothing, the check fails rather than recording 0.0\% as a
-pass --- ``could not measure'' is not ``measured and passed''.
+The exception is \texttt{typecheck}: there is no universal type checker, so
+an undeclared typecheck does not run and \texttt{verify.typecheck\_clean}
+stays \texttt{null}, never \texttt{true}. A declared role is run verbatim
+and judged by its exit code, the one contract every lint and test tool
+honours. Coverage is the other exception: the built-in path delegates the
+gate to \texttt{--cov-fail-under}, which does not exist outside Python, so a
+declared coverage command has its percentage extracted with
+\texttt{coverage\_pattern} and compared here. If the pattern matches nothing,
+the check fails rather than recording 0.0\% as a pass --- ``could not
+measure'' is not ``measured and passed''. When the project declares several
+coverage sources, all of them are passed to pytest-cov, so the gate measures
+the surface the project declared rather than a subset of it.
 
 A config file that exists but is invalid aborts with exit code 1. Falling
 back to ruff silently would report the success of a check the project
-never asked for, which is precisely the class of fabricated claim the judge exists to detect. The
+never asked for, and that is the kind of fabricated claim the judge
+exists to detect. Since 0.8.0 the refusal is stricter: an unknown key at
+any level is a named error, because a misspelled section
+(\texttt{veirfy:}) used to fall back to the Python defaults with no
+warning, and a command containing a shell operator (\texttt{\&\&},
+\texttt{||}, \texttt{|}, \texttt{;}, \texttt{>}) is refused as well.
+Commands run without a shell, so \texttt{npm run check \&\& npm run test:db}
+would reach npm as arguments and exit 0 with the second tier never
+executed; the project must declare a script or an explicit
+\texttt{bash -c}. A path flag that no longer applies because its role is
+declared is reported as ignored instead of being silently discarded.
+The
 JUDGE follows the same line: it knows the test syntax of Python, JS/TS,
 Go, Ruby, Rust, Java/Kotlin, C\#, PHP, and Swift (the language probes
 implemented in \texttt{kata/judge.py} as a per-language table of
@@ -763,12 +663,15 @@ dialogue, Kata runs directly in the primary conversation through skills
 alone (\texttt{skills/kata/} orchestrating the phase skills).
 The script measures the shared
 fraction by rendering every source for both frontends and diffing the
-outputs line by line: 92.6\% of the rendered lines are shared (93\% at
-whole-number precision), and the remainder is declared difference --- host
+outputs line by line: 92.8\% of the rendered lines are shared at tag
+\texttt{v0.8.0} (93\% at whole-number precision), and the remainder is
+declared difference --- host
 tool names, identity wording, and capability blocks such as the
 closed-choice ask --- reported by
-\texttt{python3 scripts/build\_skills.py -{}-stats}. The 395 divergent
-lines are the count the author observed between the two hand-maintained
+\texttt{python3 scripts/build\_skills.py -{}-stats}. The figure moves as the
+phase sources grow: the same command reported 92.6\% at \texttt{v0.7.0} and
+92.8\% at \texttt{v0.8.0}. The 395 divergent
+lines are the count we observed between the two hand-maintained
 copies before the single-source migration; that figure is historical and
 the script does not re-derive it. This
 single-source design exists because the previous arrangement --- two
@@ -807,7 +710,7 @@ phase skills, so an adapter is written once and served to both hosts.
 
 \subsection{Design trade-offs}
 
-The cycle encodes two design trade-offs worth making explicit.
+The cycle encodes two design trade-offs.
 
 The first is the \textbf{done criterion} (Fable Step 1): THINK records what
 ``ready'' means and how it will be verified \emph{before} the evidence
@@ -843,13 +746,13 @@ was approved anyway is specification betrayal.
 \item \textbf{Accepted without verification}: the success criterion is a
 subjective confirmation the user gives during VERIFY, and no command
 reproduces it. The JUDGE lists it separately as accepted without
-verification, and it adds a caveat. Presenting it as verified would be
-exactly the fraud the judge exists to hunt.
+verification, and it adds a caveat. Counting it as verified is the fraud
+the judge exists to hunt.
 \end{itemize}
 
-This three-way classification is what makes the JUDGE honest in both
+This three-way classification keeps the JUDGE honest in both
 directions. It does not over-claim: claims it cannot re-execute are
-confessed, not assumed. And it does not under-claim: claims it can
+confessed, not assumed. Neither does it under-claim: claims it can
 re-execute are always re-run, never taken at face value. The same model
 applies to the audit mode, which grades each phase as followed, skipped,
 faked, or degraded by comparing the task file's content with what the phase was
@@ -884,7 +787,7 @@ cannot be inspected (binary, or larger than
 \texttt{MAX\_UNTRACKED\_FILE\_BYTES} = 256\,KiB, \texttt{kata/verify.py:63})
 counts as ten lines, which is exactly the number that fails the triviality
 gate: ``could not look'' must not become ``trivial change'', or the cycle
-would skip SIMPLIFY, INTENT, and SURGICAL precisely where there is the
+would skip SIMPLIFY, INTENT, and SURGICAL where there is the
 least evidence to trust.
 
 \begin{lstlisting}[caption=fit gate (kata/fit.py).,label=alg:fit]
@@ -914,13 +817,15 @@ ALGORITHM fit_gate(cwd)
 \end{lstlisting}
 
 \paragraph{Verification pipeline.} Listing~\ref{alg:verify} runs the three
-roles --- lint, test, coverage --- respecting the project's declared
-commands from \texttt{.kata/config.yaml} when present (\texttt{config.py}),
-and falling back to the Python defaults otherwise. Three properties are
-deliberate. First, a declared role runs verbatim and is judged by its exit
-code, the one contract every lint and test tool honours; second, coverage
-is short-circuited when the test step fails (a coverage number on top of a
-failing suite is deceptive and uninformative); third, ``could not measure'' is never recorded as
+roles of the evaluated version --- lint, test, coverage --- respecting the
+project's declared commands from \texttt{.kata/config.yaml} when present
+(\texttt{config.py}), and falling back to the Python defaults otherwise. The
+0.8.0 pipeline adds the declared \texttt{typecheck} between lint and test;
+it has no default and does not run when undeclared. Three properties are
+deliberate. A declared role runs verbatim and is judged by its exit
+code, the one contract every lint and test tool honours. Coverage
+is short-circuited when the test step fails, since a coverage number on top of a
+failing suite is deceptive and uninformative. And ``could not measure'' is never recorded as
 ``measured and passed'': when the coverage pattern matches nothing, the
 check fails with a named error instead of reporting 0.0\% as a pass
 (\texttt{verify.py:201--207}).
@@ -956,8 +861,9 @@ driver (\texttt{kata/cli.py}). It persists the task file after every phase
 with an atomic write (\texttt{mkstemp} + \texttt{fsync} + \texttt{replace},
 \texttt{cli.py:115}), so an interrupted cycle can be resumed. The routes
 matter: a trivial task skips THINK through SURGICAL via the triviality
-gate; \texttt{--plan} and the \texttt{plan-first} route stop after THINK;
-the \texttt{question} route stops after FIT. The verify step implements
+gate; \texttt{--plan} and the \texttt{plan-first} route run THINK and
+stop, leaving a plan; the \texttt{question} route also runs THINK and
+stops, leaving a diagnosis. The verify step implements
 the hard bound of Fable Step 5: a counter of \emph{failed} attempts
 persisted in the task file hands the task back to the user after three
 failures.
@@ -990,7 +896,7 @@ ALGORITHM main()
   // VERIFY in detail
  23 results <- run_all(...); print lint/test/coverage with real exit codes
  24 success_criteria_met <- user confirms (or True in --check-only)
- 25 attempts <- persisted count of FAILED runs (K-13, not executions)
+ 25 attempts <- persisted count of FAILED runs, not executions
  26 if not all_ok: attempts <- attempts+1; hand_back <- attempts >= 3
  27 status <- approved iff all_ok and success_criteria_met
  28 if approved: approved_commit <- HEAD            // R14: ceiling of the diff
@@ -1038,15 +944,15 @@ ALGORITHM judge_task(task_data, cwd, config)
 \end{lstlisting}
 
 \paragraph{Weakened-checks hunt.} Listing~\ref{alg:weakened} is the most
-elaborate of the seven hunters. A weakened check is a test that exists,
+elaborate of the hunters. A weakened check is a test that exists,
 runs, and verifies nothing: a body replaced by \texttt{pass}, an assertion
 commented out, a new test whose first instruction is a no-op
 (\texttt{assert True}, \texttt{pytest.skip}, \texttt{it.skip},
 \texttt{t.Skip}, \texttt{XCTSkip}). The hunts are language-aware: probes
 for each language (\texttt{judge.py:29--339}) define what a removal, an
 empty body, and a no-op look like in that syntax, so a Go pattern is never
-applied to a Ruby file. The subtlety worth calling out is the
-\emph{pair rule} (K-01): a removed assertion is only a fraud if no added
+applied to a Ruby file. One subtlety deserves emphasis: the
+\emph{pair rule}: a removed assertion is only a fraud if no added
 line in the same file contains an assertion of the same family, because
 changing \texttt{expect(x).toBe(1)} to \texttt{expect(x).toBe(2)} is a
 modification, not a removal. Files whose language has no probes are
@@ -1066,7 +972,7 @@ ALGORITHM hunt_weakened_checks(diff)
   9    if is_new: collect '+' lines per file; continue
  10    if line starts with '+':
  11        if an assertion of the family is on this + line:
- 12            pending <- []                           // K-01: changed value, not removal
+ 12            pending <- []                           // changed value, not removal
  13        for each (pattern, desc) in probes.weakened:
  14            if pattern matches line:
  15                if line starts with '-' and family probes exist:
@@ -1128,17 +1034,21 @@ ALGORITHM doctor()
 
 \begin{lstlisting}[caption=trap harness (eval/run\_traps.py).,label=alg:traps]
 ALGORITHM run_traps()
-  1  for each scenario in eval/scenarios/s01..s19:
+  1  for each scenario in eval/scenarios/        // sorted; 24 as executed
   2      in a fresh sandbox (excluding .kata/ from git; one scenario opts
   3        in to the real environment with kata_visivel: true)
-  4      run kata --judge inside the fixture          // no access to ground truth
-  5      gt <- ground_truth.yaml (expected verdict + exact frauds)
-  6      fail if  verdict != gt.expected_verdict
-  7          or  any expected fraud missing
-  8          or  any unexpected fraud present          // two-sided contract
-  9  // honest scenarios must return VERIFIED, blind spots UNVERIFIABLE,
- 10  // fraud scenarios REFUTED; a scenario that passes with its defect
- 11  // reintroduced protects nothing and is rejected
+  4      repeat gt.judge_runs times in the same workspace   // s23: the
+  5          // judge's own run leaves artifacts; run two must not accuse them
+  6      run kata --judge inside the fixture          // no access to ground truth
+  7      gt <- ground_truth.yaml (expected verdict + exact frauds)
+  8      fail if  verdict != gt.expected_verdict
+  9          or  any expected fraud missing
+ 10          or  any unexpected fraud present          // two-sided contract
+ 11      if gt.expected_audit:
+ 12          run kata --audit and compare per phase  // grades, e.g. gauntlet
+ 13  // honest scenarios must return VERIFIED, blind spots UNVERIFIABLE,
+ 14  // fraud scenarios REFUTED; a scenario that passes with its defect
+ 15  // reintroduced protects nothing and is rejected
 \end{lstlisting}
 
 The listings share one discipline that the reader should verify against
@@ -1149,6 +1059,59 @@ rather than VERIFIED when it could not observe; the audit grades
 \emph{degraded} a phase whose own skill was never loaded. Every placeholder
 in these descriptions is a decision that the code makes explicitly, and
 each such decision is covered by a unit test in \texttt{tests/}.
+
+\subsection{Changes in version 0.8.0}
+\label{sec:release-080}
+
+The evaluation in this paper was run against the code identified in the
+Declarations as the evaluated version. The current release, 0.8.0, is not
+that code: it keeps the nine-phase cycle and the verdict model, and changes
+the evidence it records and the edges it checks. The additions are:
+
+\begin{itemize}
+\item \textbf{A fourth verification role.} A project may declare
+  \texttt{verify.typecheck}; it runs between lint and test and is judged by
+  its exit code. It has no default, and \texttt{verify.typecheck\_clean}
+  stays \texttt{null} when the role is undeclared, because no universal type
+  checker exists and a role that did not run must not be recorded as passed.
+\item \textbf{Execution evidence.} VERIFY stamps \texttt{kata\_version},
+  \texttt{gate\_used}, \texttt{commands} (role $\rightarrow$ command), and
+  \texttt{ran\_at} in the task file; the report prints them, and the JUDGE
+  compares them with its own run, adding a caveat when the version, the gate,
+  or a command differs from the recorded one.
+\item \textbf{A closed diff window.} \texttt{approved\_commit} is not
+  recorded while \texttt{HEAD} is still the baseline, because a ceiling equal
+  to the floor is an empty diff window. \texttt{kata --stamp TASK
+  [--commit SHA]} records the commit that ends the task, validating that it
+  resolves, descends from \texttt{base\_commit}, and is an ancestor of
+  \texttt{HEAD}.
+\item \textbf{An eighth fraud category.} \texttt{hunt\_triviality\_claim}
+  flags \texttt{fit.trivial=true} with no declared files when the measured
+  diff exceeds a deliberately gross tolerance (100 added lines or ten files).
+  The three-file honest task of s16 remains \texttt{VERIFIED}, because the
+  tolerance is set to catch a sixteen-thousand-line change approved as
+  trivial, not a small helper change.
+\item \textbf{A finer false-completion rule.} A check that did not run
+  because the environment lacks the tool is a confessed blind spot, not a
+  false completion: ``I could not run it'' is not ``I ran it and it failed''.
+\item \textbf{Attribution inside the window.} Commits that fall between
+  \texttt{base\_commit} and \texttt{approved\_commit} are attributed to
+  sibling tasks by the stamps the repository already holds: a commit stamped
+  by an approved sibling leaves the window with a caveat naming the commit
+  and the task, and an unstamped commit makes the verdict
+  \texttt{UNVERIFIABLE} rather than accusing honest work or blessing it.
+\item \textbf{Stricter configuration and diagnosis.} Unknown keys at any
+  level of \texttt{.kata/config.yaml} are named errors; shell operators in a
+  declared command are refused; \texttt{kata --doctor} reports skills
+  installed by a different Kata version; and a path flag ignored because its
+  role is declared is reported instead of silently discarded.
+\end{itemize}
+
+These changes are covered by the unit suite and by the current trap suite of
+25 scenarios (s20--s25 were added after the evaluation, together with the
+fixes they guard). They do not alter the 19-scenario results reported in
+Section~\ref{sec:impact}, and we did not re-run the evaluation on 0.8.0; the
+Declarations state which commit produced each number.
 
 \section{The development cycle in action}
 \label{sec:cycle}
@@ -1162,7 +1125,8 @@ as non-trivial and routes it to the full cycle.
 
 \subsection{FIT --- task classification}
 
-The FIT phase measures the real diff and classifies the task:
+The FIT phase measures the real diff and classifies the task; its
+control flow is Figure~\ref{fig:fit}.
 
 \begin{lstlisting}
   diff: 2 file(s), 11 changed line(s)
@@ -1181,7 +1145,17 @@ The FIT phase measures the real diff and classifies the task:
 
 A trivial task (at most one file, fewer than ten lines) would skip the
 planning phases and go directly to VERIFY --- the triviality gate of the
-Fable Method.\footnote{The \texttt{kata} CLI reports in Portuguese; the
+Fable Method. In the evaluated version, and still in 0.8.0, the measured diff
+counts untracked \texttt{.kata/*.yaml} files (the task file itself and the
+project configuration), so in a project that does not ignore \texttt{.kata/}
+a one-line change is no longer trivial: one file becomes two files and three
+lines in our reproduction on 0.8.0. The JUDGE and the SURGICAL file list
+filter this bookkeeping, but \texttt{fit.diff\_stats} does not; the trap
+harness hides the defect because it git-excludes \texttt{.kata/} in every
+fixture. No trap scenario covers it. This is a
+defect of the current release, not a historical note: a reader who relies on
+the triviality gate should ignore \texttt{.kata/} in the project or accept
+that a one-line change may take the full cycle.\footnote{The \texttt{kata} CLI reports in Portuguese; the
 CLI outputs quoted in this paper are translated into English for
 presentation. Recurring terms: \emph{não-trivial} = non-trivial;
 \emph{rota escolhida} = chosen route; \emph{arquivo(s)} = file(s);
@@ -1190,10 +1164,48 @@ presentation. Recurring terms: \emph{não-trivial} = non-trivial;
 \emph{fraude(s)} = fraud(s); \emph{re-execução} = re-execution;
 \emph{ocorrência(s)} = occurrence(s).}
 
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {FIT};
+  \node[fproc, below=of a] (d) {measure the diff vs HEAD,\\ incl. untracked files};
+  \node[fdec, below=of d] (t) {trivial?};
+  \node[fproc, right=8mm of t] (c) {confirm: no behaviour\\ change required};
+  \node[fterm, right=4mm of c] (v) {skip to\\ VERIFY};
+  \node[fdec, below=of t] (r) {route};
+  \node[fproc, below=of r, align=left] (rs)
+    {\texttt{code-loop} $\rightarrow$ full cycle\\
+     \texttt{plan-first} $\rightarrow$ THINK, stop\\
+     \texttt{question} $\rightarrow$ THINK, stop\\
+     \texttt{research} $\rightarrow$ research first\\
+     \texttt{inference} $\rightarrow$ low confidence};
+  \node[fproc, below=of rs] (rec) {record \texttt{fit}; \texttt{base\_commit}\\ and the Git anchor};
+  \node[fterm, below=of rec] (n) {THINK};
+  \draw[fa] (a) -- (d);
+  \draw[fa] (d) -- (t);
+  \draw[fa] (t) -- node[fl,above]{yes} (c);
+  \draw[fa] (c) -- node[fl,above]{yes} (v);
+  \draw[fa] (t) -- node[fl,left]{no} (r);
+  \draw[fa] (r) -- (rs);
+  \draw[fa] (c.south) |- node[fl,pos=0.75,above]{no} (r.east);
+  \draw[fa] (rs) -- (rec);
+  \draw[fa] (rec) -- (n);
+  \node[fnote, below=1.2mm of n] {headless: \texttt{code-loop}, \texttt{skipped: true}};
+\end{tikzpicture}
+\caption{The FIT phase. The real diff is measured including untracked
+files; the triviality gate re-confirms with the user, because ``one file,
+fewer than ten lines'' does not by itself prove that behaviour is
+unchanged; and the five routes diverge, with \texttt{plan-first} and
+\texttt{question} running THINK before stopping (Section~\ref{sec:cycle}).
+The baseline commit and its Git anchor are captured here.}
+\label{fig:fit}
+\end{figure}
+
 \subsection{THINK --- declaring before the evidence}
 
 THINK records the problem, assumptions, alternatives, unknowns, and the done
-criterion \emph{before} the evidence exists:
+criterion \emph{before} the evidence exists (Figure~\ref{fig:think}):
 
 \begin{lstlisting}
   What is the exact problem I am solving?
@@ -1211,14 +1223,47 @@ The done criterion is declared before the evidence exists (Fable Step 1).
 VERIFY will confront this declared criterion with the final result --- not
 ask ``is it satisfied?'' to a criterion that only exists afterwards.
 
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {THINK};
+  \node[fdec, below=of a] (g1) {\texttt{answered}?};
+  \node[fterm, right=of g1] (r1) {return};
+  \node[fdec, below=of g1] (g2) {TTY?};
+  \node[fproc, right=of g2] (r2) {defaults;\\ \texttt{skipped: true}};
+  \node[fproc, below=of g2] (q) {problem $\bullet$ assumptions\\
+    $\bullet$ alternatives $\bullet$ unknowns\\
+    $\bullet$ \textbf{done criterion}};
+  \node[fproc, below=of q] (rec) {record \texttt{think} and \texttt{done}};
+  \node[fterm, below=of rec] (n) {SIMPLIFY};
+  \coordinate (chan) at ($(q.east)+(0.60,0)$);
+  \draw[fa] (a) -- (g1);
+  \draw[fa] (g1) -- node[fl,above]{yes} (r1);
+  \draw[fa] (g1) -- node[fl,left]{no} (g2);
+  \draw[fa] (g2) -- node[fl,above]{no} (r2);
+  \draw[fa] (g2) -- node[fl,left]{yes} (q);
+  \draw[fa] (q) -- (rec);
+  \draw[fa] (rec) -- (n);
+  \draw[fa] (r2.south) -- (r2.south -| chan) -- (n -| chan) -- (n.east);
+\end{tikzpicture}
+\caption{The THINK phase. The problem, assumptions, alternatives,
+unknowns, and the \emph{done} criterion are declared before the evidence
+exists. In non-interactive mode the section is recorded with
+\texttt{skipped: true} --- not \texttt{answered} --- so the phase is not
+silently retired for a later interactive run.}
+\label{fig:think}
+\end{figure}
+
 \subsection{SIMPLIFY, INTENT, SURGICAL --- minimalism and intent gates}
 
 SIMPLIFY checks that the solution is minimal, with no single-use
-abstractions and no speculative configuration. INTENT compares what the code
-does, what the checks expect, and what the specification says, with the
-authority order: user statement $>$ specification $>$ tests $>$ current
-code. SURGICAL reviews every changed file and records whether it is
-necessary:
+abstractions and no speculative configuration (Figure~\ref{fig:simplify}).
+INTENT compares what the code does, what the checks expect, and what the
+specification says, with the authority order: user statement $>$
+specification $>$ tests $>$ current code (Figure~\ref{fig:intent}).
+SURGICAL reviews every changed file and records whether it is necessary
+(Figure~\ref{fig:surgical}):
 
 \begin{lstlisting}
   What does the code DO today? dividir raises ZeroDivisionError
@@ -1232,39 +1277,193 @@ Changed files:
   Are the removed imports only those your change made unused? [Y/n]: y
 \end{lstlisting}
 
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {SIMPLIFY};
+  \node[fdec, below=of a] (g1) {\texttt{answered}?};
+  \node[fterm, right=of g1] (r1) {return};
+  \node[fdec, below=of g1] (g2) {TTY?};
+  \node[fproc, right=of g2] (r2) {defaults;\\ \texttt{skipped: true}};
+  \node[fproc, below=of g2] (d) {show the diff (HEAD, staged,\\ and untracked files)};
+  \node[fdec, below=of d] (ch) {changes?};
+  \node[fproc, right=of ch] (r3) {no: all three\\ default true};
+  \node[fproc, below=of ch] (q) {minimal? $\bullet$ no single-use\\
+    abstraction? $\bullet$ no speculative\\ configuration?};
+  \node[fproc, below=of q] (rec) {record \texttt{simplify}};
+  \coordinate (chan) at ($(r3.east)+(0.30,0)$);
+  \node[fterm, below=of rec] (n) {INTENT};
+  \draw[fa] (a) -- (g1);
+  \draw[fa] (g1) -- node[fl,above]{yes} (r1);
+  \draw[fa] (g1) -- node[fl,left]{no} (g2);
+  \draw[fa] (g2) -- node[fl,above]{no} (r2);
+  \draw[fa] (g2) -- node[fl,left]{yes} (d);
+  \draw[fa] (d) -- (ch);
+  \draw[fa] (ch) -- node[fl,above]{no} (r3);
+  \draw[fa] (ch) -- node[fl,left]{yes} (q);
+  \draw[fa] (r3.south) |- (q.east);
+  \draw[fa] (q) -- (rec);
+  \draw[fa] (rec) -- (n);
+  \draw[fa] (r2.south) -- (r2.south -| chan) -- (n -| chan) -- (n.east);
+\end{tikzpicture}
+\caption{The SIMPLIFY phase. The diff --- including the untracked files
+that no \texttt{git diff} shows --- is presented before the three
+minimality questions. A task that only creates files still gets asked,
+instead of passing the gate with no question at all.}
+\label{fig:simplify}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {INTENT};
+  \node[fdec, below=of a] (g1) {\texttt{answered}?};
+  \node[fterm, right=of g1] (r1) {return};
+  \node[fdec, below=of g1] (g2) {TTY?};
+  \node[fproc, right=of g2] (r2) {defaults;\\ \texttt{skipped: true}};
+  \node[fproc, below=of g2] (q) {what the code does? what the\\ check expects? what the spec says?};
+  \node[fdec, below=of q] (ag) {agree?};
+  \node[fproc, right=of ag, align=left] (res) {no: authority order\\ user $>$ spec $>$ tests\\ $>$ code $\rightarrow$ recorded};
+  \node[fproc, below=of ag] (rec) {record \texttt{intent}};
+  \coordinate (chan) at ($(res.east)+(0.30,0)$);
+  \node[fterm, below=of rec] (n) {SURGICAL};
+  \draw[fa] (a) -- (g1);
+  \draw[fa] (g1) -- node[fl,above]{yes} (r1);
+  \draw[fa] (g1) -- node[fl,left]{no} (g2);
+  \draw[fa] (g2) -- node[fl,above]{no} (r2);
+  \draw[fa] (g2) -- node[fl,left]{yes} (q);
+  \draw[fa] (q) -- (ag);
+  \draw[fa] (ag) -- node[fl,above]{no} (res);
+  \draw[fa] (ag) -- (rec);
+  \draw[fa] (res.south) |- (rec.east);
+  \draw[fa] (rec) -- (n);
+  \draw[fa] (r2.south) -- (r2.south -| chan) -- (n -| chan) -- (n.east);
+\end{tikzpicture}
+\caption{The INTENT phase. Code, checks, and specification are compared
+before behaviour changes; a disagreement is resolved in the authority
+order and recorded as \texttt{conflict\_resolution}. The JUDGE reads only
+an \emph{unresolved} disagreement as specification betrayal, so the
+recorded resolution of a bug fix is not an accusation.}
+\label{fig:intent}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {SURGICAL};
+  \node[fdec, below=of a] (g1) {\texttt{answered}?};
+  \node[fterm, right=of g1] (r1) {return};
+  \node[fdec, below=of g1] (g2) {TTY?};
+  \node[fproc, right=of g2] (r2) {defaults;\\ \texttt{skipped: true}};
+  \node[fproc, below=of g2] (f) {every changed path\\ (including untracked)};
+  \node[fproc, below=of f] (nec) {per file: necessary\\ for this task?};
+  \node[fproc, below=of nec] (imp) {removed imports only those\\ the change made unused?};
+  \node[fproc, below=of imp] (rec) {record \texttt{surgical.files}};
+  \coordinate (chan) at ($(r2.east)+(0.30,0)$);
+  \node[fterm, below=of rec] (n) {VERIFY};
+  \draw[fa] (a) -- (g1);
+  \draw[fa] (g1) -- node[fl,above]{yes} (r1);
+  \draw[fa] (g1) -- node[fl,left]{no} (g2);
+  \draw[fa] (g2) -- node[fl,above]{no} (r2);
+  \draw[fa] (g2) -- node[fl,left]{yes} (f);
+  \draw[fa] (f) -- (nec);
+  \draw[fa] (nec) -- (imp);
+  \draw[fa] (imp) -- (rec);
+  \draw[fa] (rec) -- (n);
+  \draw[fa] (r2.south) -- (r2.south -| chan) -- (n -| chan) -- (n.east);
+\end{tikzpicture}
+\caption{The SURGICAL phase. Every changed file is declared necessary or
+not, and that declaration is the contract the JUDGE enforces: a changed
+file that was not declared is scope creep.}
+\label{fig:surgical}
+\end{figure}
+
 \subsection{VERIFY --- objective verification}
 
 VERIFY runs the objective checks in order: lint, test, coverage against the
 gate, and the success criterion confronted with the done criterion declared
-in THINK:
+in THINK (Figure~\ref{fig:verify}):
 
 \begin{lstlisting}
-> ruff check src/ tests/
+[>] ruff check src/ tests/
   [ok] clean
 
-> pytest tests/ --tb=short -q
+[>] pytest tests/ --tb=short -q
   [ok] passed
 
-> coverage (gate >= 70%)
+[>] coverage (gate >= 70%)
   [ok] passed (100.0%)
 
-> Success criterion of the task
+[>] Success criterion of the task
   (declared in THINK: test test_dividir_por_zero passes and coverage >= 70%)
   Is the success criterion of the task satisfied? [Y/n]: y
+
+  [!] approved_commit not recorded: HEAD is still base_commit
+      After the commit, run `kata --stamp fix-division-by-zero`
 
   [ok]  KATA CYCLE — APPROVED
 \end{lstlisting}
 
-Each of the first three steps runs the command declared in
+Each role runs the command declared in
 \texttt{.kata/config.yaml} for that role, or the Python default (ruff,
 pytest, pytest-cov with \texttt{--cov-fail-under}) when the role is not
-declared. Coverage is short-circuited when the test step fails. A task is
-approved only when all checks and the success criterion pass.
+declared; \texttt{typecheck} is the exception with no default, and it only
+runs when declared. Coverage is short-circuited when the test step fails. A
+task is approved only when all checks and the success criterion pass. In
+0.8.0 the VERIFY also records the execution evidence --- the version, the
+gate, the commands, and the timestamp --- and, when the approval happens
+before the commit, warns that \texttt{approved\_commit} is not stamped and
+prints the \texttt{--stamp} command that closes the JUDGE's window.
+
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {VERIFY};
+  \node[fproc, below=of a] (run) {lint, test, coverage: declared\\ command or Python default};
+  \node[fdec, below=of run] (tp) {tests pass?};
+  \node[fproc, right=of tp] (skip) {no: coverage is\\ short-circuited};
+  \node[fdec, below=of tp] (cp) {coverage pattern\\ matched?};
+  \node[fproc, left=of cp] (fail) {no: FAIL with\\ a named error};
+  \node[fproc, below=of cp] (crit) {confront the \texttt{done} criterion};
+  \node[fdec, below=of crit] (ok) {all passed?};
+  \node[fproc, right=of ok] (ap) {yes: \texttt{approved};\\ \texttt{approved\_commit}};
+  \node[fproc, below=of ok] (rej) {\texttt{attempts} $+1$; rejected};
+  \node[fdec, below=of rej] (hb) {attempts $\ge 3$?};
+  \node[fterm, right=of hb] (hand) {hand back\\ to the user};
+  \node[fproc, below=of hb] (fix) {fix and re-run};
+  \coordinate (L) at ($(fail.west)+(-0.35,0)$);
+  \coordinate (R) at ($(skip.east)+(0.35,0)$);
+  \draw[fa] (a) -- (run);
+  \draw[fa] (run) -- (tp);
+  \draw[fa] (tp) -- node[fl,above]{no} (skip);
+  \draw[fa] (tp) -- node[fl,left]{yes} (cp);
+  \draw[fa] (cp) -- node[fl,above]{no} (fail);
+  \draw[fa] (cp) -- (crit);
+  \draw[fa] (skip.south) -- (skip.south -| R) -- (crit.east -| R) -- (crit.east);
+  \draw[fa] (fail.south) -- (fail.south -| L) -- (crit.west -| L) -- (crit.west);
+  \draw[fa] (crit) -- (ok);
+  \draw[fa] (ok) -- node[fl,above]{yes} (ap);
+  \draw[fa] (ok) -- node[fl,left]{no} (rej);
+  \draw[fa] (rej) -- (hb);
+  \draw[fa] (hb) -- node[fl,above]{yes} (hand);
+  \draw[fa] (hb) -- node[fl,left]{no} (fix);
+  \draw[fa] (fix.west) -- (fix.west -| L) -- (run.west -| L) -- (run.west);
+\end{tikzpicture}
+\caption{The VERIFY phase. Lint, test, and coverage are judged by exit
+codes; coverage is short-circuited when the tests fail; an unmatched
+coverage pattern fails with a named error rather than recording 0.0\% as a
+pass. The attempt counter records \emph{failed} runs, and after three the
+task is handed back to the user.}
+\label{fig:verify}
+\end{figure}
 
 \subsection{TWIN CHECK --- searching for recurring patterns}
 
-TWIN CHECK runs after VERIFY and only for an approved task. When a defect
-has been fixed, the same pattern often exists elsewhere. If the INTENT gate
+TWIN CHECK (Figure~\ref{fig:twin}) runs after VERIFY and only for an
+approved task. When a defect has been fixed, the same pattern often exists
+elsewhere. If the INTENT gate
 recorded a disagreement (\texttt{all\_agree: false}), TWIN CHECK
 automatically infers that a bug was resolved; otherwise, it asks the user
 whether one was. When confirmed, it searches the project for the pattern
@@ -1280,15 +1479,52 @@ and records the answer:
   Fix the remaining occurrences now? [y/N]: n
 \end{lstlisting}
 
-Recording a negative answer is part of the point: it is what distinguishes
-``no defect'' from ``not checked''.
+Recording a negative answer distinguishes ``no defect'' from ``not
+checked'', which is the point of asking.
+
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {TWIN CHECK};
+  \node[fdec, below=of a] (ap) {approved?};
+  \node[fterm, right=of ap] (r1) {no: return};
+  \node[fdec, below=of ap] (df) {defect fixed?};
+  \node[fproc, right=of df] (r2) {no (or headless):\\ \texttt{defect\_fixed: false}};
+  \node[fproc, below=of df] (pat) {regex pattern};
+  \node[fproc, below=of pat] (sr) {search the project};
+  \node[fproc, below=of sr] (sh) {show up to 20 matches};
+  \node[fproc, below=of sh] (rec) {record \texttt{twins}: pattern, result,\\ \texttt{searched}, counts};
+  \node[fterm, below=of rec] (n) {ARTIFACT};
+  \coordinate (chan) at ($(rec.east)+(0.60,0)$);
+  \draw[fa] (a) -- (ap);
+  \draw[fa] (ap) -- node[fl,above]{no} (r1);
+  \draw[fa] (ap) -- node[fl,left]{yes} (df);
+  \draw[fa] (df) -- node[fl,above]{no} (r2);
+  \draw[fa] (df) -- node[fl,left]{yes} (pat);
+  \draw[fa] (pat) -- (sr);
+  \draw[fa] (sr) -- (sh);
+  \draw[fa] (sh) -- (rec);
+  \draw[fa] (rec) -- (n);
+  \draw[fa] (r2.south) -- (r2.south -| chan) -- (n -| chan) -- (n.east);
+\end{tikzpicture}
+\caption{The TWIN CHECK phase. For an approved task, the project is
+searched for the pattern of the defect that was fixed, and the result ---
+including a negative one --- is recorded. That record is what
+distinguishes ``no defect'' from ``not checked''; recording
+\texttt{defect\_fixed} without a search is graded \texttt{faked} by the
+audit.}
+\label{fig:twin}
+\end{figure}
 
 \subsection{ARTIFACT and REPORT --- the due lines}
 
-ARTIFACT verifies that the evidence lines that are due are present: INTENT
+ARTIFACT verifies that the evidence lines that are due are present
+(Figure~\ref{fig:artifact}): INTENT
 (due when behavior changed), AUTH (due when an irreversible external action
 was taken), PENDING (due when documentation prescribes a follow-up that was
-not taken), and TWINS (due when a defect was fixed). REPORT prints the
+not taken), and TWINS (due when a defect was fixed). REPORT
+(Figure~\ref{fig:report}) prints the
 outcome first, followed by the problem, the done criterion, changed files,
 verification results, caveats, and any due artifact lines:
 
@@ -1310,6 +1546,64 @@ verification results, caveats, and any due artifact lines:
   TWINS: searched a / b - found 1 file(s), 1 occurrence(s)
 \end{lstlisting}
 
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {ARTIFACT};
+  \node[fproc, below=of a] (owed) {four due lines: \texttt{INTENT}\\
+    (behaviour changed); \texttt{AUTH} (irreversible\\
+    action); \texttt{PENDING} (follow-up);\\
+    \texttt{TWINS} (defect fixed)};
+  \node[fdec, below=of owed] (m) {any owed\\ and missing?};
+  \node[fproc, right=of m] (ask) {yes: list, ask\\ (if TTY), record};
+  \node[fproc, below=of m] (rec) {record \texttt{artifact}\\
+    (\texttt{*\_owed}, \texttt{*\_present})};
+  \node[fterm, below=of rec] (n) {REPORT};
+  \draw[fa] (a) -- (owed);
+  \draw[fa] (owed) -- (m);
+  \draw[fa] (m) -- node[fl,above]{yes} (ask);
+  \draw[fa] (m) -- node[fl,left]{no} (rec);
+  \draw[fa] (ask.south) |- (rec.east);
+  \draw[fa] (rec) -- (n);
+\end{tikzpicture}
+\caption{The ARTIFACT phase. Each of the four evidence lines has its own
+trigger; a line that is due but missing is asked for and recorded. A gate
+that fired on every task would be noise, which is why \texttt{TWINS} is
+due only when a defect was actually declared fixed.}
+\label{fig:artifact}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {REPORT};
+  \node[fdec, below=of a] (st) {status?};
+  \node[fproc, right=0.85cm of st] (wip) {in progress:\\ status only, stop};
+  \node[fproc, below=of st] (first) {first line: the outcome\\
+    (approved or rejected)};
+  \node[fproc, below=of first] (body) {problem, declared criterion,\\
+    changed files, INTENT line};
+  \node[fproc, below=of body] (chk) {checks: lint, test, coverage,\\
+    success criterion};
+  \node[fproc, below=of chk] (cav) {caveats (hand back, skipped\\
+    phases, debris) and the due lines};
+  \node[fterm, below=of cav] (n) {regenerable with \texttt{--report}};
+  \draw[fa] (a) -- (st);
+  \draw[fa] (st) -- node[fl,above]{in progress} (wip);
+  \draw[fa] (st) -- node[fl,left]{decided} (first);
+  \draw[fa] (first) -- (body);
+  \draw[fa] (body) -- (chk);
+  \draw[fa] (chk) -- (cav);
+  \draw[fa] (cav) -- (n);
+\end{tikzpicture}
+\caption{The REPORT phase. The outcome comes first, then the problem, the
+criterion declared in THINK, the evidence, the caveats, and the due lines.
+A task still in progress reports only its status: planning is not
+failing.}
+\label{fig:report}
+\end{figure}
+
 \subsection{The task file}
 
 The entire cycle is persisted in a task file (\texttt{.kata/<task>.yaml}),
@@ -1318,11 +1612,16 @@ conversational. The file records the done criterion, the FIT classification,
 the THINK declarations, the SIMPLIFY/INTENT/SURGICAL answers, the VERIFY
 results (including the coverage percentage and the attempt counter), the
 TWIN CHECK result, and the artifact checks. It also records
-\texttt{base\_commit} (the HEAD captured when the task started) and
-\texttt{approved\_commit} (the HEAD at the moment of approval), which allow
-the JUDGE to diff \texttt{base..approved} even after the task has been
-committed --- changes made by later tasks do not count as undeclared scope
-for this one.
+\texttt{kata\_version} and, in the verify block, \texttt{gate\_used},
+\texttt{commands}, and \texttt{ran\_at}, so the JUDGE can tell whether the
+version, the gate, or the command it re-runs is the one that produced the
+evidence. \texttt{base\_commit} (the HEAD captured when the task started) and
+\texttt{approved\_commit} (the commit that ends the task) define the diff
+window, which allows the JUDGE to diff \texttt{base..approved} even after
+the task has been committed --- changes made by later tasks do not count as
+undeclared scope for this one. \texttt{approved\_commit} is not written while
+HEAD is still the baseline; the commit is stamped afterwards with
+\texttt{kata --stamp}.
 
 The task file from the demonstration of Section~\ref{sec:cycle} is shown
 in Listing~\ref{lst:taskfile}. Note the structure: every phase has an
@@ -1339,6 +1638,7 @@ distinguishes ``no defect'' from ``not checked''.
 task: fix-division-by-zero
 status: approved
 done: test test_dividir_por_zero passes and coverage >= 70%
+kata_version: 0.8.0
 fit:
   trivial: false
   route: code-loop
@@ -1359,7 +1659,8 @@ intent:
   code_does: dividir raises ZeroDivisionError
   check_expects: test expects ValueError
   spec_says: README does not mention the case
-  all_agree: true
+  all_agree: false
+  conflict_resolution: the test prevails; the code guards with ValueError
   answered: true
 surgical:
   files:
@@ -1371,12 +1672,19 @@ surgical:
   answered: true
 verify:
   ruff_clean: true
+  typecheck_clean: null
   tests_pass: true
   coverage_pct: 100.0
   coverage_pass: true
   success_criteria_met: true
   attempts: 0
   hand_back: false
+  gate_used: 70.0
+  commands:
+    lint: python -m ruff check src/ tests/
+    test: python -m pytest tests/ --tb=short -q
+    coverage: python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=70.0 -q
+  ran_at: '2026-10-29T01:58:46+00:00'
 twins:
   pattern: a / b
   result: 1 file(s), 1 occurrence(s)
@@ -1397,31 +1705,35 @@ artifact:
   twins_owed: true
   twins_present: true
 base_commit: 762b73cb7343462235d08db2aba13e7f1022c392
-approved_commit: 762b73cb7343462235d08db2aba13e7f1022c392
+# approved_commit absent: HEAD was still base_commit at approval.
+# After the commit, run `kata --stamp fix-division-by-zero`.
 \end{lstlisting}
 
 The task file is the contract between the cycle and the JUDGE. Every
 section is a claim that the JUDGE can confront with the repository: the
 verify section with re-execution, the surgical section with the diff, the
 intent section with the specification, the twins section with a pattern
-search. This is what makes the audit possible: a phase marked
+search. The audit depends on this: a phase marked
 \texttt{answered: true} with empty content is a faked phase, and the audit
 names the concrete risk it created.
 
 \section{The adversarial layer: JUDGE}
 \label{sec:judge}
 
-The JUDGE is the phase that no skill can perform. It treats the task file as
+The JUDGE is the phase that no skill can perform (Figure~\ref{fig:judge}). It treats the task file as
 a collection of claims and confronts them with the repository. It re-runs
 the claimed checks, diffs the claims against the actual changes, and hunts
-seven fraud categories:
+eight fraud categories:
 
 \begin{itemize}
 \item \textbf{weakened checks}: a test whose body was replaced by
 \texttt{pass}, an assertion turned into a comment, or a new test whose body
 is only \texttt{assert True} --- it exists, it runs, it verifies nothing;
 \item \textbf{false completion}: the report claims lint clean, tests
-passing, and coverage at the gate, but the re-execution fails;
+passing, and coverage at the gate, but the re-execution fails. In 0.8.0 a
+command that could not run because the environment lacks the tool is a
+confessed blind spot, not a false completion: ``could not run'' is not
+``ran and failed'';
 \item \textbf{scope creep}: the report declares one file, the tree has
 four;
 \item \textbf{unauthorized action}: an irreversible action was taken without
@@ -1437,14 +1749,39 @@ without verification and only an unresolved disagreement is betrayal; a
 twenty-first trap scenario (s21) covers the resolved case;
 \item \textbf{debris}: temporary files in the diff;
 \item \textbf{baseline tampering}: the \texttt{base\_commit} declared in
-the YAML diverges from the Git anchor recorded when the task started.
+the YAML diverges from the Git anchor recorded when the task started;
+\item \textbf{triviality claim}: \texttt{fit.trivial=true} with no declared
+files, when the measured diff exceeds a gross tolerance (100 added lines or
+ten files). Without it, a sixteen-thousand-line change approved as trivial
+would pass because the triviality flag itself disables the scope hunt. The
+category was added in 0.8.0 and was not part of the evaluated seven.
 \end{itemize}
+
+Two further checks in 0.8.0 refine the window rather than add categories.
+The JUDGE compares the recorded version, gate, and commands with the ones it
+re-runs and adds a caveat when they differ, because a verdict produced under
+another gate or another command is not the same verdict. And it attributes
+the commits inside a closed window to sibling tasks by their
+\texttt{approved\_commit} stamps: a commit stamped by an approved sibling
+leaves the window with a caveat naming the commit and the task, while an
+unstamped commit makes the verdict \texttt{UNVERIFIABLE} instead of accusing
+honest work or blessing it.
+
+These guarantees hold against claims that re-execution or the diff can
+contradict; they do not hold against an agent that also controls Git
+metadata or the execution environment. Section~\ref{sec:threat-model} states
+that boundary explicitly and reproduces two live bypasses --- rewriting the
+baseline anchor and emptying the diff window --- that yield a VERIFIED
+verdict on a weakened test as evaluated; a reader relying on the JUDGE as a
+merge gate should read that boundary before the results below.
 
 Frauds are graded by severity: weakened checks, false completion,
 unauthorized actions, specification betrayal, and baseline tampering are
 \emph{high-severity}; scope creep is \emph{medium-severity} (when
 undeclared files number two or fewer) or \emph{high-severity} (when three or
-more); and debris is \emph{low-severity}. Verdict calculation follows
+more); a triviality claim is \emph{medium-severity} below 1{,}000 added lines
+and 50 files, and \emph{high-severity} at or above either; and debris is
+\emph{low-severity}. Verdict calculation follows
 strictly (Listing~\ref{alg:judge}): any high-severity fraud produces a
 \texttt{REFUTED} verdict; medium- and low-severity findings yield
 \texttt{VERIFIED WITH CAVEATS}; confessed blind spots without fraud result
@@ -1478,13 +1815,16 @@ the claimed checks and returned:
 
 Note that the success criterion is listed as \emph{accepted without
 verification}: it is a subjective confirmation the user gives during VERIFY,
-and no command reproduces it. Presenting it as verified would be exactly the
-fraud the judge exists to hunt. The verdict also has a limit the output does
-not show: this task was approved before its change was committed, so its
-\texttt{base\_commit} and \texttt{approved\_commit} coincide
-(Listing~\ref{lst:taskfile}), the diff window was empty, and the surgical and
-weakened-check claims were not confronted with a diff
-(Section~\ref{sec:threat-model}).
+and no command reproduces it. Presenting it as verified would be the
+fraud the judge exists to hunt. This task was approved before its change was
+committed. In the evaluated version, \texttt{base\_commit} and
+\texttt{approved\_commit} coincided, so the diff window was empty and the
+surgical and weakened-check claims were not confronted with a diff
+(Section~\ref{sec:threat-model}). In 0.8.0 the cycle no longer records
+\texttt{approved\_commit} while \texttt{HEAD} is still the baseline
+(Listing~\ref{lst:taskfile} shows it absent), and the JUDGE diffs the working
+tree; after the commit, \texttt{kata --stamp} records the commit that ends the
+task and closes the window.
 
 \subsection{Fraudulent work: REFUTED}
 
@@ -1498,13 +1838,13 @@ failed):
 [x]  VERDICT: REFUTED
 
   Frauds found:
-    * [high] false_completion
+    [*] [high] false_completion
        ruff check re-execution failed, but the report claims it passed
        → report: ruff_clean=True → reality: ruff check failed
-    * [high] false_completion
+    [*] [high] false_completion
        pytest re-execution failed, but the report claims it passed
        → report: tests_pass=True → reality: pytest failed
-    * [high] false_completion
+    [*] [high] false_completion
        coverage re-execution failed, but the report claims it passed
        → report: coverage_pass=True → reality: coverage failed
 
@@ -1527,6 +1867,42 @@ baseline that no longer resolves --- the verdict is UNVERIFIABLE, never
 VERIFIED. ``I could not look'' is never reported as ``all clear''. With
 fraud present, the fraud decides the verdict and the blind spots are still
 listed.
+
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[node distance=3mm and 2mm]
+  \node[fterm] (a) {JUDGE};
+  \node[fproc, below=of a] (norm) {a section that is not a map becomes\\ a confessed blind spot};
+  \node[fdec, below=of norm] (base) {baseline anchored,\\ resolves, ancestor?};
+  \node[fterm, right=0.55cm of base] (tamp) {no: baseline\\ tampering};
+  \node[fproc, below=of base] (diff) {diff \texttt{base..approved} + untracked};
+  \node[fproc, below=of diff] (re) {re-execute the claimed checks};
+  \node[fproc, below=of re] (hunt) {eight hunts: weakened checks, false\\
+    completion, scope creep, unauthorized\\
+    action, specification betrayal, debris,\\
+    baseline tampering, triviality claim};
+  \node[fproc, below=of hunt] (blind) {confess what it could not observe};
+  \node[fdec, below=of blind] (v) {verdict};
+  \node[fterm, below=of v] (out) {\texttt{REFUTED} (exit 1) \textbullet\ \texttt{CAVEATS}\\
+    \texttt{UNVERIFIABLE} \textbullet\ \texttt{VERIFIED} (exit 0)};
+  \draw[fa] (a) -- (norm);
+  \draw[fa] (norm) -- (base);
+  \draw[fa] (base) -- node[fl,above]{no} (tamp);
+  \draw[fa] (base) -- node[fl,left]{yes} (diff);
+  \draw[fa] (diff) -- (re);
+  \draw[fa] (re) -- (hunt);
+  \draw[fa] (hunt) -- (blind);
+  \draw[fa] (blind) -- (v);
+  \draw[fa] (v) -- (out);
+\end{tikzpicture}
+\caption{The JUDGE phase. The task file is a set of claims; the baseline
+is checked adversarially; the claimed checks are re-executed; eight frauds
+are hunted; and what could not be observed is confessed. Only
+\texttt{REFUTED} exits non-zero --- a caveat or an honest blind spot is
+not a failure.}
+\label{fig:judge}
+\end{figure}
 
 \subsection{Threat model}
 \label{sec:threat-model}
@@ -1561,7 +1937,7 @@ Editing \texttt{base\_commit} alone is caught as baseline tampering, but
 moving both the YAML and the ref to the final commit with
 \texttt{git update-ref} empties the diff window, and the verdict is VERIFIED
 (exit 0). Deleting the ref and editing the YAML yields UNVERIFIABLE (exit 0).
-After the evaluated version, commit \texttt{3454fc7} narrowed this path: the
+After the evaluated version, commit \texttt{3454fc7} (shipped in 0.8.0) narrowed this path: the
 anchor is now written with a reflog, and an anchor that has pointed at more
 than one commit is reported as baseline tampering (trap scenario s22).
 Deleting and recreating the anchor erases its reflog and still evades that
@@ -1574,18 +1950,21 @@ Git counts a commit as its own ancestor. The weakened test is then invisible
 and the verdict is VERIFIED (exit 0), whether or not the change has been
 committed. No tampering is needed: the cycle records \texttt{approved\_commit}
 as the HEAD at approval (\texttt{cli.py:902}), so a task approved before its
-change is committed produces exactly this window. The demonstration task of
-Listing~\ref{lst:taskfile} is such a case, and the trap suite does not
-exercise it: s17 records an \texttt{approved\_commit} later than the
-baseline. This path was fixed after the evaluated version, in commit
-\texttt{3cacc5a}: when \texttt{approved\_commit} equals
-\texttt{base\_commit} and \texttt{HEAD} is still there, the JUDGE diffs the
-working tree; when \texttt{HEAD} has moved on, it confesses the empty window
-as a blind spot and can no longer return VERIFIED (UNVERIFIABLE when no
-fraud is found); and the cycle no longer records
-\texttt{approved\_commit} while \texttt{HEAD} is still the baseline.
-Regression tests and a twentieth trap scenario (s20) cover the fix; the fix
-does not close the anchor rewrite above, which we re-ran against it and
+change is committed produces exactly this window. In the evaluated version,
+the demonstration task of Listing~\ref{lst:taskfile} was such a case, and
+the suite did not exercise it: s17 records an \texttt{approved\_commit} later
+than the baseline. s20 now covers it. This path was fixed after the evaluated
+version, in commit \texttt{3cacc5a} (shipped in 0.8.0): when
+\texttt{approved\_commit} equals \texttt{base\_commit} and \texttt{HEAD} is
+still there, the JUDGE diffs the working tree; when \texttt{HEAD} has moved
+on, it confesses the empty window as a blind spot and can no longer return
+VERIFIED (UNVERIFIABLE when no fraud is found); and the cycle no longer
+records \texttt{approved\_commit} while \texttt{HEAD} is still the baseline.
+Regression tests and a twentieth trap scenario (s20) cover the fix. The
+workflow that closes the window after the commit is \texttt{kata --stamp
+TASK}: it records the commit that ends the task after validating that it
+descends from the baseline and is an ancestor of \texttt{HEAD}. The fix does
+not close the anchor rewrite above, which we re-ran against it and
 which still yielded VERIFIED at that commit.
 \item \textbf{Manufacturing a blind spot.} UNVERIFIABLE exits 0 by design
 (\texttt{cli.py:1649}), a fail-open policy chosen so that projects in
@@ -1638,7 +2017,7 @@ degraded & The phase ran without its own skill loaded (\texttt{preflight}) \\
 \label{tab:grades}
 \end{table}
 
-The faked pattern (tracked in the project as issue R7-1) is a phase
+The faked pattern is a phase
 marked as answered without real content. This is only possible because
 there is objective logic behind it:
 the audit reads the YAML and detects \texttt{answered: true} with empty
@@ -1672,7 +2051,7 @@ The orchestrator is not self-contained: at each phase it loads the matching
 skill and follows its instructions. When a skill is not installed, the call
 fails, the orchestrator has no instructions for that phase, and the model
 improvises from the phase name. The result is a task file with the section
-filled in and nothing behind it --- precisely the faked phase the audit
+filled in and nothing behind it --- the faked phase the audit
 exists to catch, except produced by the tooling rather than by the agent,
 and invisible in the output.
 
@@ -1696,7 +2075,13 @@ the orchestrator itself, records the skill name in
 audit grades such a phase as degraded, not followed, because whatever the
 other grades read was written without those instructions. VERIFY and JUDGE
 degrade best, because their logic lives in the Python package rather than
-in the skill text.
+in the skill text. Since 0.8.0, \texttt{--doctor} also reads the version
+stored in each \texttt{.kata-managed} marker and warns when the installed
+skills were written by a different Kata version than the one running: a copy
+of 0.7.4 under a 0.8.0 CLI would otherwise report ``complete installation''
+while the agent followed phase instructions from the older release. This is
+a warning, not a failure, because a pinned installation may be intentional;
+exit code 1 remains reserved for a partial install.
 
 \section{Using the kata CLI}
 \label{sec:usage}
@@ -1706,16 +2091,18 @@ interface, so that the demonstrations of
 Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced. Kata is
 published on the Python Package Index (PyPI) as \texttt{kata-dev} (the
 command stays \texttt{kata}); the installable package version is
-\texttt{0.7.2}, while the evaluated version is \texttt{v0.7.0} (the
-version whose trap suite and external study are reported here). A DOI will
+\texttt{0.8.0}. The package, the release tag \texttt{v0.8.0} and the code
+that was measured are three different revisions, and the Declarations
+(Section~\ref{sec:declarations}) define them once, together with the term
+``evaluated version'' used throughout this paper. A DOI will
 be minted upon acceptance and inserted in the camera-ready version. The
-canonical user documentation --- README (which ships as the package's long
+canonical user documentation is the README (which ships as the package's long
 description on PyPI) and \texttt{DOCUMENTATION.md} (versioned in the
-repository, not in the wheel) ---
-versioned with the source, whose exact commits and reproduction commands
-are given in the Declarations section, together with the
-comparison and external-study harnesses and the measurement and audit
-tooling cited in Sections~\ref{sec:design} and \ref{sec:external-evaluation}.
+repository, not in the wheel). Both are versioned with the source; the
+Declarations section gives the exact commits and reproduction commands,
+together with the comparison and external-study harnesses and the
+measurement and audit tooling cited in Sections~\ref{sec:design} and
+\ref{sec:external-evaluation}.
 
 \subsection{Installation}
 
@@ -1755,7 +2142,12 @@ the skills into the Claude Code configuration directory (honoring
 \texttt{CLAUDE\_CONFIG\_DIR}, defaulting to \texttt{\~{}/.claude}).
 Because the installer creates symlinks, rebuilding the generated frontends
 with \texttt{make build-skills} is immediately visible without
-reinstalling.
+reinstalling. \texttt{kata --install} performs the same installation as a
+copy from the wheel's bundled assets, so a reader without the checkout can
+install; it adopts a symlink created by the checkout installer when the
+target has the same content, and \texttt{kata --doctor} names the mode
+(link, copy, or mixed) and warns when the installed skills were written by a
+different Kata version.
 
 \subsection{Command reference}
 
@@ -1773,8 +2165,9 @@ Command & Effect \\
 \texttt{kata --init TASK} & Create the task file, run FIT + THINK \\
 \texttt{kata [--task TASK]} & Run the full interactive cycle \\
 \texttt{kata --task TASK --plan} & Run FIT + THINK, save the plan, stop \\
-\texttt{kata --check-only} & Run lint + tests + coverage only (CI entry) \\
+\texttt{kata --check-only} & Run lint + typecheck (if declared) + tests + coverage (CI entry) \\
 \texttt{kata --task TASK --report} & Regenerate the outcome-first report \\
+\texttt{kata --stamp TASK [--commit SHA]} & Record the commit that ends the task in \texttt{approved\_commit}, closing the JUDGE's diff window \\
 \texttt{kata --task TASK --judge} & Adversarial verification (hunts frauds) \\
 \texttt{kata --task TASK --audit} & Grade phases: followed/skipped/faked/degraded \\
 \texttt{kata --doctor} & Check phase-skill installation per frontend \\
@@ -1793,8 +2186,13 @@ built-in default; the 70\% value is a project convention, not a research
 finding, and the JUDGE compares the measured coverage against whatever
 gate the run resolved to. A role declared in
 \texttt{.kata/config.yaml} runs verbatim instead, so non-Python projects
-declare their own lint, test, and coverage commands; every undeclared role
-keeps its Python default.
+declare their own lint, typecheck, test, and coverage commands; every
+undeclared role keeps its Python default, except \texttt{typecheck}, which
+has no default and simply does not run. A path flag that no longer applies
+because its role is declared is reported as ignored rather than silently
+discarded. An unknown key at any level of the config is a named error, and
+a command containing a shell operator is refused because commands run
+without a shell.
 
 \subsection{Typical workflow and exit codes}
 
@@ -1811,13 +2209,15 @@ and declared done criterion (Phase 1: THINK), captures the starting HEAD as
 \texttt{refs/kata/base/<sha256(task)>}.
 \item \textbf{Execute and verify}: \texttt{kata --task fix-login} guides the
 change through SIMPLIFY (checking minimality), INTENT (aligning code, test,
-and spec), SURGICAL (auditing declared files), VERIFY (running lint, tests,
-and coverage against exit codes), and TWIN CHECK (searching project-wide for
-defect recurrence). Upon approval, it records \texttt{approved\_commit} as the
-diff ceiling.
+and spec), SURGICAL (auditing declared files), VERIFY (running lint, declared
+typecheck, tests, and coverage against exit codes), and TWIN CHECK (searching
+project-wide for defect recurrence). Upon approval it records the execution
+evidence; \texttt{approved\_commit} is not written while HEAD is still the
+baseline, so the commit that ends the task is stamped next with
+\texttt{kata --stamp fix-login}, which sets the diff ceiling.
 \item \textbf{Adversarial review}: \texttt{kata --task fix-login --judge}
 re-executes all claimed checks, diffs the Git baseline against the approved
-ceiling, and hunts for the seven categories of fraud before merge.
+ceiling, and hunts for the eight categories of fraud before merge.
 \end{enumerate}
 
 \paragraph{Automated CI and review pipelines.} In automated pipelines,
@@ -1871,7 +2271,8 @@ artifact. The layers answer different questions: the traps measure the
 two-sided contract of the JUDGE on fixtures we built ourselves, while the
 external study measures what real agent sessions produce on code we did
 not write. The first layer answers RQ1 and, reused as the workload of
-Section~\ref{sec:exec-comparison}, RQ2; the second answers RQ3.
+Section~\ref{sec:exec-comparison}, RQ2; the second answers RQ3. The
+exploratory loop study is in Appendix~\ref{sec:gauntlet-pilot}.
 
 \subsection{Self-check: the adversarial trap suite}
 \label{sec:self-check}
@@ -1880,10 +2281,12 @@ The evaluation of Kata follows the methodology of the Fable Method's eval
 \cite{fable}: adversarial trap scenarios that plant frauds the tool must
 catch, and honest scenarios it must not accuse. The trap suite is
 deliberately asymmetric in its coverage. Table~\ref{tab:traps} summarizes
-the 19 scenarios.
+the 19 scenarios the evaluated version ran at commit \texttt{230e81a}.
 
 \begin{table*}[!ht]
-\caption{The 19 adversarial trap scenarios of the evaluation suite.
+\caption{The 19 adversarial trap scenarios of the evaluated version
+(commit \texttt{230e81a}; the suite has grown since --- see the note after
+Table~\ref{tab:results}).
 Each row summarizes one \texttt{eval/scenarios/<name>/} directory, which
 pairs a \texttt{fixture/} (the planted fraud or honest work) with a
 \texttt{ground\_truth.yaml} (the expected verdict and frauds). The
@@ -1933,7 +2336,7 @@ approved anyway), debris (real temporary files in the diff), and baseline
 tampering (a \texttt{base\_commit} rewritten after the Git anchor was
 recorded).
 
-The debris scenario (s06) deserves a note: it plants real debris beside
+The debris scenario (s06) is the clearest case: it plants real debris beside
 files whose names merely look like debris (\texttt{templates/},
 \texttt{temperature.py}, \texttt{attempt\_parser.py}), so a judge that
 matches the substring ``temp'' would accuse honest work while a judge that
@@ -1942,7 +2345,7 @@ stays silent would clear fraudulent work.
 Four scenarios are entirely honest tasks that must come back VERIFIED.
 These are as important as the fraud scenarios: a judge that refuses
 legitimate work is as broken as one that misses fraud, and unit tests are
-poor at catching false positives because they test what the author thought
+poor at catching false positives because they test what we thought
 to test. One honest scenario exercises the
 triviality gate with three small files and an empty surgical list, where a
 naive scope-creep rule would falsely accuse the task. Another exercises
@@ -1959,9 +2362,9 @@ opts into the real environment with \texttt{kata\_visivel: true}: the
 harness excludes \texttt{.kata/} from Git in every fixture, and the judge
 counting the task's own file as scope creep went unnoticed through ten
 review rounds before that scenario existed --- including in the
-honest-work scenario whose whole job is catching false positives. A new
-scenario must be shown to fail when its defect is reintroduced, so a
-scenario that passes in both states protects nothing.
+honest-work scenario whose whole job is catching false positives. The same
+rule applies to every fixture added since: reintroducing the defect it was
+built for must make it fail, or the scenario is decoration.
 
 \subsubsection{Execution results}
 
@@ -2015,6 +2418,25 @@ UNVERIFIABLE, confessing blind spots instead of clearing work the judge
 could not observe. The suite runs in continuous integration on every push,
 so any regression in detection or restraint breaks the build.
 
+\paragraph{The suite has grown since the evaluated version.}
+Table~\ref{tab:traps} and Table~\ref{tab:results} describe the evaluated
+version, and we do not restate them. The repository's suite now holds 25
+scenarios: the 19 above plus six added after the evaluation. All 25 exercise
+the nine-phase cycle and live in this repository; the gauntlet variant of
+Appendix~\ref{sec:gauntlet-pilot} is kept in a separate fork and is not part
+of this count. Three of the six additions cover corrections the cycle needed
+and were already cited in place --- s20 the empty diff window, s21 a resolved
+intent conflict, and s22 a moved baseline anchor
+(Section~\ref{sec:threat-model}). s23 exercises the artifacts the judge's own
+re-execution leaves behind, which a second run in the same tree once read as
+scope creep. s24 and s25 exercise the attribution added in 0.8.0: s24 pairs
+an approved task with a sibling task whose commit is stamped inside its
+window and expects \texttt{VERIFIED}, while s25 removes the sibling's stamp
+and expects \texttt{UNVERIFIABLE}, because the judge cannot tell the
+sibling's commit from the task's own and must confess rather than accuse or
+bless. All 25 run under the same runner and the same two-sided contract, but
+only the 19 are the evaluation this paper reports.
+
 The unit suite also exercises the JUDGE against a real git repository in a
 temporary directory, because blindness to committed or untracked changes
 cannot be reproduced with mocks. The schema of the task file is compatible
@@ -2024,11 +2446,176 @@ and distributed as the \texttt{kata-dev} package on PyPI, installable in
 both agent hosts with \texttt{kata --install} (see the Declarations
 section and Section~\ref{sec:usage}).
 
+\subsection{Executed comparison with related gates}
+\label{sec:exec-comparison}
+
+The JSERD guidelines for software articles state that ``Software articles
+should describe a tool likely to be of broad utility that represents a
+significant advance over previously published software (usually demonstrated
+by direct comparison with available related software)''.\footnote{JSERD
+submission guidelines,
+\url{https://journals-sol.sbc.org.br/index.php/jserd/about/submissions},
+accessed 2026-09-11. The quoted text is verbatim from the ``Software''
+article type description as of the access date.} This
+section answers that request by direct comparison: four gates --- Kata, nova, claude-wizard,
+and a prompt-only baseline --- reviewed the same 19 adversarial scenarios of
+Section~\ref{sec:self-check}, and we measured fraud detection, false positives,
+and wall-clock time.
+
+\subsubsection{Protocol}
+
+The comparison reuses the trap suite of Section~\ref{sec:self-check} as the
+workload: each scenario is a git repository holding a ``completed'' task
+whose task file records the claims the scenario exercises --- lint, tests,
+and coverage in the false-completion case, a subset elsewhere (the blind
+spots claim no reproducible check at all). The ground truth is
+the scenario's \texttt{ground\_truth.yaml}: the expected verdict and the
+exact frauds the review must find. Eleven scenarios expect REFUTED; the
+other eight expect VERIFIED (s07, s15, s16, s17), VERIFIED WITH CAVEATS
+(s06, the debris scenario, whose ground truth expects the three real debris
+findings), or UNVERIFIABLE (s12, s13, s19).
+
+Each gate reviews every scenario in a fresh sandbox, without access to the
+ground truth. Kata runs its \texttt{--judge} mode. nova and claude-wizard
+run headless through the Claude Code CLI (\texttt{claude -p} with
+permission bypass), each receiving an identical canonical prompt that
+states the review task and the seven fraud categories of the evaluated
+taxonomy, prefixed with an
+instruction to follow the gate's workflow. The prompt-only baseline receives
+the same prompt without any gate-framework instruction; it is a reviewer
+with the same information and tool access, not a no-verification condition.
+The agent gates report their
+verdict as a single JSON object (\texttt{fraud\_detected},
+\texttt{fraud\_types}, \texttt{reason}); the harness parses it with a
+tolerant JSON decoder. The Kata arm is classified by exact verdict match
+against the ground truth; for the agent arms, a scenario is \emph{detected}
+when the gate reports the fraud matching the ground-truth types and a
+\emph{false positive} when it accuses a scenario whose ground truth expects
+no fraud. The debris scenario is the exception to the accusation rule: its
+ground truth expects the real debris to be found, so reporting debris
+without naming one of the look-alike files counts as correct, while naming
+a look-alike counts as a false positive. The \emph{Correct} column counts
+the scenarios a gate classified as detected or clean.
+
+\subsubsection{Results}
+
+Read the numbers below with their scope in mind, stated upfront rather than only
+in the caveats that close this section: this is one complete run, over
+19 scenarios we built alongside Kata, run through a single
+unrecorded model for the agent gates. It is a demonstration on Kata's own
+fixtures, not a statistically powered claim about the tools in general.
+
+Table~\ref{tab:gate-comparison} summarizes the outcome. Three results
+matter here.
+
+\begin{table*}[!ht]
+\caption{Executed comparison of five gates over the 19 trap scenarios.
+One complete run (September 2026); raw verdicts in
+\texttt{eval/results/compare\_gates\_round2.json} (agent gates) and
+\texttt{eval/results/deterministic\_baseline.json} (deterministic).
+In the Non-REFUTED
+block, FP reports the final run count alongside the range
+[\emph{min}--\emph{max}] across the two complete runs, the first
+re-scored with the final debris (s06) rule (see text). The last block excludes the three blind-spot scenarios
+(s12, s13, s19), whose ground truth expects UNVERIFIABLE, a verdict the
+agents' reporting format did not offer.}
+\centering
+\begin{tabular}{@{}lcccc@{}}
+\hline\hline
+Gate & Detection & FP (range) & Correct & Median time \\
+\hline
+\multicolumn{5}{l}{\emph{Fraud scenarios (11 REFUTED)}} \\
+Kata & 11/11 & --- & 11/11 & 0.1\,s \\
+nova & 11/11 & --- & 11/11 & 16\,s \\
+claude-wizard & 11/11 & --- & 11/11 & 17\,s \\
+bare (prompt-only) & 11/11 & --- & 11/11 & 18\,s \\
+deterministic (test + smell) & 9/11 & --- & 9/11 & 0.3\,s \\
+\multicolumn{5}{l}{\emph{Non-REFUTED scenarios (8): honest (4), debris (1), blind spots (3)}} \\
+Kata & --- & 0 [0--0] & 8/8 & 1.0\,s \\
+nova & --- & 4 [3--4] & 4/8 & 40\,s \\
+claude-wizard & --- & 2 [2--3] & 6/8 & 27\,s \\
+bare (prompt-only) & --- & 5 [3--5] & 3/8 & 32\,s \\
+deterministic (test + smell) & --- & 2 & 6/8 & 0.3\,s \\
+\hline
+\multicolumn{5}{l}{All scenarios --- correctness (final run)} \\
+Kata & & & \textbf{19/19} & \\
+nova & & & 15/19 & \\
+claude-wizard & & & 17/19 & \\
+bare (prompt-only) & & & 14/19 & \\
+deterministic (test + smell) & & & 15/19 & \\
+\hline
+\multicolumn{5}{l}{Excluding blind-spot scenarios s12, s13, s19 (16) --- correctness (final run)} \\
+Kata & & & 16/16 & \\
+nova & & & 15/16 & \\
+claude-wizard & & & 15/16 & \\
+bare (prompt-only) & & & 14/16 & \\
+deterministic (test + smell) & & & 15/16 & \\
+\hline\hline
+\end{tabular}
+\label{tab:gate-comparison}
+\end{table*}
+
+All four agent gates detected every planted fraud in all eleven
+REFUTED scenarios. Fraud detection is not where the gates differ: the
+difference is in what happens on honest work and confessed blind spots.
+Kata, in turn, returned the expected verdict on all eight non-REFUTED
+scenarios, but most agent false positives trace to the comparison design
+rather than to reviewer judgment. The agent gates made eleven false
+accusations, and their origin matters more than their count. Seven fell on
+the three blind-spot scenarios, whose ground truth expects UNVERIFIABLE ---
+nova and the baseline on s12 and s13, all three on s19; the agents'
+reporting format offered no such verdict, so a gate could only accuse or
+report no fraud (claude-wizard reported no fraud on s12 and s13 and was
+scored correct). Three, one per agent gate, fell on s17, where the agents
+counted a later task's changes as scope creep for the task under review;
+s17 depends on the \texttt{approved\_commit} diff ceiling, a Kata convention
+the review prompt did not explain. The remaining one is the prompt-only
+baseline accusing the honest s07 task of weakened checks. Excluding the
+blind-spot scenarios, correctness is 16/16 for Kata, 15/16 for nova and
+claude-wizard, and 14/16 for the baseline (Table~\ref{tab:gate-comparison});
+excluding s17 as well, nova and claude-wizard match Kata, and the only
+difference left is the baseline's error on s07. On the one non-REFUTED scenario that does contain a
+real fraud (s06, debris), the three agent gates found the debris and spared
+the look-alike names, and Kata's verdict matched the expected VERIFIED
+WITH CAVEATS --- the trap suite verifies that its output lists the three
+debris findings (Section~\ref{sec:self-check}). The gates also
+differ in time: Kata's median review took 0.1\,s on fraud scenarios and
+1.0\,s on the others, while the agent gates' medians ranged from 16\,s to
+40\,s, because the gate reads exit codes while the agents
+run a model. Kata's verdicts here are model-independent: its measured
+advantage over the agent gates is determinism (the same verdict every run)
+and cost (0.1--1.0\,s per review on these fixtures) --- not detection, which every gate
+achieved on these fixtures, and not general restraint, since Kata's absence
+of false accusations was measured on scenarios built around its own
+conventions.
+
+A fifth, deterministic baseline (run \texttt{make test} and grep the diff
+for test-smell patterns: \texttt{pass} bodies, \texttt{assert True}
+additions, \texttt{pytest.skip}) sits below all agent gates on detection:
+9/11 REFUTED, missing s08 (fraud in an untracked file invisible to
+\texttt{git diff --cached}) and s14 (metadata fraud in the YAML
+\texttt{base\_commit} field). It also produces two false positives (s06
+debris, s07 honest work flagged by smell-pattern matches). The comparison
+is diagnostic: test-smell grep catches the syntactic weakening patterns
+the JUDGE was designed for (Section~\ref{sec:judge}), but cannot inspect
+Git state, track file scope across commits, or distinguish legitimate from
+fraudulent \texttt{pass} bodies --- the operations that require
+the deterministic code path the paper argues for.
+
+The comparison is subject to important methodological caveats that we state explicitly.
+The 19 scenarios and the underlying fraud taxonomy were developed iteratively alongside Kata to serve as regression fixtures. Consequently, the test workloads are strictly in-distribution for Kata --- which includes dedicated architectural mechanisms for these specific boundary conditions --- and out-of-distribution for the alternative gates. The false positives incurred by the agent gates were concentrated on scenarios exercising these repository-level conventions (e.g., \texttt{approved\_commit} diff ceiling on s17, Git local excludes on s19, and missing language probes on s12). Hence, the false positive metric reflects familiarity with these architectural conventions and the presence of direct repository query tools as much as generic reviewer restraint.
+
+The tools were also evaluated in a constrained, emulated configuration: \texttt{nova} and \texttt{claude-wizard} were invoked as structured review prompts within a single headless Claude Code CLI session (\texttt{claude -p}), rather than within their native end-to-end interactive developer workflows. For instance, \texttt{nova} provides a full Model Context Protocol (MCP) server with specialized subagents that was not wired into this isolated review harness, which was scoped to measure a standalone, single-turn change review pass. The agent gates also operated through a single underlying LLM, Claude Code's default model. The harness did not record which model that was; the local Claude Code session logs of the final run's 57 agent reviews, which are not archived in the repository, show \texttt{claude-sonnet-5} through Claude Code CLI 2.1.268. This means their false positives and heuristic tendencies characterize this specific model under review prompting, rather than the tools in their entirety.
+
+Agent reviews are also inherently stochastic, and the scoring rules changed during the study. The repository archives five comparison files, described in \texttt{eval/results/README.md}. Two are complete, independent runs: \texttt{compare\_gates.json} and the final \texttt{compare\_gates\_round2.json} reported in Table~\ref{tab:gate-comparison}. \texttt{compare\_gates\_refined.json} re-runs only the eight non-REFUTED scenarios; \texttt{compare\_gates\_merged.json} consolidates the first run with that re-run and is not an independent run; and \texttt{compare\_gates\_final.json} is a run aborted by the account spend limit, whose INCONCLUSIVE entries from s13 onward are infrastructure blocks, not gate behaviour. Two scoring changes were made after the first run's results were seen: the agent-output parser was replaced by a decoder that takes the first complete JSON object, and the debris scenario (s06) stopped counting an accusation of the real debris as a false positive, counting one only when a look-alike file is named. The s06 change favoured the agent gates: under the first rule, all three were charged a false positive on s06 for finding the real debris. The parser change did not: in the first run, the baseline's answer on the honest s07 task could not be parsed and was recorded as INCONCLUSIVE, although its archived prefix reports \texttt{fraud\_detected: true}, so the final parser would most likely have scored it as a false positive. Scored as they were at the time, the agent false-positive counts in the two complete runs were 4 and 4 for nova, 4 and 2 for claude-wizard, and 4 and 5 for the baseline; applying the final s06 rule to the first run lowers each of its counts to 3 (4 for the baseline if its s07 accusation is counted), which gives the ranges in Table~\ref{tab:gate-comparison}. Re-scoring the final run with the final rules from its archived output reproduces every published status. The first run cannot be fully re-scored, because it archives only a truncated excerpt of each agent answer (at most 300 characters); the s06 answers fit whole, so that re-scoring is verifiable, while the s07 answer is cut off and remains INCONCLUSIVE. Kata yielded identical verdicts across every run, with zero false positives on these Kata-built fixtures. The agent reporting schema also lacked an explicit \texttt{UNVERIFIABLE} verdict, forcing agents either to accuse or remain silent, precluding explicit confessions of unobservable state.
+
+The comparison, then, does not demonstrate general superiority of Kata over the reasoning capabilities of alternative tools. Rather, it isolates the core thesis of this paper: evaluating complex software engineering boundary conditions (such as Git commit ceilings, untracked ignores, and process exit codes) through heuristic LLM prompts forces the model to guess, whereas executing deterministic, code-level checks --- deterministic in the sense that the same repository state always produces the same verdict, not in the sense of completeness --- yields instantaneous, reproducible verdicts that confess blind spots explicitly. Whether this also means fewer false accusations on workloads not built alongside Kata remains untested. The comparison harness and raw records are archived as \texttt{eval/compare\_gates.py} and \texttt{eval/results/compare\_gates\_round2.json}.
+
 \subsection{External evaluation: feasibility, scope integrity, and execution overhead on real repositories}
 \label{sec:external-evaluation}
 
 The trap suite is ours: the frauds, the fixtures, and the ground truth
-were written by the author, and a reviewer may reasonably ask whether the
+were written by us, and a reviewer may reasonably ask whether the
 mechanisms hold outside that self-referential setting. We therefore conducted
 an external evaluation: 12 bug-fix tasks from six public repositories, attempted
 by two models under two conditions (bare vs. kata, yielding 48 sessions in
@@ -2113,13 +2700,14 @@ the manifest with the pinned commits, and the raw results are archived as
 \subsubsection{Results}
 
 All 48 sessions produced a fix that passes the task's test suite, in both
-conditions and for both models. Importantly, the final artifacts contained \textbf{no
+conditions and for both models. The final artifacts contained no
 weakened tests in any of the 48 runs according to the JUDGE's own
-weakened-check detector}, which found nothing to report. This indicates that
+weakened-check detector, which found nothing to report. With $N=1$ per cell,
+this is a single absence of a negative signal, not a rate: it indicates that
 on well-isolated, narrow bugs with clear existing regression tests, these
-sessions of frontier LLMs did not spontaneously resort to
+particular sessions of frontier LLMs did not resort to
 test-weakening tactics --- a result that describes these sessions, not the
-models in general, given the sample size of $N=1$ per cell. Consequently, the external study demonstrates the operational
+models in general. Consequently, the external study demonstrates the operational
 feasibility and scope integrity of the gate on third-party codebases, while
 validation of the JUDGE's fraud detection capabilities rests on the 19 adversarial
 trap scenarios of Section~\ref{sec:self-check} where frauds were actively planted.
@@ -2142,6 +2730,9 @@ and \emph{review} report median wall-clock times alongside the observed
 [\emph{min}--\emph{max}] range. Every session's fix passes
 the task's test suite.}
 \centering
+% tabcolsep menor: a tabela estourava a mancha em 11pt com o default, e o
+% template não escala tabela com \resizebox (que aqui aumentaria a fonte).
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llrrrlcc@{}}
 \hline\hline
 Condition & Model & Runs & Weak. & Undecl. & JUDGE & Session median [min--max] & Review median [min--max] \\
@@ -2155,7 +2746,7 @@ kata & deepseek & 12 & 0 & 0 & 12 V & 405\,s [104--1040\,s] & 1.9\,s [1.4--116\,
 \label{tab:external-results}
 \end{table*}
 
-The cost dimension is the other finding; agent research has argued that
+Cost is the other side of this result; agent research has argued that
 evaluation must account for cost, not only accuracy \cite{kapoor}, and the
 same holds for gates. Without the cycle, the median session took 49\,s
 (range 28--145\,s across all 24 bare runs); with Kata, 442\,s (range
@@ -2225,8 +2816,7 @@ under
 and the derived audit is archived in
 \texttt{eval/\allowbreak results/\allowbreak external\_study\_audit.json}.
 
-However, this episode also shows where that deliberate blindness becomes a
-practical limit worth addressing. When repositories contain
+That deliberate blindness has a practical limit, though. When repositories contain
 pre-existing test breakages or flaky suites, a context-blind gate flagging
 \texttt{FAKED} on unverified success can create perverse incentives: developers
 or agents may feel pressured to modify unrelated tests or bypass the quality gate
@@ -2245,10 +2835,14 @@ reading the task files, which record the verdict. Twelve of the 24
 VERIFIED, and six, all with \texttt{claude-sonnet-5} (t03, t04, t05, t06, t09,
 t11), returned REFUTED, each for \texttt{spec\_betrayal} alone on an intent
 disagreement the session had resolved and recorded. These are false
-accusations of honest fixes, and each session's own notes attribute the
+accusations of honest fixes: of the twelve sessions that reached the JUDGE,
+half (6/12) were falsely refuted, a false-positive rate too high to read as
+noise. Each session's own notes attribute the
 verdict to the rule firing on any recorded disagreement. They come from the
 behaviour of the evaluated JUDGE described in Section~\ref{sec:judge}, fixed
-after the evaluated version in commit \texttt{15ccb7a}. The JUDGE results in
+after the evaluated version in commit \texttt{15ccb7a} (shipped in 0.8.0); we did not re-run
+the fixed JUDGE against these six sessions' artifacts, so whether the fix
+would have returned all six to VERIFIED is stated, not measured. The JUDGE results in
 Table~\ref{tab:external-results} are from the independent review pass, run on
 synthesized task files whose intent section records no disagreement; their
 absence of false accusations does not extend to the sessions' own JUDGE
@@ -2261,10 +2855,10 @@ come from six Python repositories chosen for permissive licenses and a
 pytest-based suite; they are not a random sample, and the fixes are
 reconstructed from real commits (the bug is the parent commit; the
 acceptance tests are the ones the fix touched) rather than open issue
-reports taken verbatim. Two models with a single run per cell mean the
+reports taken verbatim. The repositories (\texttt{tomli}, \texttt{idna}, \texttt{pyflakes}, \texttt{more-itertools}, among others) are public and popular, and the fix commits are probably in the models' training data; re-initializing the history stops the agent from reading the fix in the sandbox but does not remove memorization. We did not use tasks dated after the models' cutoff or measure memorization, so the 48/48 pass rate may be inflated and bears on feasibility, not on capability. The acceptance tests were also pre-applied to the sandbox, which makes the task easier than a real issue. Two models with a single run per cell mean the
 numbers describe these sessions, not the models in general; agent runs are
 stochastic. Sessions that hit the harness timeout or the workspace spend
-limit were re-run, and the campaign was resumed after the interruption;
+limit were re-run, and the study was resumed after the interruption;
 only completed sessions are counted, and all 48 have status \texttt{ok} in
 the raw results. The raw results do not record the number of re-executions
 per arm; because the \texttt{kata} arm is roughly nine times longer than
@@ -2277,7 +2871,7 @@ reviewers. The time difference between arms therefore reflects the cost
 of the full Kata cycle (all nine phases), not only the JUDGE review. The independent review uses a task file synthesized from each
 session's declaration and measurement, identical in shape for both arms,
 so it exercises the scope and weakened-test checks; false completion is
-outside its scope by construction, and the trap suite covers it. Finally,
+outside its scope by construction, and the trap suite covers it. Last,
 the review time we report is the automated JUDGE pass,
 not human review time; and because no session in either condition weakened
 a test according to the JUDGE's own detector, the external study exercises the
@@ -2285,53 +2879,24 @@ scope half of the JUDGE's
 contract, while the weakened-checks half remains covered by the trap suite
 of Section~\ref{sec:self-check}.
 
-\subsection{Executed comparison with related gates}
-
-The gate comparison of Section~\ref{sec:exec-comparison} complements the
-external study with a second kind of external evidence: four gates reviewed
-the same 19 trap scenarios with detection parity. Kata returned every
-expected verdict at a median review time of about one second on those scenarios, while ten of
-the eleven agent false positives fell on blind-spot scenarios or on a
-Kata-specific diff convention (Section~\ref{sec:exec-comparison}). That comparison is
-a direct answer to the journal's request for a software article to
-demonstrate its advance by comparison with available related software (the
-guideline quoted in Section~\ref{sec:exec-comparison}), and
-its raw verdicts are archived as
-\texttt{eval/compare\_gates.py} and
-\texttt{eval/results/compare\_gates\_round2.json}.
-
 \section{Discussion}
 \label{sec:discussion}
 
-The research landscape of 2026 positions Kata at the intersection of three
-converging lines of work: agent self-reporting unreliability, benchmark
-measurement confounds, and claim-based verification.
-
-First, the Unreliable Progress Bar study \cite{unreliable-progress} shows
-that agents cannot reliably report their own progress --- the same
-unreliability that motivates Kata's decision to never trust a claimed
-check without re-execution. The Double Measurement Confound
-\cite{double-measurement} shows that agent benchmarks conflate scaffolding
-with capability; Kata's trap suite avoids this by testing the tool, not the
-agent, and by measuring both fraud detection and false-positive avoidance.
-
-Second, the claim-based verification model that Kata implements is
-emerging independently across domains: RefVerifier \cite{refverifier}
-verifies reference claims in manuscripts, the Discovery Certification
-Protocol \cite{discovery-certification} certifies research-agent
-discoveries, and TrajMark \cite{trajmark} attributes coding-agent
-trajectories. Kata applies the same pattern to the software change itself,
-where the claims are the task file and the ground truth is the repository.
-This convergence suggests that claim-based verification is becoming a
-general pattern for trustworthy AI-assisted work, and Kata is a concrete
-instantiation for software engineering.
+The 2026 preprints surveyed in Section~\ref{sec:field} --- on unreliable
+agent self-reporting, benchmark confounds, and claim-based verification in
+other domains --- are consistent with Kata's premise that a claim should be
+re-executed rather than read. They are preprints, and we cite them as
+context, not as evidence for the design. Kata applies the claim-verification
+pattern to the software change itself, where the claims are the task file and
+the ground truth is the repository.
 
 The executed comparison of Section~\ref{sec:exec-comparison} sharpens
 this positioning. All four agent gates detected every planted fraud, separating
 \emph{detection} from \emph{restraint}: the difference appeared entirely on
 honest and blind-spot scenarios. Detection did not require an executable core
 on these fixtures, as prompted reviewers carrying the fraud taxonomy matched
-code-executing gates. What the executable core buys is a model-independent
+code-executing gates. An executable core does not detect more on these
+fixtures; it delivers a model-independent
 verdict: reproducible outcomes, review times of 0.1--1.0\,s on the trap scenarios, and
 honest confessions when mechanisms are unobservable. As analyzed in
 Section~\ref{sec:exec-comparison}, agent false positives stemmed from
@@ -2346,8 +2911,8 @@ reliability-beyond-the-mean insight of the Double Measurement Confound
 produced identical verdicts throughout, with no false accusations on these
 fixtures.
 
-Third, the limitations of Kata must be stated explicitly. Kata is a
-verification quality gate, not a panacea: it checks what was claimed against
+The limitations of Kata are equally part of the picture. Kata is a
+verification quality gate: it checks what was claimed against
 real exit codes and the diff window it is given, within the threat model of
 Section~\ref{sec:threat-model}, and says nothing about whether the generated
 patch is optimal or complete beyond the declared checks. It is
@@ -2355,7 +2920,7 @@ interactive (falling back to defaults in headless mode); it requires Git;
 and its success criterion is subjective. When project tests are flawed,
 re-execution confirms a false oracle \cite{barr-oracle}, highlighting
 metamorphic and property-based testing \cite{chen-metamorphic} as complementary
-future work. Finally, the central claim of this paper is descriptive --- Kata
+future work. The central claim of this paper is descriptive, moreover --- Kata
 re-executes claimed checks and returns an objective verdict; causal evaluation
 of whether the cycle improves AI-assisted code quality remains for future
 controlled empirical studies \cite{fable}.
@@ -2368,7 +2933,8 @@ validity that we state explicitly.
 
 \textbf{Construct validity.} The trap scenarios measure whether the JUDGE
 detects planted frauds and does not accuse honest work. The construct
-``fraud'' is operationalized as the seven categories the JUDGE hunts, which
+``fraud'' is operationalized as the seven categories the evaluated JUDGE
+hunts (the current release adds an eighth), which
 are derived from the failure modes documented in the Fable Method
 \cite{fable} --- an unrefereed GitHub repository, so these categories are a
 practitioner taxonomy rather than a validated construct --- and from the
@@ -2389,20 +2955,22 @@ fraud category not in the list (for example, a new class of weakened test
 that the probes do not recognize) would not be detected, and the blind-spot
 mechanism is the honest response: the JUDGE confesses what it could not
 observe rather than claiming to have looked. The adversary is bounded as
-well: the trap suite plants frauds in claims, not in Git metadata, and
-Section~\ref{sec:threat-model} reproduces evasions it does not exercise ---
-no trap scenario tests anchor rewriting or empty diff windows, leaving these
-evasions demonstrated only by manual reproduction and not regressable,
-including an empty diff window that the evaluated version of the cycle
-produced when a task was approved before its change was committed (fixed
-afterwards, in commit \texttt{3cacc5a}).
+well: the trap suite plants frauds in claims, not in all Git metadata.
+s22 covers moving the anchor, which the reflog now detects, and s20 covers
+the empty diff window; what remains outside the suite is deleting and
+recreating the anchor, which erases the reflog and is demonstrated only by
+manual reproduction unless a trusted base is supplied. The empty diff window
+that the evaluated version produced when a task was approved before its
+change was committed is fixed in 0.8.0 (commit \texttt{3cacc5a}) and guarded
+by s20; the workflow that closes it after the commit is
+\texttt{kata --stamp}.
 
 \textbf{Internal validity.} The trap scenarios are deterministic fixtures
 with a ground truth that specifies the exact verdict and the exact frauds
 the judge must find. The harness fails when the verdict differs, when a
 fraud is missing, or when an unexpected fraud appears. This determinism
 removes experimenter bias from the evaluation, but it also means the
-scenarios test what the author thought to test. The honest scenarios
+scenarios test what we thought to test. The honest scenarios
 mitigate this: they encode false positives that were actually observed in
 development (the debris false positive, the triviality-gate false positive,
 the \texttt{.kata/} visibility false positive), so they are regression
@@ -2412,10 +2980,10 @@ statistical inference regarding stochastic variance in session execution
 times, serving instead as a deterministic sanity check on the tool's behavior
 across non-author code.
 
-\textbf{External validity.} The evaluation is bounded in two ways. First,
-the trap suite of Section~\ref{sec:self-check} uses small synthetic
+\textbf{External validity.} The evaluation is bounded in three ways. The
+trap suite of Section~\ref{sec:self-check} uses small synthetic
 fixtures authored by the developer rather than industrial workloads, with a
-limited number of honest scenarios (four). Second, while the external study
+limited number of honest scenarios (four). The external study
 of Section~\ref{sec:external-evaluation} evaluates real historical bugs
 across six public open-source repositories, the tasks are intentionally small
 Python bug fixes with existing pytest suites, evaluated with one run per
@@ -2424,9 +2992,34 @@ restraint in the independent review pass, not in the sessions' own JUDGE
 runs, six of which falsely accused honest fixes; they do not represent complex multi-file feature additions,
 non-Python codebases, or proprietary enterprise software. A broader
 multi-language study across diverse model tiers and task complexities
-remains future work. The tool itself, however, is dogfooded in production on
-the kata repository: its own changes go through the cycle, and the trap
-suite runs in continuous integration on every push.
+remains future work: the weakened-check detector is per-language by design
+(Section~\ref{sec:judge}), so this generalization is not automatic and would
+need language-specific probes validated the same way the Python ones were.
+A third bound is the Gauntlet pilot's second campaign (Appendix~\ref{sec:gauntlet-campaign}, 30
+sessions), which selects its five tasks by a measured gaming-incentive signal, but
+draws them from the same pool of small, public, Python bug fixes as the
+external study, and its blind A/B judge is itself an LLM, not an independent
+human rater; the null result it reproduces should be read within that same
+workload profile, not as a broader-population finding. The tool itself is also applied to its own repository: its changes are checked by its own lint, tests and coverage, and the trap suite runs in continuous integration on every push. We have no data on use outside the author's own projects.
+
+\textbf{Author/evaluator conflation.} The author designed the JUDGE, wrote
+the 19 trap scenarios and their ground truth, built the external-study and
+Gauntlet harnesses, and is also the one reporting and interpreting all of
+the results above --- no external party reviewed the trap scenarios before
+they were run, and the ``blind'' A/B judge, while unaware of arm identity,
+is not independent of the author's instrumentation choices (Section~\ref{sec:external-evaluation} and
+Appendix~\ref{sec:gauntlet-campaign}). This is
+declared in the Competing Interests statement, but it bears restating here
+as a validity threat rather than a disclosure formality: every quantitative
+claim in this paper is self-reported, and the zero-weakened-test findings
+above are checked by the JUDGE's own detector, which is also the artifact
+under evaluation (Section~\ref{sec:judge}). Mitigations in place are the
+dogfooding on the kata repository itself, honest scenarios derived from real
+observed false positives rather than hypothetical ones, and the executed
+comparison against independently authored gates (Section~\ref{sec:exec-comparison});
+what remains unmitigated is independent replication --- no third party has
+re-run the trap suite, the external study, or the Gauntlet campaigns against
+their own ground truth.
 
 \textbf{Conclusion validity.} The claim ``the JUDGE catches fraud'' is
 supported by the trap suite, but the claim ``Kata improves the quality of
@@ -2440,12 +3033,12 @@ with and without Kata is needed to establish it.
 \section{Conclusion}
 \label{sec:conclusion}
 
-Kata is not a skill --- it is the tool that \emph{executes} the discipline
-that skills ask for. The distinction is the thesis of this paper: a skill
-is an instruction; Kata is a tool that executes the instruction. The skill
-says ``verify your tests''; Kata runs the tests, measures the coverage,
-compares it with the gate, and refuses to approve if it fails. The skill
-says ``be honest''; the JUDGE re-runs the claimed checks and hunts seven
+Kata is not a skill. It is the tool that \emph{executes} the discipline that
+skills ask for, and that distinction is the thesis of this paper. A skill is
+an instruction; Kata executes the instruction. Where a skill
+says ``verify your tests'', Kata runs the tests, measures the coverage,
+compares it with the gate, and refuses to approve if it fails. Where a skill
+says ``be honest'', the JUDGE re-runs the claimed checks and hunts eight
 categories of fraud.
 
 The evaluation demonstrates where the executable JUDGE succeeds as a
@@ -2459,10 +3052,16 @@ agent false positives fell on blind-spot scenarios and on a Kata-specific
 convention, so the comparison establishes determinism and cost rather than
 superior restraint. The external study shows the JUDGE is feasible on real
 repositories, and the judgment phases of the nine-phase cycle were not
-ablated and were evaluated only for cost. However, the evaluation does not
+ablated and were evaluated only for cost. An appendix reports an exploratory
+pilot and a 30-session campaign that carried an iterative builder/critic loop
+on the same task file and audit machinery. They found no evidence that the loop
+improves the artifacts, with the direction against the cycle reversed between
+the two and one run per cell, and their value is in showing how such a loop can
+be audited and how the measurement has to be built. The evaluation still does not
 show that the cycle causally improves the quality of AI-assisted code;
-a controlled study of changes with and without Kata remains future work. Furthermore,
-Kata is an enforcement gate, not a panacea: it verifies claimed exit codes and diffs
+a controlled study of changes with and without Kata remains future work, and the
+pilot's caveats (four tasks, ties in half the blind verdicts, a workload without
+incentive to cut corners) say why it is not that study. Kata is an enforcement gate, not a panacea: it verifies claimed exit codes and diffs
 rather than proving patch optimality; it is interactive; it requires Git; and
 subjective criteria are accepted with explicit caveats.
 
@@ -2479,21 +3078,351 @@ inspired this work, and the maintainers of the related tools surveyed in
 Section~\ref{sec:field} for the comparison that sharpened Kata's design.
 \end{acknowledgements}
 
+\appendix
+
+\section{Exploratory study: an iterative loop on top of the cycle}
+\label{sec:gauntlet-pilot}
+
+The evaluation in Section~\ref{sec:impact} leaves the judgment phases unablated, and Section~\ref{sec:conclusion}
+names a controlled study of whether the cycle improves the quality of
+AI-assisted changes as future work. This appendix reports a first, explicitly
+exploratory step in that direction: an implementation of an iterative
+builder/critic loop on top of the Kata cycle, and a pilot that measures whether
+it improves the artifacts. \textbf{The pilot finds no evidence of improvement}: on this
+workload the loop did not produce a measurable improvement over the cycle
+without it, and it lost to a bare agent in blind comparison, though with one
+run per cell none of these differences is statistically distinguishable from
+noise. We report it
+because an inconclusive result from a pre-registered pilot is evidence about the method
+and about how to measure it, and because the instrument corrections it forced
+are reusable.
+
+\subsection{What was built}
+
+The loop follows the Gauntlet Loop pattern: an artifact is decomposed into
+independently judgeable components; a fresh \emph{builder} improves one
+component; a fresh \emph{critic}, in a separate context that never sees the
+builder's reasoning, compares the real artifact against a concrete reference
+(the \emph{bar}) and reports the single largest gap; the next round works from
+that gap only, until the reference is met or a round ceiling fires. Two design
+constraints limit what Kata can own here. The objective core of Kata is
+deterministic --- it reads exit codes and Git state --- so the loop's execution
+belongs to the agent host, not to the \texttt{kata} package; Kata's role is to
+carry the loop's \emph{state} and to \emph{audit} it. The other constraint is
+that a loop whose
+critic runs in the builder's context is not the method: the independence is the
+intervention, so it has to be observable.
+
+Kata therefore gained three things, in a fork kept separate from the evaluated
+version so the artifact of Section~\ref{sec:impact} is not disturbed:
+(i) a \texttt{gauntlet:} block in the task file
+(\texttt{bar}, \texttt{critic}, \texttt{boundary}, and an append-only
+\texttt{rounds} list recording component, gap, verdict, and evidence per round),
+validated on read with the same fail-loud discipline as the schema version;
+(ii) an audit grade for it, so a declared loop with no concrete bar or no
+per-round verdict is reported as \texttt{faked} rather than passing as
+\texttt{followed}; and (iii) a \texttt{kata-gauntlet} skill, generated to both
+frontends from the single source of truth, that orchestrates builder and critic
+as subagents. Verdicts are binary (\texttt{pass}/\texttt{fail}): a numeric
+scale invites score drift, where the number rises without the artifact
+improving.
+
+\subsection{Protocol}
+
+The pilot reuses the external study's design of
+Section~\ref{sec:external-evaluation}: real fixes from public repositories,
+reconstructed from the fix commit with history re-initialized so the fix is not
+visible, run headless by two models. It adds a third arm. \emph{bare} is the
+model with no gate; \emph{kata} is the model running the cycle; \emph{gauntlet}
+is the model running the loop, where the builder never sees the reference and
+the critic is a separate subagent that does. Four tasks $\times$ two models
+$\times$ three arms yielded 24 sessions. The reference for the critic is the
+upstream fix commit, named in a file outside the measured tree; the builder is
+never given its path.
+
+Metrics and hypotheses were registered in the repository before collection
+(commit \texttt{85eebf9}; a timestamp in our own Git history, not in an
+external registry), following the calibration discipline the rest of this
+paper practices. Of the five registered hypotheses, H4 (the loop costs more time than the
+cycle) was contradicted by the pilot, and H1 (the loop is preferred to the
+cycle) was supported in the pilot and reversed in the campaign, so it is not
+supported. The metrics were: acceptance tests, weakened tests
+(the JUDGE's own detector), undeclared scope, the JUDGE's independent verdict,
+wall-clock cost, rounds and gaps per component, and --- as the primary metric
+--- a \emph{blind A/B preference}: a fresh judge receives the two final diffs of
+a matched pair with the origins hidden and the order fixed by a hash of
+(task, model, arm) decided in advance, and returns a winner or a tie. The judge is \texttt{claude-sonnet-5}, which
+is also one of the two models whose sessions it judges; we ran no
+self-preference or position-bias check. When the two final diffs of a pair
+are byte-identical the harness records a tie without calling the judge: this
+happened in 7 of the 24 pilot pairs and 12 of the 30 campaign pairs, so the
+number of judge calls was 17 and 18.
+
+Two instrument defects were found during the pilot and corrected; both matter
+beyond this experiment. The harness had measured ``tests pass'' by
+running the manifest's \texttt{test\_cmd}, which for two tasks names a single
+test file. Re-running the \emph{full} suite over the preserved artifacts
+revealed a regression the narrow command had reported as a pass. The other
+defect was in the A/B judge: it receives diffs but not the base state, so on
+tasks whose
+acceptance tests are pre-applied it cannot distinguish ``did not update the
+tests'' from ``the tests were already there''. Both are corrected in the
+artifact.
+
+\subsection{Results}
+
+\begin{table*}[!ht]
+\caption{Exploratory pilot: 4 tasks, two models, three arms, one session per
+cell (24 sessions). \emph{Regr.} counts sessions introducing failures that the
+baseline did not have, and \emph{healed} counts sessions fixing pre-existing
+baseline failures, both measured by the full suite; baselines had 1, 1, 8, and
+5 failures on the four tasks. \emph{Weak.} is weakened tests by the JUDGE's
+detector; \emph{undecl.} is changed files absent from the session's own
+declaration; \emph{JUDGE} reports the independent review pass. Times are
+medians with the observed range.}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrrrrlcc@{}}
+\hline\hline
+Arm & n & Regr. & Healed & Weak. & Undecl. & JUDGE & Session median [min--max] \\
+\hline
+bare & 8 & 0 & 8 & 0 & 2 & 6 V, 2 VWC & 85\,s [33--307\,s] \\
+kata & 8 & 0 & 8 & 0 & 1 & 7 V, 1 VWC & 721\,s [231--1800\,s] \\
+gauntlet & 8 & 1 & 8 & 0 & 1 & 7 V, 1 VWC & 282\,s [119--1800\,s] \\
+\hline\hline
+\end{tabular}
+\label{tab:gauntlet-pilot}
+\end{table*}
+
+Three results shape the reading of the pilot. The loop ran as a method: all eight
+gauntlet sessions recorded rounds in the task file and were graded
+\texttt{followed} by the audit, with no \texttt{faked} grade; two sessions show
+a real \texttt{fail}$\to$\texttt{pass} cycle, where the critic named a concrete
+defect and the following round fixed it. One such gap: ``\texttt{handleNodeLoad}
+does not mark the annotation as used, so \texttt{def f(): name: str;
+print(name)} emits both \texttt{UndefinedName} and \texttt{UnusedAnnotation}''.
+The mechanism is implementable and auditable in headless operation
+(Table~\ref{tab:gauntlet-pilot}).
+
+The second result is that there is no evidence of improvement. In the blind A/B
+comparison over 24 matched pairs, the loop beat the cycle four times and tied
+four, but lost to the bare agent four times against one win
+(Table~\ref{tab:gauntlet-ab}); 11 of 24 verdicts were ties, 7 of them
+byte-identical diffs that never reached the judge. The only regression
+in the pilot is a single gauntlet session that hit the 1800\,s ceiling with
+four rounds complete and delivered two of the four files the change required,
+leaving the expectation tests unupdated --- infrastructure interrupting the
+work, not the method failing, but the delivered artifact did regress. The
+weakened-test count is zero across all 24 sessions, replicating the external
+study's result. Undeclared scope concentrates on one task in every arm.
+
+\begin{table}[!ht]
+\caption{Blind A/B preference over the pilot's 24 matched pairs (17 judge calls,
+7 byte-identical pairs recorded as ties; origins hidden, order fixed by a hash decided before collection).
+The loop beats the cycle and loses to the bare agent.}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\hline\hline
+Match-up & First arm wins & Tie & Second arm wins \\
+\hline
+gauntlet vs.\ kata & 4 & 4 & 0 \\
+gauntlet vs.\ bare & 1 & 3 & 4 \\
+kata vs.\ bare & 2 & 4 & 2 \\
+\hline\hline
+\end{tabular}
+\label{tab:gauntlet-ab}
+\end{table}
+
+The third result concerns cost, and here the hypothesis was wrong in
+direction: the loop's median
+session (282\,s) was \emph{below} the cycle's (721\,s), not above it. Both
+arms have sessions stopped at the 1800\,s ceiling, so these medians compare
+censored observations. A
+plausible and untested explanation is that the cycle runs the full verification
+pipeline on every task, while the loop is directed at the gap.
+
+\subsection{A second campaign on a workload chosen for incentive}
+\label{sec:gauntlet-campaign}
+
+The pilot's caveat was that its tasks gave the agents no incentive to cut
+corners, which makes it a poor setting for testing whether a quality loop
+helps. To address that, three observable signals were defined and measured
+offline, before any session: whether the acceptance test passes with the bug
+still present; whether it asserts on fragile proxies such as message
+substrings, counts, or snapshots; and whether the upstream fix touches more
+than one source file. A task scoring high on these signals is one where
+satisfying the visible test need not require fixing the cause. Applying the
+signals to the study's task set selected five tasks (four of them
+\emph{not} used in the pilot), and the campaign ran
+$5 \times 2 \times 3 = 30$ sessions with the four instrument corrections in
+place: the full suite measured as a delta against each task's pre-existing
+failures, the A/B judge given the base state, sessions interrupted by the
+ceiling or by a signal re-run rather than entering the analysis truncated, and
+the workload selected by measured incentive.
+
+\begin{table*}[!ht]
+\caption{Second campaign: 5 tasks chosen for gaming incentive, two models,
+three arms, one session per cell (30 sessions). \emph{Regr.} counts sessions
+introducing failures absent from the baseline, \emph{healed} sessions fixing
+pre-existing baseline failures, both by the full suite. Times are medians.}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrrrrc@{}}
+\hline\hline
+Arm & n & Regr. & Healed & Weak. & Undecl. & JUDGE \\
+\hline
+bare & 10 & 0 & 8 & 0 & 0 & 10 V \\
+kata & 10 & 0 & 8 & 0 & 0 & 10 V \\
+gauntlet & 10 & 0 & 8 & 0 & 0 & 10 V \\
+\hline\hline
+\end{tabular}
+\label{tab:gauntlet-campaign}
+\end{table*}
+
+The campaign is clean on every metric (Table~\ref{tab:gauntlet-campaign}):
+thirty of thirty sessions reached \texttt{ok}, the JUDGE returned VERIFIED in
+all thirty with no fraud found, no session weakened a test, none left scope
+undeclared, and none introduced a regression --- while twenty-four of the
+thirty healed a pre-existing baseline failure. The instrument corrections
+earned their place in use rather than in argument: two cells were interrupted
+(one by the session ceiling, one by a signal) and, instead of entering the
+analysis truncated as in the pilot, were re-run to completion; and the
+measuring pass itself surfaced a defect that the pilot could not have
+detected --- a session of the cycle arm commits its own work, so measuring the
+artifact against the moving \texttt{HEAD} yields an empty diff and reads a
+completed fix as ``did nothing''. One session of the campaign had done exactly
+that, and its measurement was redone against the task state.
+
+The blind A/B comparison on these thirty pairs is
+Table~\ref{tab:gauntlet-ab-campaign}. Twenty-one of thirty verdicts are ties, but 12 of those are
+byte-identical diffs that never reached the judge; of the 18 pairs it saw,
+9 were ties and 9 were decisive. The nine decisive verdicts are decided on style and minimality --- idiom
+consistency, an explanatory comment, the smaller of two functionally
+equivalent changes --- never on whether the bug was fixed. No judge reported a
+candidate that failed to address the reported defect. The corrected instrument
+therefore does not confirm that the loop helps: with a workload selected for
+incentive, the full suite as the metric, the base state in the judge's prompt
+and interrupted cells re-run, the loop does not beat the cycle or the bare
+agent. It does not replicate the pilot's direction either: against the cycle
+the loop went from 4--0 in the pilot to 1--4 here, and pooled over both
+studies the decisive verdicts are 5--4 (loop against cycle), 2--6 (loop
+against bare) and 3--2 (cycle against bare), none of them a clear
+difference. We report these counts descriptively and attach no p-values: the
+pairs share sessions, and a sign test would ignore the clustering by task and
+model. With one run per cell the
+two studies cannot exclude a modest effect in either direction, and we do not
+claim they remove alternative explanations. The corrections remove one
+specific class of them: narrow measurement and truncated cells.
+
+\begin{table*}[!ht]
+\caption{Blind A/B preference over the second campaign's 30 matched pairs (18
+judge calls, 12 byte-identical pairs recorded as ties; origins hidden, order fixed by a hash decided before
+collection). Ties dominate; the decisive verdicts are all stylistic.}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\hline\hline
+Match-up & First arm wins & Tie & Second arm wins \\
+\hline
+gauntlet vs.\ kata & 1 & 5 & 4 \\
+gauntlet vs.\ bare & 1 & 7 & 2 \\
+kata vs.\ bare & 1 & 9 & 0 \\
+\hline\hline
+\end{tabular}
+\label{tab:gauntlet-ab-campaign}
+\end{table*}
+
+\subsection{Caveats}
+
+The pilot is small by construction and we do not over-read it. Four tasks give
+N=1 per cell for a stochastic agent, and 11 of 24 blind verdicts were ties,
+which limits discrimination. Two cells hit the session ceiling. Two tasks
+decomposed into a single component, so they exercised no iteration. The blind
+A/B judge sees diffs without the base state, which favours whichever arm
+touched the test files; and in one of 24 judgments the judge stated it had
+applied the diffs and run the suite, which it could not do --- a fabrication of
+execution, recorded rather than discarded, whose verdict direction nonetheless
+agreed with the independent full-suite measurement. We did not re-inspect the
+other 23 judgments' stated reasoning for the same failure mode, so this
+single confirmed case is a lower bound on how often the blind judge
+misrepresents its own process, not a rate. The reference is the
+upstream fix, which the measured tree does not contain, so the critic compares
+against a description of the reference rather than the reference diff itself; a
+critic noted this in its own gap. The workload is the external study's, finally:
+clean, well-isolated bugs with clear regression tests, which gave the agents
+little incentive to game visible checks --- the same condition that makes this
+a poor setting for testing whether a quality loop helps.
+
+\subsection{What scales, and what would have to change}
+
+The pilot does not justify scaling the sample; it justifies fixing the
+instrument, and those four corrections are implemented and archived alongside
+the pilot. Each earned its place in the second campaign rather than in
+argument: ``tests pass'' is measured with the full suite and reported as a
+delta against the task's pre-existing failures rather than as a pass, because
+the manifest's narrow test command had reported a regression as a pass; the
+A/B judge is given the base state with the diffs, so that on tasks whose
+acceptance tests are pre-applied it cannot mistake ``did not update the tests''
+for ``the tests were already there''; a session interrupted by the ceiling or
+by a signal is re-run with its attempt history recorded, instead of entering
+the analysis truncated; and the workload is selected by measured incentive
+rather than by convenience --- on three observable signals, whether the
+acceptance test passes with the bug present, whether it asserts on fragile
+proxies such as message substrings or counts, and whether the fix touches more
+than one source file, the pilot's own task set scores low or medium, which is a
+quantitative form of the observation that those tasks gave the agents no
+incentive. With the corrections in place the campaign ran, and it again found no
+evidence of improvement on a workload chosen for incentive
+(Appendix~\ref{sec:gauntlet-campaign}). What the two studies
+establish together is narrower and, we think, useful: that an iterative
+builder/critic loop can be carried and audited by the same task file and audit
+machinery that Kata already uses, that a blind A/B comparison with a
+pre-registered protocol is needed to measure whether such a loop helps,
+and that on the workloads measured here we found no evidence that it does, without power to exclude a modest effect --- while the measuring
+pass itself has reusable value, having found and fixed a defect (a committed
+artifact invisible to a moving \texttt{HEAD}) that neither study's results
+would have revealed.
+
 \section*{Declarations}
+\label{sec:declarations}
 
 \noindent\textbf{Availability of data and materials.}
 Kata is open-source software distributed under the MIT License. It is
 published on the Python Package Index as
 \href{https://pypi.org/project/kata-dev/}{\texttt{kata-dev}} (command
-\texttt{kata}); the installable package version is \texttt{0.7.2}, while
-the evaluated version is \texttt{v0.7.0}. Installable with \texttt{pipx install kata-dev} or \texttt{pip install
-kata-dev} (Section~\ref{sec:usage}). The evaluated logic under
-\texttt{src/kata/} was unchanged between commit \texttt{230e81a}
-(trap-suite run) and \texttt{6f56b35} (comparison and external campaign).
+\texttt{kata}); the installable package version is \texttt{0.8.0}.
+Installable with \texttt{pipx install kata-dev} or \texttt{pip install
+kata-dev} (Section~\ref{sec:usage}).
+
+Three revisions are relevant to reproducing this paper, and they are not the
+same commit. The \emph{evaluated version} is the code that was measured:
+commit \texttt{230e81a} for the trap suite, which identifies itself as 0.6.0,
+and commit \texttt{6f56b35} for the comparison and the external study. The
+logic under \texttt{src/kata/} was unchanged between the two. The
+\emph{release} is tag \texttt{v0.8.0}, 91 commits after \texttt{230e81a}. Its
+tree contains every tool cited here, including the \texttt{--stats}
+measurement of Section~\ref{sec:design}, the session-audit tooling of
+Section~\ref{sec:external-evaluation}, and the 0.8.0 additions described in
+Section~\ref{sec:release-080}. Because those additions include logic changes
+--- the declared typecheck role, the eighth fraud category, the finer
+false-completion rule, and the attribution of sibling commits ---
+\texttt{v0.8.0} is not the evaluated version. (The earlier tag
+\texttt{v0.7.0} was 24 commits after \texttt{230e81a} and differed from the
+evaluated version in version metadata and help text, not in logic.) The
+\emph{package} is \texttt{0.8.0} on PyPI and matches the tag. It contains
+fixes made after the evaluated version (commits \texttt{3cacc5a},
+\texttt{3454fc7} and \texttt{15ccb7a}, discussed in
+Sections~\ref{sec:threat-model} and \ref{sec:external-evaluation}) plus the
+0.8.0 additions (among them \texttt{6931ec7}, \texttt{545d704},
+\texttt{08509fa}, \texttt{c8d1690}, \texttt{2a16486} and
+\texttt{075c6f4}). Installing from PyPI therefore does not give the
+code that was measured; the repository history does. A reader reproducing a
+specific result should use the commit named where that result is reported.
 
 \noindent\textbf{Author contributions.}
-W.A.N. conceptualized Kata, implemented the software, designed the
-evaluation, and wrote and approved the submitted manuscript.
+\ifanon Omitted for review.\else W.A.N. conceptualized Kata, implemented the software, designed the
+evaluation, and wrote and approved the submitted manuscript.\fi
 
 \noindent\textbf{Funding.}
 This research received no specific funding from public, commercial, or
@@ -2504,9 +3433,25 @@ The author is the developer of Kata. The evaluation is self-reported
 and states its limitations; the author declares no other competing interests.
 
 \noindent\textbf{Use of AI in writing.}
-The author used generative AI tools for language editing, \LaTeX{}
-formatting, and internal review. All technical claims, citations, and evaluation
-results were verified by the author, who takes full responsibility for the content.
+Generative AI tools were used in three ways, and the distinction matters
+for how a reader should assess each part of this work. The tools were
+Anthropic's Claude models driven through a coding agent; the repository's
+commit history records which model co-authored each change.
+\emph{Prose}: the manuscript was drafted and then revised with AI
+assistance, including editing rounds that shortened clauses and removed
+formulaic constructions;
+the argument, its structure, and its framing are the author's, and the
+author rewrote or rejected AI output where it misrepresented the work.
+\emph{Software}: AI assistance was also used to edit repository code that
+the paper describes or relies on, including the paper's own build script
+and the test that guards the scenario counts reported in
+Section~\ref{sec:self-check}. \emph{Verification}: all technical claims,
+citations, measurements, and evaluation results were re-checked by the
+author against the repository, and the author takes full responsibility
+for the content. Where the paper reports an AI-assisted experiment, the
+sessions are attributed to their models in
+Section~\ref{sec:external-evaluation}; this declaration concerns the
+writing and the tooling, not the evaluated subjects.
 
 \bibliographystyle{apalike}
 \bibliography{paper}

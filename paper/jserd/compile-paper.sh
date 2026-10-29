@@ -44,6 +44,17 @@ PDF="$PAPER_DIR/$JOB.pdf"
 # Único erro conhecido e aceito: qualquer outro "!" no log reprova.
 KNOWN_ERROR="tracking feature only works with pdftex"
 
+# "Referência indefinida" ancorado no início da linha. O padrão frouxo
+# `grep -i undefined` casava com o texto do PRÓPRIO paper ecoado no log: os
+# avisos de underfull imprimem o trecho que não fechou a linha, e o paper
+# cita `\texttt{UndefinedName}` e `\texttt{UnusedAnnotation}` (nomes de erro
+# do pyflakes). Isso reprovava uma build sã — e, pior, fazia o laço de
+# convergência nunca achar que tinha convergido, queimando o teto de
+# passadas. O aviso real do LaTeX/natbib tem prefixo fixo; ancorar nele é o
+# que distingue "o log FALA de undefined" de "o log TEM citação undefined".
+UNDEFINED_RE='^(LaTeX|Package natbib) Warning:.*(undefined|Citation.*undefined|Reference.*undefined)'
+UNDEFINED_RE="$UNDEFINED_RE|^LaTeX Warning: There were undefined"
+
 # Teto de passadas: este documento converge em 4; 8 é margem folgada e ainda
 # corta um laço que não converge (referência cruzada recém-introduzida).
 MAX_RUNS=8
@@ -123,7 +134,7 @@ while (( runs < MAX_RUNS )); do
     runs=$((runs + 1))
     echo "▶ xelatex (passada $runs)"
     xelatex -interaction=nonstopmode "$JOB.tex" >/dev/null 2>&1 || true
-    if ! grep -q "Rerun to get cross-references right" "$LOG" && ! grep -qi "undefined" "$LOG"; then
+    if ! grep -q "Rerun to get cross-references right" "$LOG" && ! grep -qE "$UNDEFINED_RE" "$LOG"; then
         break
     fi
 done
@@ -148,8 +159,8 @@ if [[ -z "$pages" ]]; then
 fi
 
 # 4. referências e citações resolvidas
-if grep -qi 'undefined' "$LOG"; then
-    grep -i 'undefined' "$LOG" >&2
+if grep -qE "$UNDEFINED_RE" "$LOG"; then
+    grep -E "$UNDEFINED_RE" "$LOG" >&2
     fail "referência ou citação indefinida"
 fi
 

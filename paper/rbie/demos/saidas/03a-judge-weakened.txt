@@ -1,0 +1,41 @@
+
+┌──────────────────────────────────────────────────────────┐
+│ JUDGE — Verificação adversarial de 'dividir-por-zero'    │
+└──────────────────────────────────────────────────────────┘
+
+
+❌  VEREDITO: REFUTED
+
+  Claims verificadas:
+    • lint limpo (sem erros de lint)
+    • todos os testes passam
+    • coverage ≥ gate (100.0%)
+    • 3 arquivo(s) alterado(s) cirurgicamente (necessários)
+
+  Claims aceitas sem verificação (não re-executáveis):
+    • critério de sucesso satisfeito
+    • conflito código/teste/spec resolvido por declaração: o teste prevalece sobre o código atual (ordem: usuário > spec > testes > código); o código passa a levantar ValueError
+
+  Fraudes encontradas:
+    🔴 [high] weakened_checks
+       tests/test_calculadora.py: corpo vazio (só pass)
+       → def test_dividir_por_zero():
+    🔴 [high] false_completion
+       lint re-executado falhou, mas relatório afirma que passou
+       → relatório: ruff_clean=True → reality: lint falhou
+
+  Ressalvas:
+    • 2 claim(s) aceita(s) sem verificação (não re-executáveis)
+    • re-execução falhou: ruff
+    • 2 fraude(s) de alta severidade
+
+  Re-execução:
+    ❌ lint
+    ✅ teste
+    ✅ coverage
+
+──────────────────────────────────────────────────────────
+
+❌  KATA JUDGE — REFUTED
+
+exit=1

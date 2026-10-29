@@ -1,0 +1,22 @@
+▶ verificações de /tmp/tmp.0UxaXpgaro/pesquisa/.kata/config.yaml (declaradas pelo projeto)
+
+┌──────────────────────────────────────────────────────────┐
+│ 4. GOAL-DRIVEN — Verificação de qualidade                │
+└──────────────────────────────────────────────────────────┘
+
+▶ python3 verifica_fontes.py lint
+  ✅ limpo
+
+▶ python3 verifica_fontes.py test
+  ✅ passou
+
+▶ coverage (gate ≥ 100%)
+  ✅ passou (100.0%)
+
+▶ Critério de sucesso da tarefa
+  (modo check-only — assumido satisfeito)
+
+┌──────────────────────────────────────────────────────────┐
+│  ✅  KATA CYCLE — APROVADO                             │
+└──────────────────────────────────────────────────────────┘
+exit=0

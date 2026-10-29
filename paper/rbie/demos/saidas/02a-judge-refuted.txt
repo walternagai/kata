@@ -1,0 +1,36 @@
+
+┌──────────────────────────────────────────────────────────┐
+│ JUDGE — Verificação adversarial de 'dividir-por-zero'    │
+└──────────────────────────────────────────────────────────┘
+
+
+❌  VEREDITO: REFUTED
+
+  Claims verificadas:
+    • lint limpo (sem erros de lint)
+    • todos os testes passam
+    • coverage ≥ gate (100.0%)
+    • 3 arquivo(s) alterado(s) cirurgicamente (necessários)
+
+  Claims aceitas sem verificação (não re-executáveis):
+    • critério de sucesso satisfeito
+
+  Fraudes encontradas:
+    🔴 [high] spec_betrayal
+       intenção não alinhada: código, teste e spec discordam e nenhuma resolução foi registrada
+       → code_does=dividir levanta ZeroDivisionError | check_expects=o teste espera ValueError | spec_says=o README não menciona o caso
+
+  Ressalvas:
+    • 1 claim(s) aceita(s) sem verificação (não re-executáveis)
+    • 1 fraude(s) de alta severidade
+
+  Re-execução:
+    ✅ lint
+    ✅ teste
+    ✅ coverage
+
+──────────────────────────────────────────────────────────
+
+❌  KATA JUDGE — REFUTED
+
+exit=1

@@ -1,0 +1,27 @@
+
+┌──────────────────────────────────────────────────────────┐
+│ 4. GOAL-DRIVEN — Verificação de qualidade                │
+└──────────────────────────────────────────────────────────┘
+
+▶ /home/walternagai/dev/ninja-apps/kata-gauntlet/.venv/bin/python -m ruff check src/ tests/
+  ❌ falhou — saída:
+     /home/walternagai/dev/ninja-apps/kata-gauntlet/.venv/bin/python: No module named ruff
+     
+
+▶ /home/walternagai/dev/ninja-apps/kata-gauntlet/.venv/bin/python -m pytest tests/ --tb=short -q
+  ❌ falhou — últimas linhas:
+     /home/walternagai/dev/ninja-apps/kata-gauntlet/.venv/bin/python: No module named pytest
+     
+
+▶ coverage (gate ≥ 70%)
+  ❌ falhou (0.0% — gate: 70%)
+     (skipped — tests failed)
+
+▶ Critério de sucesso da tarefa
+  (modo check-only — assumido satisfeito)
+
+┌──────────────────────────────────────────────────────────┐
+│  ❌  KATA CYCLE — REJEITADO                            │
+│     Corrija os problemas e rode novamente.              │
+└──────────────────────────────────────────────────────────┘
+exit=1

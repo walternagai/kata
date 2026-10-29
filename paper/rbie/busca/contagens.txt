@@ -1,0 +1,32 @@
+registros brutos (soma das buscas): 126
+artigos distintos: 75
+no período (>= 2022-01-01): 52
+
+brutos por veículo e string:
+  EDUCOMP            "correção automática" programação                       5
+  EDUCOMP            "engenharia de software" "IA generativa" ensino         1
+  EDUCOMP            "inteligência artificial generativa" programação        1
+  EDUCOMP            "juiz online"                                           1
+  EDUCOMP            ChatGPT programação                                     4
+  EDUCOMP-estendido  "correção automática" programação                       2
+  EDUCOMP-estendido  "ensino de teste"                                       1
+  EDUCOMP-estendido  "juiz online"                                           1
+  EDUCOMP-estendido  ChatGPT programação                                     2
+  RBIE (Crossref)    "correção automática" programação                       11
+  RBIE (Crossref)    "criação de testes"                                     4
+  RBIE (Crossref)    "engenharia de software" "IA generativa" ensino         7
+  RBIE (Crossref)    "ensino de teste"                                       6
+  RBIE (Crossref)    "integridade acadêmica" programação                     11
+  RBIE (Crossref)    "inteligência artificial generativa" programação        12
+  RBIE (Crossref)    "juiz online"                                           1
+  RBIE (Crossref)    ChatGPT programação                                     13
+  SBIE               "correção automática" programação                       8
+  SBIE               "criação de testes"                                     1
+  SBIE               "ensino de teste"                                       3
+  SBIE               "inteligência artificial generativa" programação        4
+  SBIE               "juiz online"                                           12
+  SBIE               ChatGPT programação                                     5
+  WEI                "correção automática" programação                       1
+  WEI                "ensino de teste"                                       3
+  WEI                "inteligência artificial generativa" programação        3
+  WEI                ChatGPT programação                                     3

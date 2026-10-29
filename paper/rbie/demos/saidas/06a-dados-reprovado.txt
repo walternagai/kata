@@ -1,0 +1,26 @@
+▶ verificações de /tmp/tmp.0UxaXpgaro/dados/.kata/config.yaml (declaradas pelo projeto)
+
+┌──────────────────────────────────────────────────────────┐
+│ 4. GOAL-DRIVEN — Verificação de qualidade                │
+└──────────────────────────────────────────────────────────┘
+
+▶ python3 verifica_dados.py lint
+  ✅ limpo
+
+▶ python3 verifica_dados.py test
+  ❌ falhou — últimas linhas:
+     linhas removidas sem registro: 2 de 10
+     
+
+▶ coverage (gate ≥ 70%)
+  ❌ falhou (0.0% — gate: 70%)
+     (skipped — tests failed)
+
+▶ Critério de sucesso da tarefa
+  (modo check-only — assumido satisfeito)
+
+┌──────────────────────────────────────────────────────────┐
+│  ❌  KATA CYCLE — REJEITADO                            │
+│     Corrija os problemas e rode novamente.              │
+└──────────────────────────────────────────────────────────┘
+exit=1

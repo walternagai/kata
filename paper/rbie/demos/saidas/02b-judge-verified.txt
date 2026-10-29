@@ -1,0 +1,31 @@
+
+┌──────────────────────────────────────────────────────────┐
+│ JUDGE — Verificação adversarial de 'dividir-por-zero'    │
+└──────────────────────────────────────────────────────────┘
+
+
+✅  VEREDITO: VERIFIED
+
+  Claims verificadas:
+    • lint limpo (sem erros de lint)
+    • todos os testes passam
+    • coverage ≥ gate (100.0%)
+    • 3 arquivo(s) alterado(s) cirurgicamente (necessários)
+
+  Claims aceitas sem verificação (não re-executáveis):
+    • critério de sucesso satisfeito
+    • conflito código/teste/spec resolvido por declaração: o teste prevalece sobre o código atual (ordem: usuário > spec > testes > código); o código passa a levantar ValueError
+
+  Ressalvas:
+    • 2 claim(s) aceita(s) sem verificação (não re-executáveis)
+
+  Re-execução:
+    ✅ lint
+    ✅ teste
+    ✅ coverage
+
+──────────────────────────────────────────────────────────
+
+✅  KATA JUDGE — VERIFIED
+
+exit=0

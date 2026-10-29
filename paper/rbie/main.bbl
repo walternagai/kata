@@ -1,0 +1,351 @@
+\begin{thebibliography}{}
+
+\bibitem[Almeida {\em et~al}.(2025)]{Almeida2025}
+Almeida, A., Guerrero, D. D.~S., \& Andrade, W.~L. (2025).
+\newblock Avaliando o efeito da cria{\c{c}}{\~a}o de testes na aprendizagem e
+  no desempenho de estudantes de programa{\c{c}}{\~a}o.
+\newblock In {\em Anais do XXXVI Simp{\'o}sio Brasileiro de Inform{\'a}tica na
+  Educa{\c{c}}{\~a}o (SBIE 2025)}, pages 140--152. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/sbie.2025.12058}{10.5753/sbie.2025.12058}}.
+
+\bibitem[Anderson \& Krathwohl(2001)]{Anderson2001}
+Anderson, L.~W. \& Krathwohl, D.~R. (2001).
+\newblock {\em A Taxonomy for Learning, Teaching, and Assessing: A Revision of
+  Bloom's Taxonomy of Educational Objectives}.
+\newblock Longman, New York.
+
+\bibitem[Barr {\em et~al}.(2015)]{Barr2015}
+Barr, E.~T., Harman, M., McMinn, P., Shahbaz, M., \& Yoo, S. (2015).
+\newblock The oracle problem in software testing: A survey.
+\newblock {\em IEEE Transactions on Software Engineering}, 41(5):507--525. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1109/TSE.2014.2372785}{10.1109/TSE.2014.2372785}}.
+
+\bibitem[Becker {\em et~al}.(2023)]{Becker2023}
+Becker, B.~A., Denny, P., Finnie-Ansley, J., Luxton-Reilly, A., Prather, J., \&
+  Santos, E.~A. (2023).
+\newblock Programming is hard - or at least it used to be: Educational
+  opportunities and challenges of {AI} code generation.
+\newblock In {\em Proceedings of the 54th ACM Technical Symposium on Computer
+  Science Education V. 1}, pages 500--506. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3545945.3569759}{10.1145/3545945.3569759}}.
+
+\bibitem[Bedin {\em et~al}.(2025)]{Bedin2025}
+Bedin, H. A.~T., Marioti, M.~B., \& Jaques, P. (2025).
+\newblock Generative {AI} assisting programming learning: Functional roles,
+  comparative analysis, and emerging challenges.
+\newblock In {\em Anais do XXXVI Simp{\'o}sio Brasileiro de Inform{\'a}tica na
+  Educa{\c{c}}{\~a}o (SBIE 2025)}, pages 409--426. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/sbie.2025.12361}{10.5753/sbie.2025.12361}}.
+
+\bibitem[Biggs(1996)]{Biggs1996}
+Biggs, J. (1996).
+\newblock Enhancing teaching through constructive alignment.
+\newblock {\em Higher Education}, 32(3):347--364. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1007/bf00138871}{10.1007/bf00138871}}.
+
+\bibitem[Bispo~Jr. {\em et~al}.(2020)]{Bispo2020}
+Bispo~Jr., E.~L., Raabe, A., Matos, E., Maschio, E., Barbosa, E.~F., Carvalho,
+  L.~G., Bittencourt, R.~A., Duran, R.~S., \& Falcão, T.~P. (2020).
+\newblock Tecnologias na educação em computação: Primeiros referenciais.
+\newblock {\em Revista Brasileira de Informática na Educação}, 28:509--527.
+  DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/rbie.2020.28.0.509}{10.5753/rbie.2020.28.0.509}}.
+
+\bibitem[Black \& Wiliam(1998)]{Black1998}
+Black, P. \& Wiliam, D. (1998).
+\newblock Assessment and classroom learning.
+\newblock {\em Assessment in Education: Principles, Policy \& Practice},
+  5(1):7--74. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1080/0969595980050102}{10.1080/0969595980050102}}.
+
+\bibitem[{Brasil}(2018)]{LGPD2018}
+{Brasil} (2018).
+\newblock Lei n.º 13.709, de 14 de agosto de 2018 --- lei geral de proteção
+  de dados pessoais ({LGPD}).
+\newblock Diário Oficial da União,
+  \url{https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm}.
+
+\bibitem[{Brasil}(2024)]{brasil2024lei14874}
+{Brasil} (2024).
+\newblock Lei n.º 14.874, de 28 de maio de 2024: dispõe sobre a pesquisa com
+  seres humanos e institui o sistema nacional de Ética em pesquisa com seres
+  humanos.
+\newblock Diário Oficial da União,
+  \url{https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2024/lei/l14874.htm}.
+
+\bibitem[Camilo \& Hauck(2026)]{Camilo2026}
+Camilo, H.~T. \& Hauck, J. C.~R. (2026).
+\newblock Aplica{\c{c}}{\~o}es de {LLMs} no ensino de programa{\c{c}}{\~a}o
+  orientada a objetos: Um mapeamento sistem{\'a}tico da literatura.
+\newblock In {\em Anais do XXXIV Workshop sobre Educa{\c{c}}{\~a}o em
+  Computa{\c{c}}{\~a}o (WEI 2026)}, pages 36--49. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/wei.2026.20394}{10.5753/wei.2026.20394}}.
+
+\bibitem[Cohen(1960)]{Cohen1960}
+Cohen, J. (1960).
+\newblock A coefficient of agreement for nominal scales.
+\newblock {\em Educational and Psychological Measurement}, 20(1):37--46. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1177/001316446002000104}{10.1177/001316446002000104}}.
+
+\bibitem[{Conselho Nacional de Sa{\'u}de}(2016)]{cns2016resolucao510}
+{Conselho Nacional de Sa{\'u}de} (2016).
+\newblock Resolução n{\textordmasculine} 510, de 7 de abril de 2016.
+\newblock
+  \url{https://www.gov.br/conselho-nacional-de-saude/pt-br/atos-normativos/resolucoes/2016/resolucao-no-510.pdf}.
+
+\bibitem[{da Silva} {\em et~al}.(2023)]{SilvaCaceffo2023}
+{da Silva}, E.~P., Caceffo, R.~E., \& Azevedo, R. (2023).
+\newblock Passar nos casos de teste {\'e} suficiente? identifica{\c{c}}{\~a}o e
+  an{\'a}lise de problemas de compreens{\~a}o em c{\'o}digos corretos.
+\newblock In {\em Anais do III Simp{\'o}sio Brasileiro de Educa{\c{c}}{\~a}o em
+  Computa{\c{c}}{\~a}o (EDUCOMP 2023)}, pages 119--129. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/educomp.2023.228346}{10.5753/educomp.2023.228346}}.
+
+\bibitem[{da Silva} {\em et~al}.(2024)]{Silva2024}
+{da Silva}, T.~L., Vidotto, K. N.~S., Tarouco, L. M.~R., \& {da Silva}, P.~F.
+  (2024).
+\newblock Potencialidades do uso de intelig{\^e}ncia artificial generativa como
+  apoio ao ensino de programa{\c{c}}{\~a}o.
+\newblock In {\em Anais do XXXV Simp{\'o}sio Brasileiro de Inform{\'a}tica na
+  Educa{\c{c}}{\~a}o (SBIE 2024)}, pages 1942--1956. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/sbie.2024.242711}{10.5753/sbie.2024.242711}}.
+
+\bibitem[Daun \& Brings(2023)]{Daun2023}
+Daun, M. \& Brings, J. (2023).
+\newblock How {ChatGPT} will change software engineering education.
+\newblock In {\em Proceedings of the 2023 Conference on Innovation and
+  Technology in Computer Science Education V. 1}, pages 110--116. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3587102.3588815}{10.1145/3587102.3588815}}.
+
+\bibitem[Delgado {\em et~al}.(2026)]{Delgado2026}
+Delgado, C. A. D.~M., {Galv{\~a}o de Carvalho}, L.~S., \& Fortes, R.~S. (2026).
+\newblock Uso de ju{\'i}zes online no ensino de programa{\c{c}}{\~a}o: desafios
+  e oportunidades.
+\newblock In {\em Anais Estendidos do VI Simp{\'o}sio Brasileiro de
+  Educa{\c{c}}{\~a}o em Computa{\c{c}}{\~a}o (EDUCOMP 2026)}, pages 139--143.
+\newblock Resumo de mesa tem{\'a}tica. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/educomp\_estendido.2026.19666}{10.5753/educomp\_estendido.2026.19666}}.
+
+\bibitem[Denny {\em et~al}.(2024a)]{Denny2024}
+Denny, P., Prather, J., Becker, B.~A., Finnie-Ansley, J., Hellas, A., Leinonen,
+  J., Luxton-Reilly, A., Reeves, B.~N., Santos, E.~A., \& Sarsa, S. (2024a).
+\newblock Computing education in the era of generative {AI}.
+\newblock {\em Communications of the ACM}, 67(2):56--67. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3624720}{10.1145/3624720}}.
+
+\bibitem[Denny {\em et~al}.(2024b)]{Denny2024b}
+Denny, P., Smith, D.~H., Fowler, M., Prather, J., Becker, B.~A., \& Leinonen,
+  J. (2024b).
+\newblock Explaining code with a purpose: An integrated approach for developing
+  code comprehension and prompting skills.
+\newblock In {\em Proceedings of the 2024 on Innovation and Technology in
+  Computer Science Education V. 1}, pages 283--289. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3649217.3653587}{10.1145/3649217.3653587}}.
+
+\bibitem[Edwards(2004)]{Edwards2004}
+Edwards, S.~H. (2004).
+\newblock Using software testing to move students from trial-and-error to
+  reflection-in-action.
+\newblock In {\em Proceedings of the 35th SIGCSE technical symposium on
+  Computer science education}, pages 26--30. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/971300.971312}{10.1145/971300.971312}}.
+
+\bibitem[Finnie-Ansley {\em et~al}.(2022)]{Finnie2022}
+Finnie-Ansley, J., Denny, P., Becker, B.~A., Luxton-Reilly, A., \& Prather, J.
+  (2022).
+\newblock The robots are coming: Exploring the implications of {OpenAI} {Codex}
+  on introductory programming.
+\newblock In {\em Proceedings of the 24th Australasian Computing Education
+  Conference}, pages 10--19. ACM. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3511861.3511863}{10.1145/3511861.3511863}}.
+
+\bibitem[{forrestchang}(2026)]{KarpathySkills2026}
+{forrestchang} (2026).
+\newblock andrej-karpathy-skills: A single {CLAUDE.md} to improve {Claude Code}
+  behavior, derived from {Andrej Karpathy}'s observations on {LLM} coding
+  pitfalls.
+\newblock Reposit{\'o}rio GitHub:
+  \url{https://github.com/forrestchang/andrej-karpathy-skills}.
+\newblock Licen{\c{c}}a MIT; baseado em publica{\c{c}}{\~a}o de Karpathy no X:
+  \url{https://x.com/karpathy/status/2015883857489522876}; sem revis{\~a}o por
+  pares; acesso em 3 out. 2026.
+
+\bibitem[Garousi {\em et~al}.(2019)]{Garousi2019}
+Garousi, V., Giray, G., Tüzün, E., Catal, C., \& Felderer, M. (2019).
+\newblock Aligning software engineering education with industrial needs: A
+  meta-analysis.
+\newblock {\em Journal of Systems and Software}, 156:65--83. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1016/j.jss.2019.06.044}{10.1016/j.jss.2019.06.044}}.
+
+\bibitem[Hattie \& Timperley(2007)]{Hattie2007}
+Hattie, J. \& Timperley, H. (2007).
+\newblock The power of feedback.
+\newblock {\em Review of Educational Research}, 77(1):81--112. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.3102/003465430298487}{10.3102/003465430298487}}.
+
+\bibitem[Hellas {\em et~al}.(2023)]{Hellas2023}
+Hellas, A., Leinonen, J., Sarsa, S., Koutcheme, C., Kujanpää, L., \& Sorva,
+  J. (2023).
+\newblock Exploring the responses of large language models to beginner
+  programmers’ help requests.
+\newblock In {\em Proceedings of the 2023 ACM Conference on International
+  Computing Education Research V.1}, pages 93--105. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3568813.3600139}{10.1145/3568813.3600139}}.
+
+\bibitem[Huang {\em et~al}.(2024)]{Huang2024}
+Huang, J., Chen, X., Mishra, S., Zheng, H.~S., Yu, A.~W., Song, X., \& Zhou, D.
+  (2024).
+\newblock Large language models cannot self-correct reasoning yet.
+\newblock In {\em International Conference on Learning Representations}.
+\newblock arXiv:2310.01798; \url{https://arxiv.org/abs/2310.01798}.
+
+\bibitem[Jimenez {\em et~al}.(2024)]{Jimenez2024}
+Jimenez, C.~E., Yang, J., Wettig, A., Yao, S., Pei, K., Press, O., \&
+  Narasimhan, K. (2024).
+\newblock {SWE-bench}: Can language models resolve real-world {GitHub} issues?
+\newblock In {\em International Conference on Learning Representations}.
+\newblock arXiv:2310.06770; \url{https://arxiv.org/abs/2310.06770}.
+
+\bibitem[Kapoor {\em et~al}.(2024)]{Kapoor2024}
+Kapoor, S., Stroebl, B., Siegel, Z.~S., Nadgir, N., \& Narayanan, A. (2024).
+\newblock {AI} agents that matter.
+\newblock arXiv:2407.01502; \url{https://arxiv.org/abs/2407.01502}.
+\newblock Preprint.
+
+\bibitem[Kazemitabaar {\em et~al}.(2023)]{Kazemitabaar2023}
+Kazemitabaar, M., Chow, J., Ma, C. K.~T., Ericson, B.~J., Weintrop, D., \&
+  Grossman, T. (2023).
+\newblock Studying the effect of {AI} code generators on supporting novice
+  learners in introductory programming.
+\newblock In {\em Proceedings of the 2023 CHI Conference on Human Factors in
+  Computing Systems}, pages 1--23. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3544548.3580919}{10.1145/3544548.3580919}}.
+
+\bibitem[Keuning {\em et~al}.(2018)]{Keuning2018}
+Keuning, H., Jeuring, J., \& Heeren, B. (2018).
+\newblock A systematic literature review of automated feedback generation for
+  programming exercises.
+\newblock {\em ACM Transactions on Computing Education}, 19(1):1--43. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3231711}{10.1145/3231711}}.
+
+\bibitem[Kratzke(2019)]{Kratzke2019}
+Kratzke, N. (2019).
+\newblock Smart like a fox: How clever students trick dumb automated
+  programming assignment assessment systems.
+\newblock In {\em Proceedings of the 11th International Conference on Computer
+  Supported Education}, pages 15--26. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5220/0007424800150026}{10.5220/0007424800150026}}.
+
+\bibitem[Lau \& Guo(2023)]{Lau2023}
+Lau, S. \& Guo, P. (2023).
+\newblock From "ban it till we understand it" to "resistance is futile": How
+  university programming instructors plan to adapt as more students use {AI}
+  code generation and explanation tools such as {ChatGPT} and {GitHub}
+  {Copilot}.
+\newblock In {\em Proceedings of the 2023 ACM Conference on International
+  Computing Education Research V.1}, pages 106--121. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3568813.3600138}{10.1145/3568813.3600138}}.
+
+\bibitem[Manheim \& Garrabrant(2019)]{Manheim2019}
+Manheim, D. \& Garrabrant, S. (2019).
+\newblock Categorizing variants of {Goodhart}'s law.
+\newblock arXiv:1803.04585; \url{https://arxiv.org/abs/1803.04585}.
+\newblock Preprint.
+
+\bibitem[Oliveira \& Teixeira(2026)]{Oliveira2026}
+Oliveira, A.~A. \& Teixeira, M.~M. (2026).
+\newblock Proposta de um grau de uso da intelig{\^e}ncia artificial no contexto
+  educacional: Crit{\'e}rios {\'e}ticos e pedag{\'o}gicos para orientar a
+  pr{\'a}tica docente.
+\newblock In {\em Anais do VI Simp{\'o}sio Brasileiro de Educa{\c{c}}{\~a}o em
+  Computa{\c{c}}{\~a}o (EDUCOMP 2026)}, pages 214--227. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/educomp.2026.18562}{10.5753/educomp.2026.18562}}.
+
+\bibitem[Pimentel {\em et~al}.(2025)]{Pimentel2025}
+Pimentel, E.~P., {Lima da Silva}, L.~D., Takeuti, R.~H., \& Braga, J.~C.
+  (2025).
+\newblock Abordagem com {LLM} para gera{\c{c}}{\~a}o automatizada de feedback
+  no ensino de programa{\c{c}}{\~a}o de computadores.
+\newblock In {\em Anais do XXXVI Simp{\'o}sio Brasileiro de Inform{\'a}tica na
+  Educa{\c{c}}{\~a}o (SBIE 2025)}, pages 591--603. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/sbie.2025.12543}{10.5753/sbie.2025.12543}}.
+
+\bibitem[Prather {\em et~al}.(2023a)]{Prather2023}
+Prather, J., Denny, P., Leinonen, J., Becker, B.~A., Albluwi, I., Craig, M.,
+  Keuning, H., Kiesler, N., Kohn, T., Luxton-Reilly, A., MacNeil, S., Petersen,
+  A., Pettit, R., Reeves, B.~N., \& Savelka, J. (2023a).
+\newblock The robots are here: Navigating the generative {AI} revolution in
+  computing education.
+\newblock In {\em Proceedings of the 2023 Working Group Reports on Innovation
+  and Technology in Computer Science Education}, pages 108--159. ACM. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3623762.3633499}{10.1145/3623762.3633499}}.
+
+\bibitem[Prather {\em et~al}.(2023b)]{Prather2023b}
+Prather, J., Reeves, B.~N., Denny, P., Becker, B.~A., Leinonen, J.,
+  Luxton-Reilly, A., Powell, G., Finnie-Ansley, J., \& Santos, E.~A. (2023b).
+\newblock “it’s weird that it knows what i want”: Usability and
+  interactions with {Copilot} for novice programmers.
+\newblock {\em ACM Transactions on Computer-Human Interaction}, 31(1):1--31.
+  DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3617367}{10.1145/3617367}}.
+
+\bibitem[Prather {\em et~al}.(2024)]{Prather2024}
+Prather, J., Reeves, B.~N., Leinonen, J., MacNeil, S., Randrianasolo, A.~S.,
+  Becker, B.~A., Kimmel, B., Wright, J., \& Briggs, B. (2024).
+\newblock The widening gap: The benefits and harms of generative {AI} for
+  novice programmers.
+\newblock In {\em Proceedings of the 2024 ACM Conference on International
+  Computing Education Research}, volume~1, pages 469--486. ACM. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/3632620.3671116}{10.1145/3632620.3671116}}.
+
+\bibitem[{Sahir619}(2026)]{Fable2026}
+{Sahir619} (2026).
+\newblock The {Fable} method: The {Fable} workflow.
+\newblock Repositório GitHub, commit 88b5cf3:
+  \url{https://github.com/Sahir619/fable-method}.
+\newblock Sem revisão por pares; acesso em 11 set. 2026.
+
+\bibitem[{SBC}(2024)]{SBC2024conduta_pt}
+{SBC} (2024).
+\newblock Código de conduta para autores em publicações da {SBC}.
+\newblock SBC OpenLib (SOL):
+  \url{https://sol.sbc.org.br/index.php/indice/conduta}.
+\newblock Sociedade Brasileira de Computação.
+
+\bibitem[{Sim{\~a}o de Deus} {\em et~al}.(2024)]{Deus2024}
+{Sim{\~a}o de Deus}, W., Marcolino, A.~S., Avellar, G. M.~N., Oliveira, K.
+  K.~S., \& Barbosa, E.~F. (2024).
+\newblock Avaliando resolu{\c{c}}{\~o}es de exerc{\'i}cios introdut{\'o}rios de
+  programa{\c{c}}{\~a}o na era das {IAs} generativas: Um estudo de caso com o
+  {ChatGPT}.
+\newblock In {\em Anais do XXXV Simp{\'o}sio Brasileiro de Inform{\'a}tica na
+  Educa{\c{c}}{\~a}o (SBIE 2024)}, pages 1645--1657. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.5753/sbie.2024.242283}{10.5753/sbie.2024.242283}}.
+
+\bibitem[Spacco \& Pugh(2006)]{Spacco2006}
+Spacco, J. \& Pugh, W. (2006).
+\newblock Helping students appreciate test-driven development (tdd).
+\newblock In {\em Companion to the 21st ACM SIGPLAN symposium on
+  Object-oriented programming systems, languages, and applications}, pages
+  907--913. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1145/1176617.1176743}{10.1145/1176617.1176743}}.
+
+\bibitem[Wohlin {\em et~al}.(2012)]{Wohlin2012}
+Wohlin, C., Runeson, P., H{\"o}st, M., Ohlsson, M.~C., Regnell, B., \&
+  Wessl{\'e}n, A. (2012).
+\newblock {\em Experimentation in Software Engineering}.
+\newblock Springer, Berlin, Heidelberg, 2 edition.
+
+\bibitem[Wood {\em et~al}.(1976)]{Wood1976}
+Wood, D., Bruner, J.~S., \& Ross, G. (1976).
+\newblock The role of tutoring in problem solving.
+\newblock {\em Journal of Child Psychology and Psychiatry}, 17(2):89--100. DOI:
+  \textcolor{darkblue}{\href{https://doi.org/10.1111/j.1469-7610.1976.tb00381.x}{10.1111/j.1469-7610.1976.tb00381.x}}.
+
+\bibitem[Zhao {\em et~al}.(2026)]{SpecBench2026}
+Zhao, B., Srikanth, D., Wu, Y., \& Jiang, Z. (2026).
+\newblock {SpecBench}: Measuring reward hacking in long-horizon coding agents.
+\newblock arXiv:2605.21384; \url{https://arxiv.org/abs/2605.21384}.
+\newblock Preprint, sem revisão por pares.
+
+\end{thebibliography}

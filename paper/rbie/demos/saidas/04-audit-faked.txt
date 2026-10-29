@@ -1,0 +1,22 @@
+
+┌──────────────────────────────────────────────────────────┐
+│ AUDIT — Graduação das fases de 'entrega-aluno'           │
+└──────────────────────────────────────────────────────────┘
+
+  ❌ FIT: faked
+     ⚠ rota e trivialidade não classificadas por humano — esforço pode ser desperdiçado em tarefa trivial ou mal roteada
+  ❌ THINK: faked
+     ⚠ assumptions nunca declaradas — qualquer solução pode atacar o problema errado
+  ❌ INTENT: faked
+     ⚠ código, teste e spec podem discordar sem registro — comportamento muda sem intenção verificada
+  ❌ SIMPLIFY: faked
+     ⚠ minimalidade afirmada sem ninguém confrontar o diff com o pedido — abstrações especulativas podem passar sem revisão
+  ❌ SURGICAL: faked
+     ⚠ cada arquivo declarado necessário sem ninguém conferir — escopo extra pode entrar sem ser notado
+  ❌ VERIFY: faked
+     ⚠ sucesso afirmado sem evidência de execução — a tarefa pode estar aprovada sobre nada — critério de sucesso não declarado (done vazio); lint falhou; testes falhou; coverage falhou
+  ❌ TWINS: faked
+     ⚠ defeito corrigido sem busca de recorrência — o mesmo padrão pode se repetir em outros lugares
+
+  ⚠  Audit encontrou 7 fake(s) e 0 skip(s).
+exit=1

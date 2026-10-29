@@ -1,0 +1,6 @@
+verify:
+  lint: python3 verifica_fontes.py lint
+  test: python3 verifica_fontes.py test
+  coverage: python3 verifica_fontes.py cobertura
+  coverage_pattern: 'FONTES\s+([\d.]+)%'
+  gate: 100

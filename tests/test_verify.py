@@ -9,8 +9,10 @@ from unittest.mock import MagicMock, patch
 
 from kata.config import VerifyConfig
 from kata.verify import (
+    COMMAND_LABELS,
     COMMAND_TIMEOUT_SECONDS,
     MAX_UNTRACKED_FILE_BYTES,
+    ROLE_LABELS,
     VerifyResult,
     _run,
     changed_files,
@@ -1057,3 +1059,18 @@ def test_comando_gravado_nao_tem_caminho_absoluto() -> None:
 
     assert comando.startswith("python -m ruff check")
     assert sys.executable not in comando
+
+
+def test_tabelas_de_rotulo_cobrem_os_mesmos_papeis() -> None:
+    """A20: gravação e exibição saem da mesma tabela, com uma exceção só.
+
+    O mapa que gravava `verify.commands` vivia inline no `cli` e discordava de
+    `ROLE_LABELS` em `pytest` (`test` gravado, `teste` exibido). O teste trava
+    a divergência em exatamente um papel: uma segunda exceção reprova.
+    """
+    assert set(COMMAND_LABELS) == set(ROLE_LABELS)
+    divergentes = {
+        papel for papel, rotulo in ROLE_LABELS.items() if COMMAND_LABELS[papel] != rotulo
+    }
+    assert divergentes == {"pytest"}
+    assert COMMAND_LABELS["pytest"] == "test"

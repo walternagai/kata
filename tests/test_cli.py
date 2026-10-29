@@ -1163,6 +1163,26 @@ class TestMainVersion:
         assert __version__ == declarada
 
 
+class TestMainHelp:
+    """A21: a ajuda é a primeira superfície que um projeto não-Python lê."""
+
+    def test_help_fala_em_papel_nao_em_ferramenta(self, capsys) -> None:
+        """`--ruff-paths "Caminhos para ruff check"` é ruído num projeto eslint.
+
+        O nome da ferramenta pode ficar onde ele é a bandeira do flag; o texto
+        que explica o papel tem de falar em papel.
+        """
+        with patch("sys.argv", ["kata", "--help"]), pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 0
+        saida = capsys.readouterr().out
+
+        assert "Caminhos para o lint" in saida
+        assert "Caminhos para o teste" in saida
+        assert "Caminhos para ruff" not in saida
+        assert "Caminhos para pytest" not in saida
+
+
 class TestMainCheckOnly:
     """Testa o modo --check-only via main()."""
 

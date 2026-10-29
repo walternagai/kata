@@ -67,6 +67,7 @@ from kata.report import (  # noqa: E402
 )
 from kata.skills import DOMAIN_SKILLS, doctor
 from kata.verify import (
+    COMMAND_LABELS,
     ROLE_LABELS,
     VerifyResult,
     changed_files,
@@ -1004,13 +1005,8 @@ def _step_verify(
     # executados; eles passam a estar no arquivo, não só no terminal.
     verify["gate_used"] = gate
     verify["commands"] = {
-        rotulo: results[chave].details.get("command", "")
-        for chave, rotulo in (
-            ("ruff", "lint"),
-            ("typecheck", "typecheck"),
-            ("pytest", "test"),
-            ("coverage", "coverage"),
-        )
+        COMMAND_LABELS[chave]: results[chave].details.get("command", "")
+        for chave in COMMAND_LABELS
         if chave in results and results[chave].details.get("command")
     }
     verify["ran_at"] = datetime.now(UTC).isoformat(timespec="seconds")
@@ -1738,19 +1734,19 @@ def main() -> None:
         "--ruff-paths",
         nargs="*",
         default=None,
-        help="Caminhos para ruff check (default: src/ tests/)",
+        help="Caminhos para o lint (default: src/ tests/)",
     )
     parser.add_argument(
         "--test-paths",
         nargs="*",
         default=None,
-        help="Caminhos para pytest (default: tests/)",
+        help="Caminhos para o teste (default: tests/)",
     )
     parser.add_argument(
         "--ignore",
         nargs="*",
         default=None,
-        help="Caminhos para ignorar no pytest (--ignore)",
+        help="Caminhos a ignorar no teste (--ignore do pytest)",
     )
     parser.add_argument(
         "--cov-source",

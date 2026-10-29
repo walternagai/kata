@@ -27,6 +27,7 @@ from kata import __version__
 from kata.config import VerifyConfig
 from kata.fit import TRIVIAL_MAX_LINES
 from kata.verify import (
+    COMMAND_LABELS,
     ROLE_LABELS,
     VerifyResult,
     _is_tool_artifact,  # noqa: F401
@@ -1757,12 +1758,7 @@ def judge_task(
     # momentos, ele rodou outra coisa e disse "confere".
     comandos_aprovados = verify.get("commands")
     if isinstance(comandos_aprovados, dict):
-        for chave, rotulo in (
-            ("ruff", "lint"),
-            ("typecheck", "typecheck"),
-            ("pytest", "test"),
-            ("coverage", "coverage"),
-        ):
+        for chave, rotulo in COMMAND_LABELS.items():
             if chave not in verify_results:
                 continue
             aprovado = comandos_aprovados.get(rotulo)

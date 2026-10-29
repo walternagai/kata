@@ -33,6 +33,13 @@ ROLE_LABELS: dict[str, str] = {
     "coverage": "coverage",
 }
 
+# O mesmo papel tem duas grafias: a que o YAML persiste em `verify.commands`
+# (`test`, em inglês, porque renomear a chave é migração de schema) e a que o
+# humano lê (`teste`). A divergência é só essa, e mora aqui junto da tabela em
+# vez de solta no `cli`: era a quarta cópia do vocabulário, e discordava da
+# primeira (A20 da revisão estrutural de 2026-10).
+COMMAND_LABELS: dict[str, str] = {**ROLE_LABELS, "pytest": "test"}
+
 
 @dataclass
 class VerifyResult:

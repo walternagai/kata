@@ -1,0 +1,84 @@
+%--------------------------------------------------
+% COVER LETTER -- RBIE
+%--------------------------------------------------
+% English version. To be submitted together with the manuscript.
+%
+% COMPILATION ENGINE: XeLaTeX or LuaLaTeX (the Carlito font requires fontspec).
+%
+% INSTRUCTIONS:
+% - Fill in/edit all fields between brackets [ ... ].
+% - When alternatives are given (marked with "/ OR:"), choose the applicable option and delete the other.
+%--------------------------------------------------
+\documentclass[11pt,a4paper,english]{article}
+\usepackage{fontspec}
+\setmainfont{Carlito} % free equivalent of Calibri; to use the manuscript font, replace with "TeX Gyre Termes"
+\usepackage[top=2.5cm,bottom=2.5cm,left=3cm,right=3cm]{geometry}
+\usepackage{graphicx} % for the RBIE logo
+\usepackage{babel} % language comes from the global option "english" of \documentclass
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\urlstyle{same}
+% Block paragraphs (no first-line indentation), single line spacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt}
+\pagestyle{empty}
+\begin{document}
+% --- Letterhead: RBIE logo (top-left corner) and sender (on the right) ---
+\noindent
+\begin{minipage}[t]{0.52\linewidth}
+  \includegraphics[width=4.9cm]{RBIElogo.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.44\linewidth}
+  \raggedleft
+  {}[Your name]\\
+  {}[Your affiliation]\\
+  {}[contact e-mail]
+\end{minipage}
+
+\bigskip
+
+[Your City], [Month] [Day], [Year].
+
+Dear [name of the editor-in-chief],
+
+\subsection*{Presentation of the work}
+We would like to submit the original manuscript entitled ``[manuscript title]'' for consideration by the Brazilian Journal of Computers in Education (RBIE). We confirm that this is an original work, has not been published in any other journal or scientific event, and is not currently under consideration for publication elsewhere, having followed good scientific practices\footnote{In accordance with the SBC codes: SBC Code of Conduct for Authors in SBC Publications (Resolution 001/2024), available at \url{https://sol.sbc.org.br/index.php/indice/conduta}; and SBC Code of Professional Ethics and Conduct (Resolution 002/2024), available at \url{https://www.sbc.org.br/etica-sbc/}.}.
+
+The manuscript was prepared in the current official RBIE template (rbie2026 LaTeX class) and, in the version now submitted, all author-identifying information has been suppressed, in compliance with the double-anonymous review process.
+
+\subsection*{Intersection with Computers in Education / Computing Education}
+We believe this manuscript is appropriate for publication in RBIE because its objective [explain how the work fits within the scope of RBIE, highlighting its intersection with Computers in Education and/or Computing Education].
+
+\subsection*{Contribution and novelty}
+[Please explain the novelty (contribution) presented by the work and the problem being addressed. Do not include the abstract that is in the article. Briefly describe the research you are presenting in your article, why it is important, and why you think the journal's readers would be interested in your research. The cover letter must not exceed one page. Do not change the font, its size, or the line spacing. Try to be concise and direct.]
+
+\subsection*{Authors' contributions}
+In accordance with the submission instructions, here is the CRediT authorship statement:
+
+Author1: term1, term2\ldots; Author2: term3, term4.
+
+\subsection*{Conflicts of interest}
+[The authors declare that they have no conflicts of interest. / OR: The authors declare the following conflicts of interest: [describe].]
+
+\subsection*{Availability of data and materials}
+[describe the open-science approach of the work. For example: the datasets, code, and materials that support the results are available in an open-access repository, whose address/DOI will be provided in the final version; in the submitted version, the artifacts were anonymized to preserve the confidentiality of the review. If sharing is not possible, justify.]
+
+\subsection*{Artificial intelligence (AI) usage declaration}
+In compliance with the SBC Code of Conduct for authors, [we declare that no generative AI tool was used in the preparation of this work. / OR: we declare the use of the following generative AI tools, with their respective purposes (for example: writing, text revision, translation, data analysis, generation of figures, tables, or scripts): [list tools and stages].] AI tools are not listed as authors, and the authors assume full responsibility for all the content of the manuscript.
+
+\subsection*{Further relevant information}
+We declare that the work being submitted had its ethical matters approved by a research ethics committee for research involving human beings under number [enter here the number of the project approved by the ethics committee (CAAE)]. [If the work does not require approval by an ethics committee, indicate it with the sentence: ``We declare that the work being submitted does not require approval by research ethics committees, and we assure that all ethical precautions were taken to carry out this work.'' In addition, if the research uses any kind of data relating to human beings, the absence of the need for an ethics committee must be justified, preferably in the methodology, stating the consent of the agents involved.]
+
+This manuscript is an extended version of the work entitled ``[title of the original work]'', presented at [event name/acronym, year], containing at least 30\% new material relative to the original, whose PDF is attached as a supplementary document. [Remove this paragraph if it does not apply.]
+
+\bigskip
+
+We thank you for considering this manuscript for the RBIE review process.
+
+Sincerely, on behalf of all the authors,
+
+\vspace{2.5cm}
+
+[Your full name. Generate the PDF and sign in the space above]
+
+\end{document}

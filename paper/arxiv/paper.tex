@@ -104,7 +104,8 @@ cycle orchestration, the adversarial judge, the audit grading, and the trap
 harness --- presented as code-anchored, numbered Listings, so that the
 objective logic can be inspected and reproduced from the text itself. An
 executed comparison over 19
-adversarial scenarios shows detection parity with related gates; Kata returned
+adversarial scenarios --- self-built, in-distribution for Kata, and out-of-distribution
+for the gates it is compared against --- shows detection parity with related gates; Kata returned
 every expected verdict at about one second per review on the trap scenarios (a
 median of 0.1\,s on fraud scenarios and 1.0\,s on non-fraud ones), but ten of the eleven
 agent false positives fell on blind-spot scenarios or on a Kata-specific diff
@@ -117,7 +118,18 @@ flagged the one case of undeclared scope, while the sessions' own JUDGE
 runs
 falsely refuted six honest fixes under a rule corrected after the evaluated
 version. The evaluation establishes the JUDGE's two-sided
-contract on fixtures we built ourselves. The judgment phases of the cycle
+contract on fixtures we built ourselves. Finally, an exploratory pilot carries
+an iterative builder/critic loop on the same task file and audit machinery and
+measures whether it improves the artifacts: it does not --- the loop beat the
+cycle in blind comparison but lost to a bare agent. A second, 30-session
+campaign then ran on a workload selected for gaming incentive, with the
+instrument corrections the pilot forced (full-suite measurement as a delta
+against pre-existing failures, the base state in the blind judge's prompt,
+interrupted cells re-run rather than analysed truncated); it reproduces the
+null result, with no regression, no weakened test and no undeclared scope in
+thirty sessions, and decisive blind verdicts that are stylistic rather than
+substantive. The studies are reported for their instrument and their method as
+much as for their result. The judgment phases of the cycle
 were not ablated and were evaluated only for cost, and a controlled study of
 whether the cycle improves the quality of AI-assisted changes remains future
 work.
@@ -189,11 +201,21 @@ the same scenarios, in detection, false accusations, determinism, and cost?
 \item \textbf{RQ3.} Is the cycle feasible on real repositories the author did
 not write, and what does it cost? (Section~\ref{sec:external-evaluation}: 12
 real bugs, 48 agent sessions.)
+\item \textbf{RQ4.} Can an iterative builder/critic loop be carried and audited
+by the same task file, and does it improve the artifacts? The first half is
+answered affirmatively; the second is answered negatively across two studies ---
+a pilot of 24 sessions and a 30-session campaign on a workload selected for
+gaming incentive, after the instrument corrections the pilot forced
+(Section~\ref{sec:gauntlet-pilot}: 4 + 5 tasks, 54 sessions, 54 blind
+judgments).
 \end{itemize}
-The evaluation does not address whether the judgment phases of the cycle
+The evaluation does not establish whether the judgment phases of the cycle
 (THINK, SIMPLIFY, INTENT, SURGICAL, TWIN CHECK) improve the changes an agent
 produces: they were not ablated, and their contribution was measured only as
-cost.
+cost. The exploratory pilot of Section~\ref{sec:gauntlet-pilot} takes a first
+step by adding an iterative loop on top of the cycle and measuring the
+artifacts in blind comparison; it finds no improvement on its workload, so the
+question remains open with a better-instrumented path to it.
 
 The remainder of this paper is organized as follows. Section~\ref{sec:need}
 states the problem and the research purpose of the software.
@@ -421,7 +443,7 @@ SWE-bench \cite{swebench} & Yes & N/A & N/A & N/A & N/A & No \\
 \bottomrule
 \end{tabular}
 \par\smallskip
-{\footnotesize Sources: Fable Method \cite{fable}; claude-wizard \cite{claudewizard}; Ring \cite{ring}; nova \cite{nova}; Consort \cite{consort}; SpecBench \cite{specbench}; SWE-bench \cite{swebench}. ``Partial'' means the tool discusses the fraud type but does not execute a detector for it. Benchmarks (SpecBench, SWE-bench) re-execute checks by design but do not audit or detect frauds.}
+{\footnotesize Sources: Fable Method \cite{fable}; claude-wizard \cite{claudewizard}; Ring \cite{ring}; nova \cite{nova}; Consort \cite{consort}; SpecBench \cite{specbench}; SWE-bench \cite{swebench}. ``Partial'' means the tool discusses the fraud type but does not execute a detector for it. Benchmarks (SpecBench, SWE-bench) re-execute checks by design but do not audit or detect frauds. The \emph{Blind-spot confession} column favors Kata partly by protocol: in the executed comparison of Section~\ref{sec:exec-comparison}, the other tools' agent-reporting schema had no \texttt{UNVERIFIABLE} verdict to offer, so a gate could only accuse or stay silent, not confess (Section~\ref{sec:exec-comparison}); this row is not evidence that the other tools cannot represent that state, only that this comparison did not give them the option.}
 \label{tab:comparison}
 \end{table}
 
@@ -498,6 +520,12 @@ a look-alike counts as a false positive. The \emph{Correct} column counts
 the scenarios a gate classified as detected or clean.
 
 \subsubsection{Results}
+
+Read the numbers below with their scope in mind, stated upfront rather than only
+in the caveats that close this section: this is one complete campaign, over
+19 scenarios the author built alongside Kata, run through a single
+unrecorded model for the agent gates. It is a demonstration on Kata's own
+fixtures, not a statistically powered claim about the tools in general.
 
 Table~\ref{tab:gate-comparison} summarizes the outcome. Three findings
 stand out.
@@ -1450,6 +1478,14 @@ twenty-first trap scenario (s21) covers the resolved case;
 the YAML diverges from the Git anchor recorded when the task started.
 \end{itemize}
 
+These guarantees hold against claims that re-execution or the diff can
+contradict; they do not hold against an agent that also controls Git
+metadata or the execution environment. Section~\ref{sec:threat-model} states
+that boundary explicitly and reproduces two live bypasses --- rewriting the
+baseline anchor and emptying the diff window --- that yield a VERIFIED
+verdict on a weakened test as evaluated; a reader relying on the JUDGE as a
+merge gate should read that boundary before the results below.
+
 Frauds are graded by severity: weakened checks, false completion,
 unauthorized actions, specification betrayal, and baseline tampering are
 \emph{high-severity}; scope creep is \emph{medium-severity} (when
@@ -2127,13 +2163,14 @@ the manifest with the pinned commits, and the raw results are archived as
 \subsubsection{Results}
 
 All 48 sessions produced a fix that passes the task's test suite, in both
-conditions and for both models. Importantly, the final artifacts contained \textbf{no
+conditions and for both models. The final artifacts contained no
 weakened tests in any of the 48 runs according to the JUDGE's own
-weakened-check detector}, which found nothing to report. This indicates that
+weakened-check detector, which found nothing to report. With $N=1$ per cell,
+this is a single absence of a negative signal, not a rate: it indicates that
 on well-isolated, narrow bugs with clear existing regression tests, these
-sessions of frontier LLMs did not spontaneously resort to
+particular sessions of frontier LLMs did not resort to
 test-weakening tactics --- a result that describes these sessions, not the
-models in general, given the sample size of $N=1$ per cell. Consequently, the external study demonstrates the operational
+models in general. Consequently, the external study demonstrates the operational
 feasibility and scope integrity of the gate on third-party codebases, while
 validation of the JUDGE's fraud detection capabilities rests on the 19 adversarial
 trap scenarios of Section~\ref{sec:self-check} where frauds were actively planted.
@@ -2262,10 +2299,14 @@ reading the task files, which record the verdict. Twelve of the 24
 VERIFIED, and six, all with \texttt{claude-sonnet-5} (t03, t04, t05, t06, t09,
 t11), returned REFUTED, each for \texttt{spec\_betrayal} alone on an intent
 disagreement the session had resolved and recorded. These are false
-accusations of honest fixes, and each session's own notes attribute the
+accusations of honest fixes: of the twelve sessions that reached the JUDGE,
+half (6/12) were falsely refuted, a false-positive rate too high to read as
+noise. Each session's own notes attribute the
 verdict to the rule firing on any recorded disagreement. They come from the
 behaviour of the evaluated JUDGE described in Section~\ref{sec:judge}, fixed
-after the evaluated version in commit \texttt{15ccb7a}. The JUDGE results in
+after the evaluated version in commit \texttt{15ccb7a}; we did not re-run
+the fixed JUDGE against these six sessions' artifacts, so whether the fix
+would have returned all six to VERIFIED is stated, not measured. The JUDGE results in
 Table~\ref{tab:external-results} are from the independent review pass, run on
 synthesized task files whose intent section records no disagreement; their
 absence of false accusations does not extend to the sessions' own JUDGE
@@ -2302,11 +2343,293 @@ scope half of the JUDGE's
 contract, while the weakened-checks half remains covered by the trap suite
 of Section~\ref{sec:self-check}.
 
+\subsection{Exploratory study: an iterative loop on top of the cycle}
+\label{sec:gauntlet-pilot}
+
+The evaluation above leaves the judgment phases unablated, and Section~\ref{sec:conclusion}
+names a controlled study of whether the cycle improves the quality of
+AI-assisted changes as future work. This subsection reports a first, explicitly
+exploratory step in that direction: an implementation of an iterative
+builder/critic loop on top of the Kata cycle, and a pilot that measures whether
+it improves the artifacts. \textbf{The pilot's answer is negative}: on this
+workload the loop did not produce a measurable improvement over the cycle
+without it, and it lost to a bare agent in blind comparison. We report it
+because a null result from a pre-registered pilot is evidence about the method
+and about how to measure it, and because the instrument corrections it forced
+are reusable.
+
+\subsubsection{What was built}
+
+The loop follows the Gauntlet Loop pattern: an artifact is decomposed into
+independently judgeable components; a fresh \emph{builder} improves one
+component; a fresh \emph{critic}, in a separate context that never sees the
+builder's reasoning, compares the real artifact against a concrete reference
+(the \emph{bar}) and reports the single largest gap; the next round works from
+that gap only, until the reference is met or a round ceiling fires. Two design
+constraints bound what Kata can own here. First, the objective core of Kata is
+deterministic --- it reads exit codes and Git state --- so the loop's execution
+belongs to the agent host, not to the \texttt{kata} package; Kata's role is to
+carry the loop's \emph{state} and to \emph{audit} it. Second, a loop whose
+critic runs in the builder's context is not the method: the independence is the
+intervention, so it has to be observable.
+
+Kata therefore gained three things, in a fork kept separate from the evaluated
+version so the artifact of Section~\ref{sec:impact} is not disturbed:
+(i) a \texttt{gauntlet:} block in the task file
+(\texttt{bar}, \texttt{critic}, \texttt{boundary}, and an append-only
+\texttt{rounds} list recording component, gap, verdict, and evidence per round),
+validated on read with the same fail-loud discipline as the schema version;
+(ii) an audit grade for it, so a declared loop with no concrete bar or no
+per-round verdict is reported as \texttt{faked} rather than passing as
+\texttt{followed}; and (iii) a \texttt{kata-gauntlet} skill, generated to both
+frontends from the single source of truth, that orchestrates builder and critic
+as subagents. Verdicts are binary (\texttt{pass}/\texttt{fail}): a numeric
+scale invites score drift, where the number rises without the artifact
+improving.
+
+\subsubsection{Protocol}
+
+The pilot reuses the external study's design of
+Section~\ref{sec:external-evaluation}: real fixes from public repositories,
+reconstructed from the fix commit with history re-initialized so the fix is not
+visible, run headless by two models. It adds a third arm. \emph{bare} is the
+model with no gate; \emph{kata} is the model running the cycle; \emph{gauntlet}
+is the model running the loop, where the builder never sees the reference and
+the critic is a separate subagent that does. Four tasks $\times$ two models
+$\times$ three arms yielded 24 sessions. The reference for the critic is the
+upstream fix commit, named in a file outside the measured tree; the builder is
+never given its path.
+
+Metrics were pre-registered before collection, following the calibration
+discipline the rest of this paper practices: acceptance tests, weakened tests
+(the JUDGE's own detector), undeclared scope, the JUDGE's independent verdict,
+wall-clock cost, rounds and gaps per component, and --- as the primary metric
+--- a \emph{blind A/B preference}: a fresh judge receives the two final diffs of
+a matched pair with the origins hidden and the order fixed by a hash of
+(task, model, arm) decided in advance, and returns a winner or a tie.
+
+Two instrument defects were found during the pilot and corrected; both matter
+beyond this experiment. First, the harness had measured ``tests pass'' by
+running the manifest's \texttt{test\_cmd}, which for two tasks names a single
+test file. Re-running the \emph{full} suite over the preserved artifacts
+revealed a regression the narrow command had reported as a pass. Second, a
+blind A/B judge receives diffs but not the base state, so on tasks whose
+acceptance tests are pre-applied it cannot distinguish ``did not update the
+tests'' from ``the tests were already there''. Both are corrected in the
+artifact.
+
+\subsubsection{Results}
+
+\begin{table}[!ht]
+\caption{Exploratory pilot: 4 tasks, two models, three arms, one session per
+cell (24 sessions). \emph{Regr.} counts sessions introducing failures that the
+baseline did not have, and \emph{healed} counts sessions fixing pre-existing
+baseline failures, both measured by the full suite; baselines had 1, 1, 8, and
+5 failures on the four tasks. \emph{Weak.} is weakened tests by the JUDGE's
+detector; \emph{undecl.} is changed files absent from the session's own
+declaration; \emph{JUDGE} reports the independent review pass. Times are
+medians with the observed range.}
+\centering
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrlcc@{}}
+\toprule
+Arm & n & Regr. & Healed & Weak. & Undecl. & JUDGE & Session median [min--max] \\
+\midrule
+bare & 8 & 0 & 8 & 0 & 2 & 6 V, 2 VWC & 85\,s [33--307\,s] \\
+kata & 8 & 0 & 8 & 0 & 1 & 7 V, 1 VWC & 721\,s [231--1800\,s] \\
+gauntlet & 8 & 1 & 8 & 0 & 1 & 7 V, 1 VWC & 282\,s [119--1800\,s] \\
+\bottomrule
+\end{tabular}%
+}
+\label{tab:gauntlet-pilot}
+\end{table}
+
+Three findings stand out. First, \textbf{the loop ran as a method}: all eight
+gauntlet sessions recorded rounds in the task file and were graded
+\texttt{followed} by the audit, with no \texttt{faked} grade; two sessions show
+a real \texttt{fail}$\to$\texttt{pass} cycle, where the critic named a concrete
+defect and the following round fixed it. One such gap: ``\texttt{handleNodeLoad}
+does not mark the annotation as used, so \texttt{def f(): name: str;
+print(name)} emits both \texttt{UndefinedName} and \texttt{UnusedAnnotation}''.
+The mechanism is implementable and auditable in headless operation.
+
+Second, \textbf{there is no evidence of improvement}. In the blind A/B
+comparison over 24 matched pairs, the loop beat the cycle four times and tied
+four, but lost to the bare agent four times against one win
+(Table~\ref{tab:gauntlet-ab}); 11 of 24 verdicts were ties. The only regression
+in the pilot is a single gauntlet session that hit the 1800\,s ceiling with
+four rounds complete and delivered two of the four files the change required,
+leaving the expectation tests unupdated --- infrastructure interrupting the
+work, not the method failing, but the delivered artifact did regress. The
+weakened-test count is zero across all 24 sessions, replicating the external
+study's result. Undeclared scope concentrates on one task in every arm.
+
+\begin{table}[!ht]
+\caption{Blind A/B preference over the pilot's matched pairs (24 judges, one
+per pair, origins hidden, order fixed by a hash decided before collection).
+The loop beats the cycle and loses to the bare agent.}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Match-up & First arm wins & Tie & Second arm wins \\
+\midrule
+gauntlet vs.\ kata & 4 & 4 & 0 \\
+gauntlet vs.\ bare & 1 & 3 & 4 \\
+kata vs.\ bare & 2 & 4 & 2 \\
+\bottomrule
+\end{tabular}
+\label{tab:gauntlet-ab}
+\end{table}
+
+Third, \textbf{the cost hypothesis was wrong in direction}: the loop's median
+session (282\,s) was \emph{below} the cycle's (721\,s), not above it. A
+plausible and untested explanation is that the cycle runs the full verification
+pipeline on every task, while the loop is directed at the gap.
+
+\subsubsection{A second campaign on a workload chosen for incentive}
+\label{sec:gauntlet-campaign}
+
+The pilot's caveat was that its tasks gave the agents no incentive to cut
+corners, which makes it a poor setting for testing whether a quality loop
+helps. To address that, three observable signals were defined and measured
+offline, before any session: whether the acceptance test passes with the bug
+still present; whether it asserts on fragile proxies such as message
+substrings, counts, or snapshots; and whether the upstream fix touches more
+than one source file. A task scoring high on these signals is one where
+satisfying the visible test need not require fixing the cause. Applying the
+signals to the study's task set selected five tasks (four of them
+\emph{not} used in the pilot), and the campaign ran
+$5 \times 2 \times 3 = 30$ sessions with the four instrument corrections in
+place: the full suite measured as a delta against each task's pre-existing
+failures, the A/B judge given the base state, sessions interrupted by the
+ceiling or by a signal re-run rather than entering the analysis truncated, and
+the workload selected by measured incentive.
+
+\begin{table}[!ht]
+\caption{Second campaign: 5 tasks chosen for gaming incentive, two models,
+three arms, one session per cell (30 sessions). \emph{Regr.} counts sessions
+introducing failures absent from the baseline, \emph{healed} sessions fixing
+pre-existing baseline failures, both by the full suite. Times are medians.}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrrrrc@{}}
+\toprule
+Arm & n & Regr. & Healed & Weak. & Undecl. & JUDGE \\
+\midrule
+bare & 10 & 0 & 8 & 0 & 0 & 10 V \\
+kata & 10 & 0 & 8 & 0 & 0 & 10 V \\
+gauntlet & 10 & 0 & 8 & 0 & 0 & 10 V \\
+\bottomrule
+\end{tabular}
+\label{tab:gauntlet-campaign}
+\end{table}
+
+The campaign is clean on every metric (Table~\ref{tab:gauntlet-campaign}):
+thirty of thirty sessions reached \texttt{ok}, the JUDGE returned VERIFIED in
+all thirty with no fraud found, no session weakened a test, none left scope
+undeclared, and none introduced a regression --- while twenty-four of the
+thirty healed a pre-existing baseline failure. The instrument corrections
+earned their place in use rather than in argument: two cells were interrupted
+(one by the session ceiling, one by a signal) and, instead of entering the
+analysis truncated as in the pilot, were re-run to completion; and the
+measuring pass itself surfaced a defect that the pilot could not have
+detected --- a session of the cycle arm commits its own work, so measuring the
+artifact against the moving \texttt{HEAD} yields an empty diff and reads a
+completed fix as ``did nothing''. One session of the campaign had done exactly
+that, and its measurement was redone against the task state.
+
+The blind A/B comparison on these thirty pairs is
+Table~\ref{tab:gauntlet-ab-campaign}. Twenty-one of thirty verdicts are ties,
+and the nine that are not are decided on style and minimality --- idiom
+consistency, an explanatory comment, the smaller of two functionally
+equivalent changes --- never on whether the bug was fixed. No judge reported a
+candidate that failed to address the reported defect. The corrected instrument
+therefore reproduces the pilot's finding rather than overturning it: with a
+workload selected for incentive, with the full suite as the metric, with the
+base state in the judge's prompt, and with interrupted cells re-run, the loop
+still does not beat the cycle or the bare agent on artifact quality. What the
+campaign removes are the alternative explanations: the null result is not an
+artifact of narrow measurement, a biased judge, or a truncated cell.
+
+\begin{table}[!ht]
+\caption{Blind A/B preference over the second campaign's matched pairs (30
+judges, one per pair, origins hidden, order fixed by a hash decided before
+collection). Ties dominate; the decisive verdicts are all stylistic.}
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Match-up & First arm wins & Tie & Second arm wins \\
+\midrule
+gauntlet vs.\ kata & 1 & 5 & 4 \\
+gauntlet vs.\ bare & 1 & 7 & 2 \\
+kata vs.\ bare & 1 & 9 & 0 \\
+\bottomrule
+\end{tabular}
+\label{tab:gauntlet-ab-campaign}
+\end{table}
+
+\subsubsection{Caveats}
+
+The pilot is small by construction and we do not over-read it. Four tasks give
+N=1 per cell for a stochastic agent, and 11 of 24 blind verdicts were ties,
+which limits discrimination. Two cells hit the session ceiling. Two tasks
+decomposed into a single component, so they exercised no iteration. The blind
+A/B judge sees diffs without the base state, which favours whichever arm
+touched the test files; and in one of 24 judgments the judge stated it had
+applied the diffs and run the suite, which it could not do --- a fabrication of
+execution, recorded rather than discarded, whose verdict direction nonetheless
+agreed with the independent full-suite measurement. We did not re-inspect the
+other 23 judgments' stated reasoning for the same failure mode, so this
+single confirmed case is a lower bound on how often the blind judge
+misrepresents its own process, not a rate. The reference is the
+upstream fix, which the measured tree does not contain, so the critic compares
+against a description of the reference rather than the reference diff itself; a
+critic noted this in its own gap. Finally, the workload is the external study's:
+clean, well-isolated bugs with clear regression tests, which gave the agents
+little incentive to game visible checks --- the same condition that makes this
+a poor setting for testing whether a quality loop helps.
+
+\subsubsection{What scales, and what would have to change}
+
+The pilot does not justify scaling the sample; it justifies fixing the
+instrument, and those four corrections are implemented and archived alongside
+the pilot. Each earned its place in the second campaign rather than in
+argument: ``tests pass'' is measured with the full suite and reported as a
+delta against the task's pre-existing failures rather than as a pass, because
+the manifest's narrow test command had reported a regression as a pass; the
+A/B judge is given the base state with the diffs, so that on tasks whose
+acceptance tests are pre-applied it cannot mistake ``did not update the tests''
+for ``the tests were already there''; a session interrupted by the ceiling or
+by a signal is re-run with its attempt history recorded, instead of entering
+the analysis truncated; and the workload is selected by measured incentive
+rather than by convenience --- on three observable signals, whether the
+acceptance test passes with the bug present, whether it asserts on fragile
+proxies such as message substrings or counts, and whether the fix touches more
+than one source file, the pilot's own task set scores low or medium, which is a
+quantitative form of the observation that those tasks gave the agents no
+incentive. With the corrections in place the campaign ran, and it reproduced
+the pilot's null result on a workload chosen for incentive
+(Section~\ref{sec:gauntlet-campaign}). What the two studies
+establish together is narrower and, we think, useful: that an iterative
+builder/critic loop can be carried and audited by the same task file and audit
+machinery that Kata already uses, that a blind A/B comparison with a
+pre-registered protocol is what it takes to measure whether such a loop helps,
+and that on the workloads measured here it does not --- while the measuring
+pass itself has reusable value, having found and fixed a defect (a committed
+artifact invisible to a moving \texttt{HEAD}) that neither study's results
+would have revealed.
+
 \subsection{Executed comparison with related gates}
 
 The gate comparison of Section~\ref{sec:exec-comparison} complements the
-external study with a second kind of external evidence: four gates reviewed
-the same 19 trap scenarios with detection parity. Kata returned every
+external study with a second kind of external evidence, on the same
+self-built trap suite: four gates reviewed
+the same 19 trap scenarios --- scenarios built alongside Kata and therefore
+in-distribution for it, out-of-distribution for the tools it is compared
+against --- with detection parity. Kata returned every
 expected verdict at a median review time of about one second on those scenarios, while ten of
 the eleven agent false positives fell on blind-spot scenarios or on a
 Kata-specific diff convention (Section~\ref{sec:exec-comparison}). That comparison is
@@ -2429,7 +2752,7 @@ statistical inference regarding stochastic variance in session execution
 times, serving instead as a deterministic sanity check on the tool's behavior
 across non-author code.
 
-\textbf{External validity.} The evaluation is bounded in two ways. First,
+\textbf{External validity.} The evaluation is bounded in three ways. First,
 the trap suite of Section~\ref{sec:self-check} uses small synthetic
 fixtures authored by the developer rather than industrial workloads, with a
 limited number of honest scenarios (four). Second, while the external study
@@ -2441,9 +2764,36 @@ restraint in the independent review pass, not in the sessions' own JUDGE
 runs, six of which falsely accused honest fixes; they do not represent complex multi-file feature additions,
 non-Python codebases, or proprietary enterprise software. A broader
 multi-language study across diverse model tiers and task complexities
-remains future work. The tool itself, however, is dogfooded in production on
+remains future work: the weakened-check detector is per-language by design
+(Section~\ref{sec:judge}), so this generalization is not automatic and would
+need language-specific probes validated the same way the Python ones were.
+Third, the Gauntlet pilot's second campaign (Section~\ref{sec:gauntlet-campaign}, 30
+sessions) selects its five tasks by a measured gaming-incentive signal, but
+draws them from the same pool of small, public, Python bug fixes as the
+external study, and its blind A/B judge is itself an LLM, not an independent
+human rater; the null result it reproduces should be read within that same
+workload profile, not as a broader-population finding. The tool itself, however, is dogfooded in production on
 the kata repository: its own changes go through the cycle, and the trap
 suite runs in continuous integration on every push.
+
+\textbf{Author/evaluator conflation.} The author designed the JUDGE, wrote
+the 19 trap scenarios and their ground truth, built the external-study and
+Gauntlet harnesses, and is also the one reporting and interpreting all of
+the results above --- no external party reviewed the trap scenarios before
+they were run, and the ``blind'' A/B judge, while unaware of arm identity,
+is not independent of the author's instrumentation choices (Sections
+\ref{sec:external-evaluation}--\ref{sec:gauntlet-campaign}). This is
+declared in the Competing Interests statement, but it bears restating here
+as a validity threat rather than a disclosure formality: every quantitative
+claim in this paper is self-reported, and the zero-weakened-test findings
+above are checked by the JUDGE's own detector, which is also the artifact
+under evaluation (Section~\ref{sec:judge}). Mitigations in place are the
+dogfooding on the kata repository itself, honest scenarios derived from real
+observed false positives rather than hypothetical ones, and the executed
+comparison against independently authored gates (Section~\ref{sec:exec-comparison});
+what remains unmitigated is independent replication --- no third party has
+re-run the trap suite, the external study, or the Gauntlet campaigns against
+their own ground truth.
 
 \textbf{Conclusion validity.} The claim ``the JUDGE catches fraud'' is
 supported by the trap suite, but the claim ``Kata improves the quality of
@@ -2476,9 +2826,22 @@ agent false positives fell on blind-spot scenarios and on a Kata-specific
 convention, so the comparison establishes determinism and cost rather than
 superior restraint. The external study shows the JUDGE is feasible on real
 repositories, and the judgment phases of the nine-phase cycle were not
-ablated and were evaluated only for cost. However, the evaluation does not
+ablated and were evaluated only for cost. The exploratory pilot of
+Section~\ref{sec:gauntlet-pilot} took a first step into that gap by carrying an
+iterative builder/critic loop on the same task file and audit machinery, and it
+found no measurable improvement over the cycle on its workload --- the loop beat
+the cycle in blind comparison but lost to a bare agent, and the pilot's value
+was in showing how such a loop can be audited and how the measurement has to be
+built. A second, 30-session campaign then ran on a workload chosen for gaming
+incentive, with the instrument corrections in place (full-suite measurement,
+base state in the judge's prompt, interrupted cells re-run), and reproduced the
+null result: thirty sessions with no regression, no weakened test and no
+undeclared scope, and a blind comparison dominated by ties whose few decisive
+verdicts are stylistic. The evaluation still does not
 show that the cycle causally improves the quality of AI-assisted code;
-a controlled study of changes with and without Kata remains future work. Furthermore,
+a controlled study of changes with and without Kata remains future work, and the
+pilot's caveats (four tasks, ties in half the blind verdicts, a workload without
+incentive to cut corners) say why it is not that study. Furthermore,
 Kata is an enforcement gate, not a panacea: it verifies claimed exit codes and diffs
 rather than proving patch optimality; it is interactive; it requires Git; and
 subjective criteria are accepted with explicit caveats.

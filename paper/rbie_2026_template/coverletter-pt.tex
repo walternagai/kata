@@ -1,0 +1,96 @@
+%--------------------------------------------------
+% CARTA DE APRESENTAÇÃO (COVER LETTER) -- RBIE
+%--------------------------------------------------
+% Versão em português. Deve ser enviada junto com o manuscrito.
+%
+% MOTOR DE COMPILAÇÃO: XeLaTeX ou LuaLaTeX (a fonte Carlito exige fontspec).
+%
+% INSTRUÇÕES:
+% - Preencha/edite todos os campos entre colchetes [ ... ].
+% - Escolha, quando houver alternativas (marcadas por "/ OU:"), a opção aplicável e apague a outra.
+%--------------------------------------------------
+
+\documentclass[11pt,a4paper,brazilian]{article}
+
+\usepackage{fontspec}
+\setmainfont{Carlito} % equivalente livre do Calibri; para usar a fonte do manuscrito, troque por "TeX Gyre Termes"
+
+\usepackage[top=2.5cm,bottom=2.5cm,left=3cm,right=3cm]{geometry}
+
+\usepackage{graphicx} % para a logomarca da RBIE
+
+\usepackage{babel} % idioma vem da opção global "brazilian" do \documentclass
+
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\urlstyle{same}
+
+
+% Parágrafos em bloco (sem recuo de primeira linha), espaçamento simples entre linhas
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt}
+
+
+\pagestyle{empty}
+
+
+\begin{document}
+
+% --- Cabeçalho: logomarca da RBIE (canto superior esquerdo) e remetente (à direita) ---
+\noindent
+\begin{minipage}[t]{0.52\linewidth}
+  \includegraphics[width=4.9cm]{RBIElogo.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.44\linewidth}
+  \raggedleft
+  {}[Seu nome]\\
+  {}[Sua afiliação]\\
+  {}[e-mail de contato]
+\end{minipage}
+
+\bigskip
+
+[Sua Cidade], [Dia] de [Mês] de [Ano].
+
+Prezado(a) [nome do(a) editor(a) chefe],
+
+\subsection*{Apresentação do trabalho}
+Gostaríamos de apresentar o manuscrito original intitulado ``[título do manuscrito]'' para consideração da Revista Brasileira de Informática na Educação (RBIE). Confirmamos que este é um trabalho original, não foi publicado em nenhum outro periódico ou evento científico, e nem está sendo considerado atualmente para publicação em outro veículo, tendo adotado boas práticas científicas\footnote{Conforme os códigos da SBC: Código de Conduta para Autores em Publicações da SBC (Resolução 001/2024), disponível em \url{https://sol.sbc.org.br/index.php/indice/conduta}; e Código de Ética e Conduta Profissional da SBC (Resolução 002/2024), disponível em \url{https://www.sbc.org.br/etica-sbc/}.}.
+
+O manuscrito foi preparado no modelo oficial vigente da RBIE (classe LaTeX rbie2026) e, na versão ora submetida, teve todas as informações de identificação de autoria suprimidas, em conformidade com o processo de avaliação duplamente anônima.
+
+\subsection*{Interseção com a Informática na Educação / Educação em Computação}
+Acreditamos que este manuscrito é apropriado para publicação na RBIE porque seu objetivo [explique como o trabalho se insere no escopo da RBIE, evidenciando sua interseção com a Informática na Educação e/ou a Educação em Computação].
+
+\subsection*{Contribuição e novidade}
+[Por favor, explique a novidade (contribuição) apresentada pelo trabalho, o problema que está sendo tratado. Não insira o resumo que está no artigo. Descreva de forma sucinta a pesquisa que você está apresentando em seu artigo, por que é importante e por que você acha que os leitores da revista estariam interessados na sua pesquisa. A carta de apresentação não deve ultrapassar uma página. Não altere a fonte, seu tamanho nem espaçamento entre linhas. Procure ser sucinto e direto.]
+
+\subsection*{Contribuições dos autores}
+De acordo com as instruções de submissão, aqui está a declaração de autoria CRediT:
+
+Autor1: termo1, termo2\ldots; Autor2: termo3, termo4.
+
+\subsection*{Conflitos de interesse}
+[As pessoas autoras declaram não haver qualquer conflito de interesse. / OU: As pessoas autoras declaram os seguintes conflitos de interesse: [descrever].]
+
+\subsection*{Disponibilidade de dados e materiais}
+[descreva a abordagem de ciência aberta do trabalho. Por exemplo: os conjuntos de dados, códigos e materiais que sustentam os resultados estão disponíveis em repositório de acesso aberto, cujo endereço/DOI será informado na versão final; na versão submetida, os artefatos foram anonimizados para preservar o sigilo da avaliação. Caso não seja possível compartilhar, justifique.]
+
+\subsection*{Declaração de utilização de inteligência artificial (IA)}
+Em atendimento ao Código de Conduta para autores da SBC, [declaramos que nenhuma ferramenta de IA generativa foi utilizada na elaboração deste trabalho. / OU: declaramos o uso das seguintes ferramentas de IA generativa, com as respectivas finalidades (por exemplo: redação, revisão de texto, tradução, análise de dados, geração de figuras, tabelas ou scripts): [listar ferramentas e etapas].] As ferramentas de IA não figuram como autoras e as pessoas autoras assumem integral responsabilidade por todo o conteúdo do manuscrito.
+
+\subsection*{Outras informações relevantes}
+Declaramos que o trabalho que está sendo enviado teve suas questões éticas aprovadas por um comitê de ética em pesquisa com seres humanos sob o número [colocar aqui o número do projeto aprovado pelo comitê de ética (CAAE)]. [Caso o trabalho não demande pela aprovação de um comitê de ética indicar através da frase: ``Declaramos que o trabalho que está sendo enviado não necessita da aprovação de comitês de ética em pesquisa e asseguramos que todos os cuidados éticos foram tomados para a realização deste trabalho.'' Além disso, caso a pesquisa utilize dados que envolvam quaisquer tipos de dados relativos a seres humanos, a não demanda por comitê de ética deve ser justificada, preferencialmente na metodologia, informando a anuência dos agentes envolvidos.]
+
+Este manuscrito é uma versão estendida do trabalho intitulado ``[título do trabalho original]'', apresentado em [nome/sigla do evento, ano], contendo pelo menos 30\% de material novo em relação ao original, cujo PDF é anexado como documento suplementar. [Remova este parágrafo caso não se aplique.]
+
+\bigskip
+Agradecemos por considerar este manuscrito para o processo de revisão da RBIE.
+
+Atenciosamente em nome de todos os autores,
+
+\vspace{2.5cm}
+
+[Seu nome completo. Gere o PDF e assine no espaço acima]
+
+\end{document}

@@ -49,8 +49,10 @@ make package
 ```
 
 `make package` apaga `dist/` velho, constrói wheel + sdist, roda `twine check`
-e confere o conteúdo contra `src/kata/assets/` (módulos essenciais, os 31
-assets e a versão). É o mesmo alvo que o job `package` do CI roda.
+e confere os dois artefatos: no wheel, os módulos essenciais, os 31 assets e a
+versão; no sdist, os arquivos de raiz que ele precisa levar (`CHANGELOG.md`,
+`README.md`, `LICENSE`, `MANIFEST.in`). É o mesmo alvo que o job `package` do
+CI roda.
 
 Artefato de release anterior em `dist/` é a armadilha clássica: sem apagar, o
 wheel velho sobe junto.

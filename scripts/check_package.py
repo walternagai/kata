@@ -18,6 +18,7 @@ Uso:
 from __future__ import annotations
 
 import sys
+import tarfile
 import tomllib
 import zipfile
 from pathlib import Path
@@ -26,6 +27,10 @@ REPO = Path(__file__).resolve().parent.parent
 ASSETS = REPO / "src" / "kata" / "assets"
 # Código mínimo sem o qual o pacote não roda, independente dos assets.
 ESSENCIAIS = ("kata/__init__.py", "kata/cli.py", "kata/install.py")
+# Arquivos de documentação que o sdist precisa levar na raiz. O `MANIFEST.in`
+# entra por conta do setuptools; a checagem existe para o dia em que deixar de
+# entrar sem ninguém notar. O `CHANGELOG.md` não entra sem `include`.
+SDIST_EXTRAS = ("CHANGELOG.md", "MANIFEST.in", "README.md", "LICENSE")
 
 
 def assets_esperados() -> list[str]:
@@ -59,21 +64,62 @@ def conferir(wheel: Path) -> list[str]:
     return problemas
 
 
+def conferir_sdist(tarball: Path) -> list[str]:
+    """Devolve a lista de problemas do sdist; vazia significa artefato íntegro.
+
+    O wheel é conferido arquivo a arquivo pelo `package-data`; o sdist não tem
+    esse glob, vive do `MANIFEST.in` e das regras escondidas do setuptools.
+    Foi assim que o changelog ficou de fora: o tarball saía, publicava, e o
+    leitor da página do PyPI recebia um link para um arquivo que só existia no
+    repositório.
+    """
+    if not tarball.is_file():
+        return [f"{tarball}: não existe"]
+    problemas: list[str] = []
+    with tarfile.open(tarball) as t:
+        # O sdist embrulha tudo num diretório `nome-versao/`: a raiz é o
+        # primeiro componente, não uma constante.
+        raizes = {Path(n).parts[0] for n in t.getnames() if n and not n.startswith("./")}
+        if len(raizes) != 1:
+            return [f"estrutura inesperada: {len(raizes)} diretório(s) de topo"]
+        raiz = raizes.pop()
+        nomes = {n for n in t.getnames()}
+        for extra in SDIST_EXTRAS:
+            if f"{raiz}/{extra}" not in nomes:
+                problemas.append(f"ausente no sdist: {extra}")
+    return problemas
+
+
+def _artefatos(args: list[str]) -> list[Path]:
+    """Wheels e sdists a conferir: os argumentos ou o que estiver em dist/."""
+    if args:
+        return [Path(a) for a in args]
+    dist = REPO / "dist"
+    return sorted(dist.glob("*.whl")) + sorted(dist.glob("*.tar.gz"))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    wheels = [Path(a) for a in args] or sorted((REPO / "dist").glob("*.whl"))
-    if not wheels:
-        print("❌ nenhum wheel em dist/ — rode `python3 -m build` antes")
+    artefatos = _artefatos(args)
+    if not artefatos:
+        print("❌ nenhum artefato em dist/ — rode `python3 -m build` antes")
         return 1
     problemas: list[str] = []
-    for wheel in wheels:
-        encontrados = conferir(wheel)
-        if encontrados:
-            problemas.extend(f"{wheel.name}: {p}" for p in encontrados)
+    for artefato in artefatos:
+        # `Path.suffix` de `.tar.gz` é `.gz`: o nome é que carrega as duas extensões.
+        if artefato.name.endswith(".tar.gz"):
+            encontrados = conferir_sdist(artefato)
+            if encontrados:
+                problemas.extend(f"{artefato.name}: {p}" for p in encontrados)
+                continue
+            print(f"  ✅ {artefato.name}: {len(SDIST_EXTRAS)} arquivo(s) de raiz")
             continue
-        print(
-            f"  ✅ {wheel.name}: {len(assets_esperados())} asset(s) + {len(ESSENCIAIS)} módulo(s)"
-        )
+        encontrados = conferir(artefato)
+        if encontrados:
+            problemas.extend(f"{artefato.name}: {p}" for p in encontrados)
+            continue
+        assets = len(assets_esperados())
+        print(f"  ✅ {artefato.name}: {assets} asset(s) + {len(ESSENCIAIS)} módulo(s)")
     if problemas:
         print("\n❌ artefato inconsistente com src/kata/assets/:")
         for p in problemas:

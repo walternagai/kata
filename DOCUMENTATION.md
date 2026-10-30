@@ -371,6 +371,13 @@ version`) and `src/kata/__init__.py` (`__version__`) — and
 `test_changelog_menciona_a_versao_atual` fails when the version has no
 section. The release procedure itself is [`RELEASING.md`](RELEASING.md).
 
+The sdist carries `CHANGELOG.md`, `README.md`, `LICENSE` and `MANIFEST.in`
+next to the package (`MANIFEST.in` includes the changelog explicitly; the
+other three arrive by setuptools' rules), because whoever downloads the
+tarball has no checkout and the README points at the changelog.
+`scripts/check_package.py` verifies both artifacts: the wheel file by file and
+the sdist by its required root files.
+
 ## CLI
 
 ### Modes

@@ -2,3 +2,8 @@
 prune tests
 prune eval
 prune paper
+
+# Quem baixa o tarball não tem o repositório, e o README (que é a página do
+# PyPI) manda procurar a mudança no changelog. `MANIFEST.in` entra no sdist
+# por conta do setuptools; `CHANGELOG.md` não entra sem esta linha.
+include CHANGELOG.md

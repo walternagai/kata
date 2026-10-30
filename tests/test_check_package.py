@@ -84,7 +84,7 @@ class TestMain:
 
         monkeypatch.setattr(cp, "REPO", tmp_path)
         assert cp.main([]) == 1
-        assert "nenhum wheel" in capsys.readouterr().out
+        assert "nenhum artefato" in capsys.readouterr().out
 
     def test_wheel_incompleto_sai_um_e_lista(self, tmp_path, monkeypatch, capsys) -> None:
         import check_package as cp
@@ -123,3 +123,73 @@ def test_versao_do_pacote_bate_com_o_pyproject() -> None:
     import kata
 
     assert kata.__version__ == versao_do_pyproject()
+
+
+def _sdist(tmp_path: Path, membros: dict[str, str], raiz: str = "kata_dev-0.0.0") -> Path:
+    import io
+    import tarfile
+
+    caminho = tmp_path / f"{raiz}.tar.gz"
+    with tarfile.open(caminho, "w:gz") as t:
+        for nome, conteudo in membros.items():
+            dados = conteudo.encode("utf-8")
+            info = tarfile.TarInfo(f"{raiz}/{nome}")
+            info.size = len(dados)
+            t.addfile(info, io.BytesIO(dados))
+    return caminho
+
+
+def _sdist_completo() -> dict[str, str]:
+    from check_package import SDIST_EXTRAS
+
+    return {nome: "" for nome in SDIST_EXTRAS}
+
+
+class TestConferirSdist:
+    """O wheel era conferido; o tarball, não. O changelog ficou de fora assim."""
+
+    def test_sdist_completo_nao_tem_problema(self, tmp_path) -> None:
+        from check_package import conferir_sdist
+
+        assert conferir_sdist(_sdist(tmp_path, _sdist_completo())) == []
+
+    def test_changelog_ausente_e_nomeado(self, tmp_path) -> None:
+        from check_package import conferir_sdist
+
+        membros = _sdist_completo()
+        del membros["CHANGELOG.md"]
+
+        assert any("CHANGELOG.md" in p for p in conferir_sdist(_sdist(tmp_path, membros)))
+
+    def test_manifest_ausente_e_nomeado(self, tmp_path) -> None:
+        from check_package import conferir_sdist
+
+        membros = _sdist_completo()
+        del membros["MANIFEST.in"]
+
+        assert any("MANIFEST.in" in p for p in conferir_sdist(_sdist(tmp_path, membros)))
+
+    def test_sdist_inexistente_nao_explode(self, tmp_path) -> None:
+        from check_package import conferir_sdist
+
+        alvo = tmp_path / "nao-existe.tar.gz"
+        assert conferir_sdist(alvo) == [f"{alvo}: não existe"]
+
+    def test_estrutura_sem_raiz_unica_reprova(self, tmp_path) -> None:
+        from check_package import conferir_sdist
+
+        caminho = _sdist(tmp_path, _sdist_completo())
+        # Regrava com dois diretórios de topo: o leitor de caminhos não tem
+        # como saber qual é a raiz, e adivinhar esconderia o defeito.
+        import io
+        import tarfile
+
+        with tarfile.open(caminho, "w:gz") as t:
+            for raiz in ("a", "b"):
+                for nome, conteudo in _sdist_completo().items():
+                    dados = conteudo.encode("utf-8")
+                    info = tarfile.TarInfo(f"{raiz}/{nome}")
+                    info.size = len(dados)
+                    t.addfile(info, io.BytesIO(dados))
+
+        assert any("estrutura inesperada" in p for p in conferir_sdist(caminho))

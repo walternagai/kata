@@ -1959,6 +1959,58 @@ class TestJudgeTaskDetectsCommittedFraud:
         result = judge_task(task, cwd=tmp_path)
         assert any(f.type == "baseline_tampering" for f in result.frauds)
 
+    def test_approved_commit_fora_da_linha_com_base_valida_e_fraude(
+        self, repo_git, tmp_path, monkeypatch
+    ) -> None:
+        """O teto é checado mesmo quando o PISO é sadio.
+
+        O teste anterior deixa também o `base_commit` órfão, então a fraude
+        sai na checagem do piso e o ramo do teto nunca é executado. Aqui o
+        piso é ancestral do HEAD e só o `approved_commit` está fora da linha
+        — é o único jeito de o ramo que acusa o teto rodar.
+        """
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        # Trabalho da tarefa na linha principal: o piso continua ancestral.
+        (tmp_path / "src.py").write_text("x = 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "trabalho"], cwd=tmp_path, check=True)
+
+        # approved_commit resolve, mas mora num branch órfão (rebase/poda).
+        linha = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        subprocess.run(["git", "checkout", "-q", "--orphan", "outro"], cwd=tmp_path, check=True)
+        (tmp_path / "outro.py").write_text("y = 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "approved"], cwd=tmp_path, check=True)
+        approved = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        subprocess.run(["git", "checkout", "-q", linha], cwd=tmp_path, check=True)
+
+        task = {
+            "task": "t",
+            "base_commit": base,
+            "approved_commit": approved,
+            "verify": {},
+        }
+        result = judge_task(task, cwd=tmp_path)
+        assert any(
+            f.type == "baseline_tampering" and "approved_commit não é ancestral" in f.description
+            for f in result.frauds
+        ), [f.description for f in result.frauds]
+
     @staticmethod
     def _repo_com_teste_real(tmp_path: Path, task: str) -> str:
         """Commita um teste com asserção de verdade e ancora o baseline nele."""

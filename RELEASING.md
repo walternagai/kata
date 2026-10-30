@@ -28,9 +28,15 @@ O número vive em `pyproject.toml` (`[project] version`) e em
 `src/kata/__init__.py` (`__version__`). `tests/test_cli.py::test_version_matches_pyproject`
 reprova se divergirem.
 
+O `CHANGELOG.md` entra no mesmo passo: a seção da versão nova sai de "Não
+publicado" para `## X.Y.Z — AAAA-MM-DD`, e `test_changelog_menciona_a_versao_atual`
+reprova se a versão publicada não tiver seção. O changelog é escrito para quem
+usa o CLI, o agente ou as skills — o `git log` continua sendo a trilha técnica.
+
 ```bash
 # pyproject.toml:7            version = "X.Y.Z"
 # src/kata/__init__.py:9     __version__ = "X.Y.Z"
+# CHANGELOG.md               ## X.Y.Z — AAAA-MM-DD
 python3 -m kata --version    # confirma no binário
 ```
 

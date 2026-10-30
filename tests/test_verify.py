@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from kata.config import VerifyConfig
 from kata.verify import (
     COMMAND_LABELS,
@@ -14,6 +16,7 @@ from kata.verify import (
     MAX_UNTRACKED_FILE_BYTES,
     ROLE_LABELS,
     VerifyResult,
+    _interpretador_do_projeto,
     _run,
     changed_files,
     consistency_failures,
@@ -1119,3 +1122,72 @@ def test_tabelas_de_rotulo_cobrem_os_mesmos_papeis() -> None:
     }
     assert divergentes == {"pytest"}
     assert COMMAND_LABELS["pytest"] == "test"
+
+
+def _venv_falso(raiz: Path, responde: int) -> Path:
+    """Cria `.venv/bin/python` que sai com `responde` — a sonda do interpretador."""
+    bin_dir = raiz / ".venv" / "bin"
+    bin_dir.mkdir(parents=True)
+    python = bin_dir / "python"
+    python.write_text(f"#!/bin/sh\nexit {responde}\n", encoding="utf-8")
+    python.chmod(0o755)
+    return python
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="venv falso é um script POSIX")
+class TestInterpretadorDoProjeto:
+    """F4: o gate roda com o Python do projeto quando ele serve.
+
+    `sys.executable` é o do kata — num `pipx install kata-dev` sem as
+    dependências do alvo, o pytest re-executado morre por `ModuleNotFoundError`
+    num repositório limpo. O `pytest` puro herdado do ecossistema tem o mesmo
+    sintoma, registrado na raiz `AGENTS.md`.
+    """
+
+    def test_venv_com_as_ferramentas_e_adotado(self, tmp_path: Path) -> None:
+        python = _venv_falso(tmp_path, 0)
+        _interpretador_do_projeto.cache_clear()
+
+        with patch("kata.verify._run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr=""
+            )
+            run_pytest(testpaths=["tests/"], cwd=tmp_path)
+
+        executado = mock_run.call_args_list[-1][0][0]
+        assert executado[0] == str(python)
+        _interpretador_do_projeto.cache_clear()
+
+    def test_venv_sem_as_ferramentas_cai_no_interpretador_do_kata(self, tmp_path: Path) -> None:
+        """Sonda reprovada não é troca silenciosa de ambiente: usa o do kata."""
+        _venv_falso(tmp_path, 1)
+        _interpretador_do_projeto.cache_clear()
+
+        def responde(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+            # A sonda é `python -c "import ..."`: reprova. O pytest em si passa.
+            falhou = "-c" in cmd
+            return subprocess.CompletedProcess(
+                args=cmd, returncode=1 if falhou else 0, stdout="", stderr=""
+            )
+
+        with patch("kata.verify._run", side_effect=responde) as mock_run:
+            run_pytest(testpaths=["tests/"], cwd=tmp_path)
+
+        executado = mock_run.call_args_list[-1][0][0]
+        assert executado[0] == sys.executable
+        _interpretador_do_projeto.cache_clear()
+
+    def test_interpretador_do_projeto_sai_como_python_no_yaml(self, tmp_path: Path) -> None:
+        """O caminho do venv não vaza para `verify.commands`."""
+        _venv_falso(tmp_path, 0)
+        _interpretador_do_projeto.cache_clear()
+
+        with patch("kata.verify._run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr=""
+            )
+            comando = run_pytest(testpaths=["tests/"], cwd=tmp_path).details["command"]
+
+        assert comando.startswith("python -m pytest")
+        assert str(tmp_path) not in comando
+        _interpretador_do_projeto.cache_clear()

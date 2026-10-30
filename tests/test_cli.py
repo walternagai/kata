@@ -1162,6 +1162,24 @@ class TestMainVersion:
         declarada = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
         assert __version__ == declarada
 
+    def test_changelog_menciona_a_versao_atual(self) -> None:
+        """F5: sem CHANGELOG rastreado, a única trilha era o `git log`.
+
+        Quem instala pelo PyPI não tem o checkout, e "o que mudou desde a
+        versão que eu tenho" ficava sem resposta. O teste impede a segunda
+        forma de mentir: bumpar a versão e deixar a seção antiga.
+        """
+        import re
+        from pathlib import Path
+
+        from kata import __version__
+
+        changelog = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
+        texto = changelog.read_text(encoding="utf-8")
+        assert re.search(rf"^## {re.escape(__version__)} —", texto, re.MULTILINE), (
+            f"CHANGELOG.md não tem seção para a versão {__version__}"
+        )
+
 
 class TestMainHelp:
     """A21: a ajuda é a primeira superfície que um projeto não-Python lê."""
@@ -4595,3 +4613,74 @@ class TestFlagsIgnoradas:
                 cli.main()
 
         assert "ignorada(s)" not in capsys.readouterr().out
+
+
+class TestInstallImprimeResultado:
+    """F6: o caminho de impressão de `--install/--uninstall` não tinha teste.
+
+    `install.py` era testado e o CLI que o chama também não era — o relatório
+    de uma instalação parcial saía com `print` errado sem nada reprovar. É a
+    última coisa que o usuário vê antes de descobrir que a skill não entrou.
+    """
+
+    def test_install_imprime_todas_as_categorias(self, tmp_path, monkeypatch, capsys) -> None:
+        from kata.install import InstallReport
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        relatorio = InstallReport(
+            frontend="opencode",
+            instaladas=["kata-fit"],
+            backups=[str(tmp_path / "kata-fit.bak")],
+            recusadas=["kata-judge: conteúdo editado"],
+            preservadas=["kata-think"],
+            erros=["kata-report: destino bloqueado"],
+        )
+
+        with patch("kata.cli.run_install", return_value=([relatorio], 1)):
+            with patch("sys.argv", ["kata", "--install", "opencode"]):
+                with pytest.raises(SystemExit) as exc:
+                    cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 1, "relatório com recusa/erro não sai como sucesso"
+        assert "INSTALL" in out
+        assert "✅ kata-fit" in out
+        assert "backup em" in out
+        assert "❌ kata-judge" in out
+        assert "⚠  kata-think" in out
+        assert "⚠  kata-report" in out
+
+    def test_uninstall_imprime_removidas(self, tmp_path, monkeypatch, capsys) -> None:
+        from kata.install import InstallReport
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        relatorio = InstallReport(frontend="claude-code", removidas=["kata-fit"])
+
+        with patch("kata.cli.run_uninstall", return_value=([relatorio], 0)):
+            with patch("sys.argv", ["kata", "--uninstall", "claude-code"]):
+                with pytest.raises(SystemExit) as exc:
+                    cli.main()
+
+        out = capsys.readouterr().out
+        assert exc.value.code == 0
+        assert "UNINSTALL" in out
+        assert "kata-fit" in out
+
+    def test_install_nao_cria_kata_dir(self, tmp_path, monkeypatch) -> None:
+        """Instalar skill é global por frontend: não pertence a uma tarefa."""
+        from kata.install import InstallReport
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+
+        with patch("kata.cli.run_install", return_value=([InstallReport(frontend="opencode")], 0)):
+            with patch("sys.argv", ["kata", "--install", "opencode"]):
+                with pytest.raises(SystemExit):
+                    cli.main()
+
+        assert not (tmp_path / ".kata").exists()

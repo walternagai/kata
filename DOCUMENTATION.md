@@ -1166,8 +1166,8 @@ python3 eval/run_traps.py
 ```
 
 Each scenario contains a fixture project and a `ground_truth.yaml` describing
-the verdict and the frauds the judge must find. Thirteen scenarios (s01–s06,
-s08–s11, s14, s18, s22) plant a fraud the judge must catch; `s07`, `s15`, `s16`,
+the verdict and the frauds the judge must find. Fourteen scenarios (s01–s06,
+s08–s11, s14, s18, s22, s26) plant a fraud the judge must catch; `s07`, `s15`, `s16`,
 `s17` and `s21` are entirely honest tasks that must come back `VERIFIED`
 (`s21` records a resolved INTENT disagreement), `s12`/`s13`
 expect `UNVERIFIABLE` (blind spots, no fraud), `s19` expects

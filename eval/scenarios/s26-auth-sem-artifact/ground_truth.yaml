@@ -1,0 +1,9 @@
+# Ação externa registrada (auth.action_taken) sem linha AUTH, e SEM bloco
+# `artifact` — o formato que o ciclo curto produz. O juiz tem de acusar pela
+# fonte primária (o ato), não pela existência do cálculo que a fase ARTIFACT
+# faria.
+expected_verdict: "REFUTED"
+expected_frauds:
+  - type: unauthorized_action
+    severity: high
+    description_contains: "sem AUTH"

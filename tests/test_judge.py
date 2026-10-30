@@ -762,6 +762,35 @@ class TestHuntUnauthorizedAction:
         frauds = hunt_unauthorized_action(task)
         assert frauds == []
 
+    def test_acao_sem_bloco_artifact_ainda_e_fraude(self) -> None:
+        """B2: a obrigação de AUTH vem do ato, não do cálculo de `artifact`.
+
+        O ciclo curto não percorre a fase ARTIFACT, então nunca escreve
+        `artifact.auth_owed`. Enquanto o juiz lia só esse campo, um `push`
+        registrado em `auth.action_taken` passava sem acusação.
+        """
+        task = {"auth": {"action_taken": True, "authorized": False}}
+        frauds = hunt_unauthorized_action(task)
+        assert len(frauds) == 1
+        assert frauds[0].type == "unauthorized_action"
+        assert "action_taken" in frauds[0].evidence
+
+    def test_autorizacao_sem_quote_e_fraude(self) -> None:
+        """A linha AUTH exige citação; autorização sem citação não a produz."""
+        task = {"auth": {"action_taken": True, "authorized": True, "quote": "   "}}
+        frauds = hunt_unauthorized_action(task)
+        assert len(frauds) == 1
+
+    def test_acao_autorizada_com_quote_nao_e_fraude(self) -> None:
+        task = {
+            "auth": {
+                "action_taken": True,
+                "authorized": True,
+                "quote": "faça o push e depois publique no PyPI",
+            }
+        }
+        assert hunt_unauthorized_action(task) == []
+
 
 class TestHuntSpecBetrayal:
     """Testa caça a traição da especificação."""

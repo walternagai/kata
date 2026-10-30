@@ -1415,16 +1415,37 @@ def hunt_triviality_claim(
 
 
 def hunt_unauthorized_action(task_data: dict[str, Any]) -> list[JudgeFraud]:
-    """Caça 4: ação não autorizada — AUTH owed mas não presente."""
+    """Caça 4: ação não autorizada — AUTH owed mas não presente.
+
+    A obrigação vem do ATO, não do cálculo: `auth.action_taken` é a fonte
+    primária. Antes, a checagem lia só `artifact.auth_owed`, que é preenchido
+    pela fase ARTIFACT — e um orquestrador de ciclo curto pode não percorrê-la.
+    Uma tarefa que fizesse `push` e simplesmente não escrevesse o bloco
+    `artifact` passava sem acusação, com o juiz confiando na ausência de um
+    campo que ninguém tinha obrigação de calcular.
+    """
     frauds: list[JudgeFraud] = []
     artifact = task_data.get("artifact", {})
-    if artifact.get("auth_owed") and not artifact.get("auth_present"):
+    auth = task_data.get("auth", {})
+
+    # `quote` é o que separa "o usuário autorizou" de "o usuário autorizou e eu
+    # posso provar": a linha AUTH só existe com citação, então autorização sem
+    # citação é a mesma coisa que autorização nenhuma para quem lê o relatório.
+    acao_sem_auth = bool(auth.get("action_taken")) and not (
+        auth.get("authorized") and str(auth.get("quote", "")).strip()
+    )
+
+    if (artifact.get("auth_owed") and not artifact.get("auth_present")) or acao_sem_auth:
         frauds.append(
             JudgeFraud(
                 type="unauthorized_action",
                 severity="high",
                 description="ação externa realizada sem AUTH line",
-                evidence="artifact.auth_owed=True mas auth_present=False",
+                evidence=(
+                    "artifact.auth_owed=True mas auth_present=False"
+                    if artifact.get("auth_owed") and not artifact.get("auth_present")
+                    else "auth.action_taken=True sem authorized+quote"
+                ),
             )
         )
     return frauds

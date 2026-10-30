@@ -8,7 +8,27 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
-## Não publicado
+## 0.8.1 — 2026-10-30
+
+### Adicionado
+
+- `CHANGELOG.md` — marcos de uso de cada versão, a partir da 0.6.0. O pacote
+  está no PyPI desde a 0.7.1 e não havia de onde ler o que mudou; agora
+  `test_changelog_menciona_a_versao_atual` reprova quando a versão publicada
+  não tem seção.
+- Documentação da distribuição: badges de versão e Python, seção
+  "Distribuição (PyPI)" no README (nome do pacote vs comando, conteúdo do
+  wheel, install/upgrade/uninstall), seção "Distribution and versions" em
+  `DOCUMENTATION.md` e a URL `Changelog` nos project links do PyPI.
+- O sdist passa a levar `CHANGELOG.md`.
+
+### Alterado
+
+- O lint e o teste padrão rodam com o interpretador do projeto
+  (`.venv/bin/python`, `.venv/Scripts/python.exe`, `venv/`) quando ele importa
+  as ferramentas do papel. Num `pipx install kata-dev` sem as dependências do
+  alvo, o pytest re-executado morria por `ModuleNotFoundError` num repositório
+  limpo — e o JUDGE lia a falha como `false_completion`.
 
 ### Corrigido
 
@@ -17,16 +37,16 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
   (revisor do host, humano ou ninguém) e checklist de quatro itens ancorado
   em `file:line`. Item não checado se escreve "não verificado" e vira caveat —
   estágio inteiro não verificado nunca produz VERIFIED.
+- README, `DOCUMENTATION.md`, `CLAUDE.md` e `COMPETITIVE.md` deixaram de
+  ensinar `/advisor` e `/effort` como caminho do Estágio 2.
 - O comando de teste declarado em `.kata/config.yaml` deste repositório
   importava o kata de `site-packages`; `pythonpath = ["src"]` no
   `[tool.pytest.ini_options]` resolve nos três sistemas operacionais.
 - O ramo do JUDGE que acusa `approved_commit` não ancestral do HEAD
   (`judge.py:1717-1725`) tinha teste de nome parecido que nunca o alcançava.
-- O lint e o teste padrão passam a rodar com o interpretador do projeto
-  (`.venv/bin/python`, `.venv/Scripts/python.exe`, `venv/`) quando ele importa
-  as ferramentas do papel, em vez do `sys.executable` do kata. Num
-  `pipx install kata-dev` sem as dependências do alvo, o pytest re-executado
-  morria por `ModuleNotFoundError` num repositório limpo.
+- O caminho de impressão de `--install`/`--uninstall` passou a ter teste.
+- `scripts/check_package.py` confere o **sdist** e não só o wheel: exigir os
+  arquivos de raiz é o que impede o changelog de ficar de fora outra vez.
 
 ## 0.8.0 — 2026-10-28
 

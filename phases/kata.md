@@ -152,7 +152,7 @@ pacote Python, e não no texto da skill.
 | SIMPLIFY | Confrontar o diff com o pedido: código mínimo, sem abstração especulativa nem configurabilidade não solicitada |
 | INTENT | Ler código, teste e spec; se discordarem, resolver por usuário > spec > teste > código **antes** de editar |
 | SURGICAL | Confirmar arquivo por arquivo que a mudança rastreia ao pedido; conferir imports órfãos |
-| VERIFY | `python -m kata --check-only` — a lógica é do CLI |
+| VERIFY | `python -m kata --verify-task <task>` (grava na tarefa) ou `--check-only` (sem tarefa) — a lógica é do CLI |
 | TWIN CHECK | Se um defeito foi corrigido, buscar o mesmo padrão no projeto inteiro com {{SEARCH}} |
 | ARTIFACT | Conferir as linhas devidas: INTENT, AUTH, PENDING, TWINS |
 | REPORT | Resultado na primeira linha, verificações, caveats honestos, linhas devidas |
@@ -434,8 +434,9 @@ O adapter define:
    `verify.test` ou `verify.coverage`, use aqueles comandos verbatim no papel
    correspondente — eles substituem os defaults Python abaixo, e as flags de
    caminho daquele papel deixam de valer. `verify.gate` e
-   `verify.coverage_pattern` valem junto. Rodar `kata --check-only` já faz
-   tudo isso sozinho. Se o projeto não for Python e não houver config, não
+   `verify.coverage_pattern` valem junto. Rodar `kata --verify-task <task>`
+   (ou `--check-only`, quando não há tarefa) já faz tudo isso sozinho. Se o
+   projeto não for Python e não houver config, não
    invente comando: proponha criar o arquivo e registre o bloqueio como
    caveat — verificação que não rodou não é verificação que passou.
 2. **Lint** (default): `python -m ruff check <paths>` via {{RUN}} (ou `py -m ruff` no Windows)

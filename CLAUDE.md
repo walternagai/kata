@@ -87,7 +87,7 @@ see [`DOCUMENTATION.md`](DOCUMENTATION.md#cli) for its modes (`--init`, `--plan`
 src/kata/
 ├── cli.py       CLI, task persistence (.kata/*.yaml), cycle orchestration, reports
 ├── config.py    .kata/config.yaml — project check commands (verify) and advisor settings (advisor)
-├── skills.py    PHASE_SKILLS + per-frontend install check (the --doctor preflight)
+├── skills.py    PHASE_SKILLS / OPTIONAL_PHASES + per-frontend install check (the --doctor preflight)
 ├── install.py   kata --install / --uninstall / --force: copies the skills bundled in
 │                src/kata/assets/ (no checkout needed — pipx install kata-dev has none)
 ├── fit.py       diff_stats() / is_trivial() — the fit gate
@@ -145,7 +145,8 @@ src/kata/
 - `skills.py`: `PHASE_SKILLS` is the canonical list the cycle needs. `--doctor` checks each frontend's
   config dir; a **partial** install exits 1 (a missing skill makes the orchestrator improvise the phase),
   an absent one does not. A phase run without its skill is recorded in `preflight.skills_missing` and
-  graded `degraded` by `--audit`.
+  graded `degraded` by `--audit`. `OPTIONAL_PHASES` (today only `kata-agile`, the short cycle
+  orchestrator) is warned about, never required: running the full cycle loses nothing without it.
 - `install.py`: `kata --install opencode|claude-code|all` copies the generated tree bundled in
   `src/kata/assets/` into the frontend config dir — the route for `pipx install kata-dev`, which has no
   checkout to symlink to. On OpenCode it also copies the orchestrator (`agent/kata.md`) and the

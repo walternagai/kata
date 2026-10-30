@@ -20,6 +20,7 @@ from kata.skills import (
     SUBAGENTES_DIR,
     Frontend,
     check_frontend,
+    check_optional_phases,
     doctor,
 )
 
@@ -336,14 +337,23 @@ def test_a_lista_canonica_bate_com_as_fontes_em_phases() -> None:
     mas o pacote instalado não tem `phases/` e precisa da lista escrita. Uma
     fase nova em phases/ sem entrada aqui sai do preflight — e volta a ser
     possível rodar o ciclo sem ela e não ser avisado.
+
+    `OPTIONAL_PHASES` entra no conjunto esperado, mas não em `PHASE_SKILLS`:
+    fonte sem categoria (obrigatória ou opcional) continua sendo divergência.
+    O que a disjunção protege é a categoria, não a existência.
     """
+    from kata.skills import OPTIONAL_PHASES
+
     fontes = {p.stem for p in (REPO / "phases").glob("*.md")}
-    esperado = {*PHASE_SKILLS, ORCHESTRATOR_SKILL}
+    esperado = {*PHASE_SKILLS, ORCHESTRATOR_SKILL, *OPTIONAL_PHASES}
     assert fontes == esperado, (
         f"phases/ e kata.skills.PHASE_SKILLS divergem: "
         f"só em phases/ {sorted(fontes - esperado)}, "
         f"só em PHASE_SKILLS {sorted(esperado - fontes)}"
     )
+    # Opcional que vaza para a lista obrigatória reprova a instalação de quem
+    # não perdeu nada — que é o estado que o doctor existe para acusar.
+    assert not (set(PHASE_SKILLS) & set(OPTIONAL_PHASES))
 
 
 class TestVersoesInstaladas:
@@ -423,3 +433,43 @@ class TestVersoesInstaladas:
         assert velha.versao_desatualizada is True
         assert mista.versao_desatualizada is True
         assert vazia.versao_desatualizada is False
+
+
+class TestOptionalPhases:
+    """`kata-agile` é orquestrador alternativo: instalá-lo é opcional.
+
+    Entrar em PHASE_SKILLS tornaria a skill obrigatória e reprovaria o
+    `--doctor` de toda instalação existente até um `make reinstall` — o
+    alarme de "instalação parcial" passaria a tocar para quem não perdeu
+    nada.
+    """
+
+    def _com_agente(self, raiz: Path, nomes) -> None:
+        _instala(raiz, nomes)
+        (raiz / "agent").mkdir(exist_ok=True)
+        (raiz / "agent" / "kata.md").write_text("agent", encoding="utf-8")
+
+    def test_kata_agile_fora_do_preflight_obrigatorio(self, oc, tmp_path) -> None:
+        from kata.skills import OPTIONAL_PHASES
+
+        assert "kata-agile" in OPTIONAL_PHASES
+        assert "kata-agile" not in PHASE_SKILLS
+
+    def test_instalacao_sem_kata_agile_continua_completa(self, oc, tmp_path) -> None:
+        self._com_agente(tmp_path, PHASE_SKILLS)
+        e = check_frontend(oc)
+        assert e.completo is True
+        assert e.parcial is False
+        assert "kata-agile" not in e.faltando
+
+    def test_kata_agile_faltando_vira_aviso(self, oc, tmp_path) -> None:
+        self._com_agente(tmp_path, PHASE_SKILLS)
+        assert check_optional_phases(oc) == ["kata-agile"]
+
+    def test_kata_agile_instalada_sem_aviso(self, oc, tmp_path) -> None:
+        self._com_agente(tmp_path, (*PHASE_SKILLS, "kata-agile"))
+        assert check_optional_phases(oc) == []
+
+    def test_frontend_ausente_nao_avisa(self, oc) -> None:
+        """Sem nem as fases, acusar a falta de uma opcional é ruído (R10-15)."""
+        assert check_optional_phases(oc) == []

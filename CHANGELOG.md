@@ -8,6 +8,45 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
+## 0.9.0 — 2026-10-30
+
+Primeira *minor* do pacote: o número sobe porque `kata-agile` muda **como o
+ciclo é aberto**, não só o que ele verifica. Publicar isso como patch
+esconderia a mudança de quem lê o changelog.
+
+### Adicionado
+
+- `kata --verify-task TASK [--criterion-met|--no-criterion-met]` — roda o gate
+  (lint, typecheck quando declarado, teste e coverage) e **grava** `verify.*`,
+  `status` e `kata_version` na própria tarefa. Antes, `--check-only` rodava a
+  verificação sobre um dict local sem salvar nada e era mutuamente exclusivo
+  com `--task`: um orquestrador que não percorresse as 9 fases só tinha o
+  caminho de transcrever o resultado à mão — evidência digitada, que é o
+  `false_completion` que o juiz caça.
+- Skill `kata-agile` — orquestrador alternativo de ciclo curto
+  (FIT → THINK → DECLARE → VERIFY → REPORT), com 4 interações em vez de 13+.
+  `DECLARE` funde INTENT, SURGICAL e SIMPLIFY sem deixar de gravar
+  `surgical.files`, `intent.*` e `simplify.*`; `REPORT` absorve ARTIFACT (o
+  cálculo de `auth_owed` é o que arma `unauthorized_action` no juiz) e a
+  pergunta do TWIN CHECK. Como as chaves são as mesmas, `--audit`, `--judge` e
+  `--report` continuam valendo sem mudança de schema.
+- `kata.skills.OPTIONAL_PHASES`, `check_optional_phases` e
+  `doctor_optional_phases` — categoria de skill de fase **opcional**, separada
+  de `PHASE_SKILLS`. O doctor avisa, nunca reprova: tornar `kata-agile`
+  obrigatória marcaria como parcial toda instalação existente até um
+  `make reinstall`, que é o alarme reservado a risco real.
+- Gatilho de escalonamento do ciclo curto: diff acima de 5 arquivos ou 200
+  linhas, `domain != coding`, ação irreversível, VERIFY reprovado uma vez, ou
+  trivialidade declarada contra o diff medido.
+
+### Alterado
+
+- `_step_verify` aceita `criterion_met` explícito. `--verify-task` não pergunta
+  em terminal e não assume "satisfeito" quando ninguém afirmou; aprovar sem
+  `done` declarado também é recusado, porque produziria um `approved` que o
+  relatório classifica como INCONSISTENTE. `--check-only` mantém o
+  comportamento anterior.
+
 ## 0.8.1 — 2026-10-30
 
 ### Adicionado

@@ -389,22 +389,30 @@ the sdist by its required root files.
 | `kata --task TASK` | Resume a specific task |
 | `kata --plan [--task TASK]` | Run FIT and THINK, save the plan, and stop |
 | `kata --check-only` | Run Ruff, pytest, and coverage without task interaction |
+| `kata --verify-task TASK [--criterion-met\|--no-criterion-met]` | Run the same checks for **one task** and write the evidence into it (`verify.*`, `status`, `kata_version`). This is the gate of the short cycle: `--check-only` saves nothing, and the alternative — transcribing the result by hand — is exactly the `false_completion` the judge hunts |
 | `kata --report --task TASK` | Regenerate the outcome-first report |
 | `kata --stamp TASK [--commit SHA]` | Record the commit that ends the task in `approved_commit`, closing the judge's diff window. Run it right after the commit; without `--commit` it uses `HEAD`. Validates that the commit resolves, descends from `base_commit` and is an ancestor of `HEAD` |
 | `kata --judge --task TASK` | Run adversarial verification (requires `status: approved`) |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
-| `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters and the optional `kata-advisor` subagent are warnings, not failures |
+| `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters, the optional `kata-agile` phase skill and the optional `kata-advisor` subagent are warnings, not failures |
 | `kata --install FRONTEND` | Copy the bundled skills, the orchestrator agent and the `kata-advisor` subagent (`opencode`, `claude-code` or `all`) without a checkout of this repository |
 | `kata --uninstall FRONTEND` | Remove what `--install` created (only what Kata itself wrote) |
 | `kata --force` | With `--install`: back up existing customization to `.bak` and replace it |
 | `kata --version` | Print the package version |
 
-The `--plan`, `--check-only`, `--judge`, `--report`, `--audit` and `--stamp`
-combinations are validated by the CLI. In particular, `--plan` and
-`--check-only` cannot be used together, `--judge` cannot be combined with
+The `--plan`, `--check-only`, `--judge`, `--report`, `--audit`, `--verify-task`
+and `--stamp` combinations are validated by the CLI. In particular, `--plan`
+and `--check-only` cannot be used together, `--judge` cannot be combined with
 either one, `--audit` is mutually exclusive with `--init`, `--plan`,
-`--check-only`, `--judge`, and `--report`, and `--stamp` excludes every other
-mode (`--commit` only exists with it).
+`--check-only`, `--judge`, and `--report`, `--verify-task` names its own task
+and excludes every other mode, and `--stamp` excludes every other mode
+(`--commit` only exists with it).
+
+`--criterion-met` exists only with `--verify-task`, and it is what keeps that
+mode honest: the flag asserts that the `done` criterion declared in THINK was
+met. Without it the command prompts, and with no terminal it refuses — a
+non-interactive caller must state the answer instead of letting the CLI assume
+it. `--no-criterion-met` records the refusal, and the task ends `rejected`.
 
 ### Verification options
 
@@ -611,6 +619,49 @@ printed as `INCONSISTENTE` and exits `1`, instead of claiming a success the
 evidence does not support. A rejected task whose `verify.hand_back` is `true`
 reports the hand-back explicitly with the number of failed attempts, instead of
 a generic "rejected" that invites yet another fix-verify cycle.
+
+### The short cycle (`kata-agile`)
+
+`kata-agile` is an **alternative orchestrator**, not a phase: five phases and
+four interactions with the user, against nine phases and thirteen or more.
+
+```
+FIT → THINK → DECLARE → VERIFY → REPORT
+```
+
+What shrinks is the conversation, not the verification. `DECLARE` folds
+INTENT, SURGICAL and SIMPLIFY into a single declaration **that still writes
+the same keys** — `surgical.files[]` is what the judge reads for
+`scope_creep`, and `intent.all_agree` is what it reads for `spec_betrayal`.
+`REPORT` absorbs ARTIFACT and the TWIN CHECK question, and the due-line
+calculation has to keep running: `artifact.auth_owed` is what arms
+`unauthorized_action`.
+
+The gate runs through `kata --verify-task TASK --criterion-met`, so the CLI —
+not the agent — records which commands ran, with which gate and when. The
+short cycle writes only keys the schema already defines, which is why
+`--audit`, `--judge` and `--report` work unchanged; a phase it never touches
+is omitted from the audit rather than accused.
+
+A task escalates to the full `@kata` when, measured in FIT or re-measured in
+DECLARE: the diff exceeds five files or two hundred added lines; the domain is
+not `coding`; an irreversible action is part of the task; VERIFY failed once
+(the second attempt belongs to the full cycle); or `fit.trivial: true`
+contradicts the measured diff.
+
+The skill ships with the package and is **optional** in `--doctor`
+(`OPTIONAL_PHASES` in `kata.skills`): turning it into a required phase skill
+would report every existing installation as partial until a reinstall, which
+is the alarm the doctor reserves for a real risk.
+
+It is also selected **only by name**. A skill is chosen by its description, and
+the other fourteen are scoped by phase ("when the `@kata` agent is at phase X"),
+so they never compete at the entry point. `kata-agile` would, and a description
+advertising "small task, before committing" lets the model divert a large task
+to the short cycle without the user choosing — while the escalation trigger
+only runs *after* the skill was already selected. Its description therefore
+points generic requests at `@kata`, and a test in `test_skills_build.py` fails
+if it drifts back.
 
 ### AUDIT
 

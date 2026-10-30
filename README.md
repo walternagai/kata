@@ -29,6 +29,19 @@ FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK →
 Modos adicionais do CLI: `--audit` (gradua as fases da tarefa como
 followed / skipped / faked / degraded) e `--check-only` (só verificação, para CI).
 
+Para tarefa pequena ou média há o **ciclo curto** `kata-agile` (skill opcional),
+com cinco fases e quatro interações:
+
+```
+FIT → THINK → DECLARE → VERIFY → REPORT
+```
+
+Ele encurta a conversa, não a verificação: o gate continua sendo
+`kata --verify-task <nome>`, que grava lint/teste/coverage na própria tarefa,
+e as chaves gravadas são as mesmas — `--audit`, `--judge` e `--report` seguem
+valendo. Tarefa que estoura o gatilho (diff grande, domínio não-`coding`, ação
+irreversível) escala para o `@kata` completo.
+
 Como um kata marcial, é uma sequência disciplinada e repetível de movimentos:
 classificar a tarefa, pensar antes de codar, manter o código mínimo, verificar
 intenção, mudanças cirúrgicas e verificar com critérios objetivos.
@@ -225,13 +238,17 @@ como texto após o nome (ex: `/kata --init nome-da-tarefa`):
 kata --init minha-tarefa       # Cria .kata/minha-tarefa.yaml
 kata                            # Ciclo interativo completo
 kata --check-only               # Só VERIFY (lint + test + coverage)
+kata --verify-task minha-tarefa --criterion-met  # VERIFY gravado na tarefa
+                                   # (gate do ciclo curto: roda o mesmo e
+                                   # escreve verify.* no .kata/<task>.yaml)
 kata --plan                     # Modo planejamento: FIT + THINK, para
 kata --plan --task minha-tarefa # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
 kata --task minha-tarefa --report  # Relatório outcome-first
 kata --doctor                      # As skills de fase estão instaladas?
-                                   # (parcial sai 1; domain adapters ausentes e o
-                                   # subagente kata-advisor ausente só avisam)
+                                   # (parcial sai 1; domain adapters ausentes, a
+                                   # skill opcional kata-agile e o subagente
+                                   # kata-advisor ausentes só avisam)
 kata --install all [--force]       # Instala skills + agente + subagente advisor
                                    # (opencode, claude-code ou all)
 kata --uninstall all               # Remove só o que o --install criou
@@ -244,6 +261,8 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | Flag | Default | Descrição |
 |------|---------|-----------|
 | `--plan` | `False` | Modo planejamento: FIT + THINK, não modifica código |
+| `--verify-task` | (nenhum) | Roda lint/teste/coverage de uma tarefa e grava `verify.*` + `status` nela. É o gate do ciclo curto: `--check-only` não grava nada e não combina com `--task` |
+| `--criterion-met` | (pergunta) | Só com `--verify-task`: afirma que o `done` do THINK foi satisfeito (`--no-criterion-met` nega). Sem terminal e sem a flag, recusa em vez de assumir |
 | `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes); exige tarefa com `status: approved` |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |

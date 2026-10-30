@@ -59,7 +59,7 @@ passou.
 
 Para esta fase, use:
 
-- **`bash`**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --check-only`; no Windows, use `py -m kata` se necessário).
+- **`bash`**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --verify-task <tarefa>` quando há tarefa, que roda o mesmo e grava a evidência; `python -m kata --check-only` para CI sem tarefa; no Windows, use `py -m kata` se necessário).
 - **`question`** (via `kata-question`): pergunte ao usuário se o critério de sucesso foi satisfeito.
 - **`write` / `edit`**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
 
@@ -261,6 +261,20 @@ Para executar via CLI:
 ```bash
 python -m kata --check-only
 ```
+
+## Modo --verify-task (o gate de um ciclo curto)
+
+`python -m kata --verify-task <tarefa> --criterion-met` roda as mesmas
+verificações e **grava** `verify.*`, `status` e `kata_version` na tarefa.
+`--check-only` não grava nada (o resultado morre num dict local): use-o para
+CI sem tarefa, e `--verify-task` quando existe arquivo de tarefa para carregar
+a evidência. Sem `--criterion-met` (ou `--no-criterion-met`) e sem terminal, o
+comando **recusa** em vez de assumir o critério satisfeito — e aprovar sem
+`done` declarado também é recusado.
+
+Transcrever o resultado à mão é a alternativa que este modo existe para
+evitar: evidência digitada é afirmação, e é isso que o JUDGE chama de
+`false_completion`.
 
 ## Princípios
 

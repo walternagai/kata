@@ -215,6 +215,25 @@ class TestTemplate:
             render(fonte, "claude-code", "teste.md")
 
 
+def test_kata_agile_nao_disputa_o_gatilho_do_orquestrador() -> None:
+    """A descrição é a superfície de seleção: quem escolhe a skill é o host.
+
+    As 14 skills anteriores são escopadas por fase ("quando o agente @kata
+    estiver na fase X") e não concorrem na porta de entrada. `kata-agile` é
+    orquestrador alternativo e, anunciado como "use quando a tarefa é
+    pequena", desviava da `@kata` uma tarefa grande sem o usuário escolher —
+    e o gatilho de escalonamento só roda depois de a skill já ter sido
+    escolhida.
+    """
+    fonte = (REPO / "phases" / "kata-agile.md").read_text(encoding="utf-8")
+    frontmatter = fonte.split("---")[1]
+    assert "pelo nome" in frontmatter, "a seleção tem de ser explícita"
+    assert "@kata" in frontmatter, "a descrição tem de apontar o @kata como padrão"
+    assert "Use quando a tarefa é pequena" not in frontmatter, (
+        "a descrição voltou a anunciar gatilho genérico — é o @kata que decide a rota"
+    )
+
+
 class TestFontes:
     """Invariantes das fontes em phases/."""
 

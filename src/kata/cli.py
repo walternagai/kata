@@ -924,6 +924,7 @@ def _step_verify(
     cov_source: str | list[str] = "src",
     gate: float = 70.0,
     config: VerifyConfig | None = None,
+    criterion_met: bool | None = None,
 ) -> dict[str, Any]:
     """Fase 4: GOAL-DRIVEN — verificação de qualidade (lint + teste + coverage)."""
     _print_header("4. GOAL-DRIVEN — Verificação de qualidade")
@@ -1019,7 +1020,19 @@ def _step_verify(
     done = data.get("done", "")
     if done:
         print(f"  (declarado no THINK: {done})")
-    if task == "check-only":
+    if criterion_met is not None:
+        # `--verify-task`: quem afirmou foi o usuário, por `--criterion-met`,
+        # depois de ver o critério declarado. Não há pergunta aqui para não
+        # transformar o gate de um ciclo curto em mais uma ida-e-volta.
+        success_met = criterion_met
+        print(f"  (critério afirmado: {'satisfeito' if success_met else 'não satisfeito'})")
+        if success_met and not str(done).strip():
+            # Aprovar sem `done` produziria um `approved` que o report
+            # classifica como INCONSISTENTE (consistency_failures). Melhor
+            # dizer isso agora, com o gate na mão, do que no fim do ciclo.
+            print("  ⚠  'done' não declarado no THINK — o critério não tem o que confrontar")
+            success_met = False
+    elif task == "check-only":
         success_met = True
         print("  (modo check-only — assumido satisfeito)")
     else:
@@ -1726,6 +1739,25 @@ def main() -> None:
         help="Modo planejamento: executa THINK e para (não modifica código)",
     )
     parser.add_argument(
+        "--verify-task",
+        metavar="NAME",
+        default=None,
+        help=(
+            "Roda só a verificação da tarefa --task NAME e grava o resultado nela. "
+            "É o gate dos ciclos curtos: sem ele, quem não percorre as 9 fases teria "
+            "de transcrever verify.* à mão"
+        ),
+    )
+    parser.add_argument(
+        "--criterion-met",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Com --verify-task: afirma que o critério 'done' do THINK foi satisfeito "
+            "(--no-criterion-met nega). Omitido, pergunta se houver terminal"
+        ),
+    )
+    parser.add_argument(
         "--task",
         metavar="NAME",
         help="Retoma tarefa específica existente",
@@ -1859,6 +1891,36 @@ def main() -> None:
         parser.error("--init é mutuamente exclusivo com --judge, --report, --plan e --check-only")
     if args.task and args.check_only:
         parser.error("--task é mutuamente exclusivo com --check-only")
+    # --verify-task já nomeia a tarefa; `--task` junto seria uma segunda forma
+    # de dizer o mesmo, e as duas divergindo é o tipo de ambiguidade que o K-17
+    # fechou para --init/--check-only.
+    if args.verify_task and (
+        args.task
+        or args.init
+        or args.plan
+        or args.check_only
+        or args.judge
+        or args.report
+        or args.audit
+        or args.stamp
+        or args.install
+        or args.uninstall
+    ):
+        parser.error(
+            "--verify-task é mutuamente exclusivo com --task, --init, --plan, "
+            "--check-only, --judge, --report, --audit, --stamp e --install/--uninstall"
+        )
+    if args.criterion_met is not None and not args.verify_task:
+        parser.error("--criterion-met só vale com --verify-task")
+    # Sem `--criterion-met` e sem terminal, ninguém afirmou o critério: aprovar
+    # aqui seria o "assumido satisfeito" do --check-only aplicado a uma tarefa
+    # que declarou `done`. Falha de uso, não de verificação — antes de gastar
+    # a execução do gate.
+    if args.verify_task and args.criterion_met is None and not sys.stdin.isatty():
+        parser.error(
+            "--verify-task sem --criterion-met exige terminal para perguntar. "
+            "Passe --criterion-met ou --no-criterion-met depois de confirmar com o usuário"
+        )
     if args.commit and not args.stamp:
         parser.error("--commit só vale com --stamp")
     if args.stamp and (
@@ -2074,6 +2136,39 @@ def main() -> None:
             gate=gate,
             config=config,
         )
+        sys.exit(0 if data.get("status") == "approved" else 1)
+
+    # Modo --verify-task: o gate de um ciclo curto, gravado na tarefa.
+    #
+    # O ciclo de 9 fases roda a verificação dentro da própria sequência
+    # interativa. Um ciclo menor não tem essa sequência: se chamasse
+    # `--check-only`, o resultado morreria num dict local (não há _save_task
+    # ali) e o `verify.*` da tarefa teria de ser transcrito pelo agente — a
+    # evidência passaria a ser afirmação. Este modo existe para que o CLI
+    # continue sendo quem grava o que rodou, e o agente só decida QUANDO.
+    if args.verify_task:
+        task = args.verify_task
+        path = _task_path(task)
+        if not path.exists():
+            print(f"⚠  tarefa '{task}' não existe: {path}")
+            print(f"   Crie com `kata --init {task}` antes de verificar.")
+            sys.exit(1)
+        data = _load_task_or_exit(path)
+        data = _capture_base_commit(data, task=task)
+        _save_task(path, data)
+        data = _step_verify(
+            task,
+            data,
+            ruff_paths=args.ruff_paths,
+            test_paths=args.test_paths,
+            ignore=args.ignore,
+            cov_source=cov_source,
+            gate=gate,
+            config=config,
+            criterion_met=args.criterion_met,
+        )
+        _save_task(path, data)
+        print(f"\n📝  Resultado salvo em {path}")
         sys.exit(0 if data.get("status") == "approved" else 1)
 
     # Modo interativo: escolher ou criar tarefa

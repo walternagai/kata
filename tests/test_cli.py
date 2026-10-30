@@ -1243,6 +1243,125 @@ class TestMainCheckOnly:
                 assert e.code == 1
 
 
+class TestMainVerifyTask:
+    """`--verify-task`: o gate de um ciclo curto, gravado na tarefa.
+
+    Existe porque `--check-only` roda a verificação num dict local e não
+    grava nada, e `--task` é mutuamente exclusivo com ele. Sem este modo, um
+    orquestrador que não percorre as 9 fases teria de transcrever `verify.*`
+    à mão — e evidência digitada é afirmação, não observação.
+    """
+
+    def _cria_tarefa(self, nome: str = "agil", done: str = "o gate passa") -> Path:
+        cli._init_task(nome)
+        path = cli._task_path(nome)
+        data = cli._load_task_or_exit(path)
+        data["done"] = done
+        data["status"] = "think-complete"
+        cli._save_task(path, data)
+        return path
+
+    @patch("kata.cli.run_all")
+    def test_grava_evidencia_e_aprova(self, mock_run_all, repo_git, monkeypatch) -> None:
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True, details={"command": "ruff check"}),
+            "pytest": VerifyResult(ok=True, details={"command": "pytest -q"}),
+            "coverage": VerifyResult(
+                ok=True,
+                details={"coverage_pct": 91.0, "gate": 70.0, "command": "pytest --cov"},
+            ),
+        }
+        monkeypatch.chdir(repo_git)
+        path = self._cria_tarefa()
+
+        with patch("sys.argv", ["kata", "--verify-task", "agil", "--criterion-met"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 0
+        data = cli._load_task_or_exit(path)
+        assert data["status"] == "approved"
+        assert data["verify"]["ruff_clean"] is True
+        assert data["verify"]["success_criteria_met"] is True
+        assert data["verify"]["gate_used"] == 70.0
+        assert data["verify"]["commands"]["test"] == "pytest -q"
+        assert data["verify"]["ran_at"]
+        assert data["kata_version"] == cli.__version__
+
+    @patch("kata.cli.run_all")
+    def test_recusa_tarefa_inexistente(self, mock_run_all, repo_git, monkeypatch, capsys) -> None:
+        monkeypatch.chdir(repo_git)
+        with patch("sys.argv", ["kata", "--verify-task", "nao-existe", "--criterion-met"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 1
+        # Não gaste a execução do gate numa tarefa que não existe.
+        assert mock_run_all.called is False
+        assert "--init" in capsys.readouterr().out
+
+    def test_sem_criterion_met_e_sem_terminal_e_erro_de_uso(self, repo_git, monkeypatch) -> None:
+        """Sem TTY ninguém afirmou o critério. Aprovar aqui seria o "assumido
+        satisfeito" do --check-only aplicado a uma tarefa que declarou `done`."""
+        monkeypatch.chdir(repo_git)
+        self._cria_tarefa()
+        with patch("sys.argv", ["kata", "--verify-task", "agil"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+    @patch("kata.cli.run_all")
+    def test_criterion_not_met_rejeita(self, mock_run_all, repo_git, monkeypatch) -> None:
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0, "gate": 70.0}),
+        }
+        monkeypatch.chdir(repo_git)
+        path = self._cria_tarefa()
+
+        with patch("sys.argv", ["kata", "--verify-task", "agil", "--no-criterion-met"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 1
+        data = cli._load_task_or_exit(path)
+        assert data["status"] == "rejected"
+        assert data["verify"]["success_criteria_met"] is False
+
+    @patch("kata.cli.run_all")
+    def test_sem_done_nao_aprova(self, mock_run_all, repo_git, monkeypatch, capsys) -> None:
+        """Aprovar sem `done` produziria um `approved` que o report classifica
+        como INCONSISTENTE (consistency_failures)."""
+        mock_run_all.return_value = {
+            "ruff": VerifyResult(ok=True),
+            "pytest": VerifyResult(ok=True),
+            "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0, "gate": 70.0}),
+        }
+        monkeypatch.chdir(repo_git)
+        path = self._cria_tarefa(done="")
+
+        with patch("sys.argv", ["kata", "--verify-task", "agil", "--criterion-met"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 1
+        assert cli._load_task_or_exit(path)["verify"]["success_criteria_met"] is False
+        assert "'done' não declarado" in capsys.readouterr().out
+
+    def test_criterion_met_sem_verify_task_e_erro_de_uso(self) -> None:
+        with patch("sys.argv", ["kata", "--criterion-met"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+    def test_verify_task_com_task_e_erro_de_uso(self) -> None:
+        with patch("sys.argv", ["kata", "--verify-task", "a", "--task", "b", "--criterion-met"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+
 class TestDetectCovSource:
     """Testa detecção automática do pacote fonte de coverage."""
 

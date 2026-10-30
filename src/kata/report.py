@@ -18,7 +18,7 @@ from typing import Any
 
 from kata import __version__
 from kata.judge import JudgeResult
-from kata.skills import InstallStatus, doctor_domain
+from kata.skills import InstallStatus, doctor_domain, doctor_optional_phases
 from kata.verify import ROLE_LABELS, consistency_failures
 
 
@@ -354,6 +354,21 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
         print("     Domain adapters só são necessárias quando a tarefa usa um")
         print("     domínio diferente de coding. Instale com `kata --install all`")
         print("     (ou `make reinstall` / `make reinstall-claude-code` no checkout).")
+        print()
+
+    # Skills de fase opcionais: avisar, nunca reprovar. O kata-agile é um
+    # orquestrador ALTERNATIVO — sem ela, o ciclo completo continua inteiro.
+    # Ao contrário do domain adapter, ela não é carregada por nenhuma fase:
+    # quem não abre uma tarefa em ciclo curto nunca sente a falta.
+    optional_warnings = 0
+    for frontend, faltando in doctor_optional_phases().items():
+        if faltando:
+            optional_warnings += 1
+            print(f"  ℹ️  {frontend}: skill de fase opcional faltando: {', '.join(faltando)}")
+    if optional_warnings:
+        print("     O kata-agile é o ciclo curto (FIT → THINK → DECLARE →")
+        print("     VERIFY → REPORT); o ciclo completo não depende dele.")
+        print("     Instale com `kata --install all` (ou `make reinstall` no checkout).")
         print()
 
     # Subagente opcional (advisor): avisar, nunca reprovar. Sem ele o JUDGE

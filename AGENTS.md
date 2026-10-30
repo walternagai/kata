@@ -37,11 +37,12 @@ tests/          testes pytest (test_cli.py, test_config.py, test_fit.py,
 opencode/       definição do agente, subagente e skills para o OpenCode
   agent/kata.md          prompt do agente orquestrador @kata
   agents/kata-advisor.md subagente de revisão adversarial semântica (Hostile Reviewer)
-  skills/kata-*/SKILL.md 14 skills (10 de fase + 4 domain adapters; TWIN CHECK
+  skills/kata-*/SKILL.md 15 skills (10 de fase + 4 domain adapters + o
+                         orquestrador alternativo kata-agile; TWIN CHECK
                          vive no orquestrador)
 claude-code/    skills para o Claude Code
   skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
-  skills/kata-*/SKILL.md as mesmas 14 skills (mesmo procedimento,
+  skills/kata-*/SKILL.md as mesmas 15 skills (mesmo procedimento,
                          nomes de ferramenta do host — não são texto idêntico)
 domains/        adapters de domínio opcionais, fonte única como phases/
                 (TEMPLATE.md documenta o schema; kata-devops.md,
@@ -126,6 +127,10 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
   a checagem de instalação por frontend (`kata --doctor`). Instalação parcial
   reprova; ausente não. Uma fase rodada sem a skill dela vai para
   `preflight.skills_missing` e o `--audit` a gradua como `degraded`.
+  `OPTIONAL_PHASES` é a terceira categoria: skills geradas e instaladas (hoje
+  só `kata-agile`, o orquestrador de ciclo curto) que o doctor **avisa** e não
+  exige — quem roda o ciclo completo não perde nada sem elas, e exigi-las
+  marcaria toda instalação existente como parcial.
 - `install.py` é o `kata --install` / `--uninstall` / `--force`: copia as
   skills empacotadas de `src/kata/assets/` para o config dir do frontend, sem
   exigir clone do repo (quem instalou via `pipx install kata-dev` não tem

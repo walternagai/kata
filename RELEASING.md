@@ -19,8 +19,14 @@ O pacote se chama **`kata-dev`** no PyPI; o comando e o repositório continuam
 O PyPI **rejeita re-upload da mesma versão**. Errar o número não tem rollback:
 sobra `yank` (esconde a versão, não a substitui) e publicar a seguinte.
 
-Convenção observada no repo (não há semver declarado): mudança aditiva sem
-quebra é *patch* — `v0.7.0 → v0.7.1` publicou o `install.py` inteiro assim.
+Convenção a partir da 0.9.0: **feature visível sobe *minor*** (0.8.x → 0.9.0);
+correção, ajuste de texto e refactor sem comportamento novo sobem *patch*.
+A 0.9.0 é o primeiro caso — o `kata-agile` muda como o ciclo é aberto, e um
+número de patch esconderia isso de quem lê "o que mudou".
+
+Antes disso a convenção era outra: mudança aditiva sem quebra era *patch*, e
+`v0.7.0 → v0.7.1` publicou o `install.py` inteiro assim. O histórico anterior
+não foi reescrito; ele só não serve mais de regra.
 
 ## 2. Bump nos dois lugares
 
@@ -49,10 +55,10 @@ make package
 ```
 
 `make package` apaga `dist/` velho, constrói wheel + sdist, roda `twine check`
-e confere os dois artefatos: no wheel, os módulos essenciais, os 31 assets e a
-versão; no sdist, os arquivos de raiz que ele precisa levar (`CHANGELOG.md`,
-`README.md`, `LICENSE`, `MANIFEST.in`). É o mesmo alvo que o job `package` do
-CI roda.
+e confere os dois artefatos: no wheel, os módulos essenciais, os assets das
+skills e a versão; no sdist, os arquivos de raiz que ele precisa levar
+(`CHANGELOG.md`, `README.md`, `LICENSE`, `MANIFEST.in`). É o mesmo alvo que o
+job `package` do CI roda.
 
 Artefato de release anterior em `dist/` é a armadilha clássica: sem apagar, o
 wheel velho sobe junto.

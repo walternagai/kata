@@ -61,6 +61,14 @@ MARKER_DIR = ".kata-managed"
 
 DOMAIN_SKILLS: tuple[str, ...] = ("kata-devops", "kata-data-analysis", "kata-research", "kata-docs")
 
+# Skills de fase opcionais: geradas e instaladas, mas fora do preflight
+# obrigatório. `kata-agile` é um orquestrador ALTERNATIVO — quem roda o ciclo
+# completo nunca precisa dela. Entrar em PHASE_SKILLS tornaria a skill
+# obrigatória e reprovaria o `--doctor` de toda instalação existente até um
+# `make reinstall`, que é justamente o alarme de "instalação parcial" que o
+# doctor usa para acusar risco real.
+OPTIONAL_PHASES: tuple[str, ...] = ("kata-agile",)
+
 
 @dataclass(frozen=True)
 class Frontend:
@@ -299,6 +307,24 @@ def check_domain_skills(frontend: Frontend) -> list[str]:
 def doctor() -> list[InstallStatus]:
     """Estado de instalação de todos os frontends conhecidos."""
     return [check_frontend(f) for f in FRONTENDS]
+
+
+def check_optional_phases(frontend: Frontend) -> list[str]:
+    """Skills de fase opcionais que estão faltando no frontend.
+
+    Mesmo contrato de `check_domain_skills`: informa, nunca reprova. Quem não
+    tem `kata-agile` instalada roda o `@kata` completo normalmente; a
+    instalação parcial de uma fase OBRIGATÓRIA é que é o estado perigoso.
+    """
+    if check_frontend(frontend).ausente:
+        return []
+    raiz = frontend.config_dir() / "skills"
+    return [nome for nome in OPTIONAL_PHASES if not (raiz / nome).exists()]
+
+
+def doctor_optional_phases() -> dict[str, list[str]]:
+    """Skills de fase opcionais faltando em cada frontend."""
+    return {f.nome: check_optional_phases(f) for f in FRONTENDS}
 
 
 def doctor_domain() -> dict[str, list[str]]:

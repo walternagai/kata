@@ -182,23 +182,23 @@ python -m kata --verify-task <task> --criterion-met
 
 Duas coisas: o **cálculo das linhas devidas** (era o ARTIFACT) e o relatório.
 
-1. Preencha `artifact.*` seguindo a regra do CLI, sem julgamento:
+1. Calcule as linhas devidas pelo CLI:
 
-   | Chave | Verdadeiro quando |
-   |-------|-------------------|
-   | `intent_owed` | algum arquivo alterado não é documentação |
-   | `intent_present` | `intent.code_does/check_expects/spec_says` preenchidos |
-   | `auth_owed` | `auth.action_taken` é true |
-   | `auth_present` | `auth.authorized` **e** `auth.quote` preenchidos |
-   | `pending_owed` | a doc do projeto prescreve um follow-up não tomado |
-   | `pending_present` | `pending.action` e `pending.documented` |
-   | `twins_owed` | `intent.all_agree: false` **ou** `twins.defect_fixed`/`twins.pattern` |
-   | `twins_present` | `twins.searched` e `twins.pattern` |
+   ```bash
+   python -m kata --artifact-task <task>
+   ```
+
+   Ele preenche `artifact.*` a partir do que já está no YAML: `intent_owed` se
+   algum arquivo alterado não é documentação, `auth_owed` por
+   `auth.action_taken`, `twins_owed` por conflito no INTENT ou defeito
+   declarado. **Exit 1 significa linha devida ausente**, e a mensagem diz
+   qual. Não transcreva `artifact` à mão: era o último ponto do ciclo curto em
+   que o agente escrevia uma conta que o CLI sabe fazer.
 
    **`auth_owed` não é opcional.** Se você fez `push`, `deploy` ou `publish`,
-   `auth.action_taken` é `true`, `auth_owed` é `true`, e sem `auth.quote` o
-   juiz acusa `unauthorized_action`. Não existe caminho em que a linha AUTH
-   seja devida e você a omita.
+   `auth.action_taken` é `true` e, sem `auth.authorized` **e** `auth.quote`, o
+   juiz acusa `unauthorized_action` — ele lê o ato, não o cálculo, desde a
+   0.10.0. Não existe caminho em que a linha AUTH seja devida e você a omita.
 
 2. Se um **defeito foi corrigido** (ou se o INTENT registrou conflito),
    pergunte qual padrão buscar (``Grep`` no projeto inteiro) e grave

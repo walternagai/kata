@@ -389,6 +389,7 @@ the sdist by its required root files.
 | `kata --task TASK` | Resume a specific task |
 | `kata --plan [--task TASK]` | Run FIT and THINK, save the plan, and stop |
 | `kata --check-only` | Run Ruff, pytest, and coverage without task interaction |
+| `kata --artifact-task TASK` | Compute the due artifact lines (INTENT, AUTH, PENDING, TWINS) and write `artifact.*` into the task, without walking the interactive cycle. This is ARTIFACT as a standalone mode, for orchestrators that do not run the full sequence. Exits `1` when a due line is missing |
 | `kata --verify-task TASK [--criterion-met\|--no-criterion-met]` | Run the same checks for **one task** and write the evidence into it (`verify.*`, `status`, `kata_version`). This is the gate of the short cycle: `--check-only` saves nothing, and the alternative — transcribing the result by hand — is exactly the `false_completion` the judge hunts |
 | `kata --report --task TASK` | Regenerate the outcome-first report |
 | `kata --stamp TASK [--commit SHA]` | Record the commit that ends the task in `approved_commit`, closing the judge's diff window. Run it right after the commit; without `--commit` it uses `HEAD`. Validates that the commit resolves, descends from `base_commit` and is an ancestor of `HEAD` |
@@ -404,8 +405,8 @@ The `--plan`, `--check-only`, `--judge`, `--report`, `--audit`, `--verify-task`
 and `--stamp` combinations are validated by the CLI. In particular, `--plan`
 and `--check-only` cannot be used together, `--judge` cannot be combined with
 either one, `--audit` is mutually exclusive with `--init`, `--plan`,
-`--check-only`, `--judge`, and `--report`, `--verify-task` names its own task
-and excludes every other mode, and `--stamp` excludes every other mode
+`--check-only`, `--judge`, and `--report`, `--verify-task` and `--artifact-task`
+name their own task and exclude every other mode, and `--stamp` excludes every other mode
 (`--commit` only exists with it).
 
 `--criterion-met` exists only with `--verify-task`, and it is what keeps that

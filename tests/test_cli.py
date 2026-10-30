@@ -1399,6 +1399,66 @@ class TestMainVerifyTask:
         assert exc.value.code == 2
 
 
+class TestMainArtifactTask:
+    """`--artifact-task`: a fase ARTIFACT sem o ciclo interativo."""
+
+    def _cria_tarefa(self, nome: str, auth: dict | None = None) -> Path:
+        cli._init_task(nome)
+        path = cli._task_path(nome)
+        data = cli._load_task_or_exit(path)
+        data["done"] = "gate passa"
+        data["status"] = "approved"
+        if auth is not None:
+            data["auth"] = auth
+        cli._save_task(path, data)
+        return path
+
+    def test_tarefa_inexistente_sai_1(self, repo_git, monkeypatch, capsys) -> None:
+        monkeypatch.chdir(repo_git)
+        with patch("sys.argv", ["kata", "--artifact-task", "nao-existe"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+        assert "--init" in capsys.readouterr().out
+
+    def test_acao_sem_auth_falha_e_grava_owed(self, repo_git, monkeypatch) -> None:
+        """O caso do ciclo curto: fez a ação, não escreveu AUTH."""
+        monkeypatch.chdir(repo_git)
+        path = self._cria_tarefa(
+            "agil", auth={"action_taken": True, "authorized": False, "quote": ""}
+        )
+
+        with patch("sys.argv", ["kata", "--artifact-task", "agil"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 1
+        artifact = cli._load_task_or_exit(path)["artifact"]
+        assert artifact["auth_owed"] is True
+        assert artifact["auth_present"] is False
+
+    def test_nada_devido_sai_0(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        path = self._cria_tarefa("limpa")
+
+        with patch("sys.argv", ["kata", "--artifact-task", "limpa"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+
+        assert exc.value.code == 0
+        artifact = cli._load_task_or_exit(path)["artifact"]
+        assert artifact["auth_owed"] is False
+        assert artifact["intent_owed"] is False
+
+    def test_exclusivo_com_verify_task(self) -> None:
+        with patch(
+            "sys.argv", ["kata", "--artifact-task", "a", "--verify-task", "b", "--criterion-met"]
+        ):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 2
+
+
 class TestDetectCovSource:
     """Testa detecção automática do pacote fonte de coverage."""
 

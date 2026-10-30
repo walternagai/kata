@@ -241,6 +241,8 @@ kata --check-only               # Só VERIFY (lint + test + coverage)
 kata --verify-task minha-tarefa --criterion-met  # VERIFY gravado na tarefa
                                    # (gate do ciclo curto: roda o mesmo e
                                    # escreve verify.* no .kata/<task>.yaml)
+kata --artifact-task minha-tarefa  # Calcula as linhas devidas (INTENT/AUTH/
+                                   # PENDING/TWINS) e grava artifact.*
 kata --plan                     # Modo planejamento: FIT + THINK, para
 kata --plan --task minha-tarefa # Planeja tarefa específica
 kata --task minha-tarefa        # Retoma tarefa específica
@@ -263,6 +265,7 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--plan` | `False` | Modo planejamento: FIT + THINK, não modifica código |
 | `--verify-task` | (nenhum) | Roda lint/teste/coverage de uma tarefa e grava `verify.*` + `status` nela. É o gate do ciclo curto: `--check-only` não grava nada e não combina com `--task` |
 | `--criterion-met` | (pergunta) | Só com `--verify-task`: afirma que o `done` do THINK foi satisfeito (`--no-criterion-met` nega). Sem terminal e sem a flag, recusa em vez de assumir |
+| `--artifact-task` | (nenhum) | Calcula as linhas devidas (INTENT/AUTH/PENDING/TWINS) e grava `artifact.*` na tarefa. É a fase ARTIFACT avulsa, para quem não percorre o ciclo interativo. Exit 1 quando falta linha devida |
 | `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes); exige tarefa com `status: approved` |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |

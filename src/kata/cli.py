@@ -1775,6 +1775,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--artifact-task",
+        metavar="NAME",
+        default=None,
+        help=(
+            "Calcula as linhas devidas (INTENT/AUTH/PENDING/TWINS) da tarefa NAME e "
+            "grava em artifact.*. É a fase ARTIFACT sem o ciclo interativo — sem ela, "
+            "um orquestrador curto teria de calcular auth_owed à mão"
+        ),
+    )
+    parser.add_argument(
         "--criterion-met",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -1938,6 +1948,27 @@ def main() -> None:
         )
     if args.criterion_met is not None and not args.verify_task:
         parser.error("--criterion-met só vale com --verify-task")
+    # --artifact-task é o outro modo avulso de uma tarefa. As exclusões são as
+    # mesmas de --verify-task: os dois nomeiam a própria tarefa e não fazem
+    # sentido junto de um modo que já percorre o ciclo.
+    if args.artifact_task and (
+        args.task
+        or args.init
+        or args.plan
+        or args.check_only
+        or args.verify_task
+        or args.judge
+        or args.report
+        or args.audit
+        or args.stamp
+        or args.install
+        or args.uninstall
+    ):
+        parser.error(
+            "--artifact-task é mutuamente exclusivo com --task, --init, --plan, "
+            "--check-only, --verify-task, --judge, --report, --audit, --stamp e "
+            "--install/--uninstall"
+        )
     # Sem `--criterion-met` e sem terminal, ninguém afirmou o critério: aprovar
     # aqui seria o "assumido satisfeito" do --check-only aplicado a uma tarefa
     # que declarou `done`. Falha de uso, não de verificação — antes de gastar
@@ -2196,6 +2227,38 @@ def main() -> None:
         _save_task(path, data)
         print(f"\n📝  Resultado salvo em {path}")
         sys.exit(0 if data.get("status") == "approved" else 1)
+
+    # Modo --artifact-task: a fase ARTIFACT sem o ciclo interativo.
+    #
+    # `artifact.auth_owed` é o que arma o `unauthorized_action` no juiz (desde o
+    # B2 ele também lê `auth.action_taken` direto, mas o relatório continua
+    # precisando das linhas devidas). No ciclo completo esse cálculo acontece
+    # depois do VERIFY, dentro da sequência; um ciclo curto não tem essa
+    # sequência, e calcular à mão é a mesma transcrição que o `--verify-task`
+    # existe para eliminar.
+    if args.artifact_task:
+        task = args.artifact_task
+        path = _task_path(task)
+        if not path.exists():
+            print(f"⚠  tarefa '{task}' não existe: {path}")
+            print(f"   Crie com `kata --init {task}` antes de calcular as linhas devidas.")
+            sys.exit(1)
+        data = _load_task_or_exit(path)
+        data = _step_artifact(task, data)
+        _save_task(path, data)
+        checks = _secao(data, "artifact")
+        faltando = [
+            nome
+            for nome, devido, presente in (
+                ("INTENT", checks.get("intent_owed"), checks.get("intent_present")),
+                ("AUTH", checks.get("auth_owed"), checks.get("auth_present")),
+                ("PENDING", checks.get("pending_owed"), checks.get("pending_present")),
+                ("TWINS", checks.get("twins_owed"), checks.get("twins_present")),
+            )
+            if devido and not presente
+        ]
+        print(f"\n📝  Resultado salvo em {path}")
+        sys.exit(1 if faltando else 0)
 
     # Modo interativo: escolher ou criar tarefa
     if args.task:

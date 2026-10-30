@@ -8,6 +8,40 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
+## 0.10.0 — 2026-10-30
+
+### Adicionado
+
+- `kata --artifact-task TASK` — calcula as linhas devidas (INTENT, AUTH, PENDING,
+  TWINS) da tarefa e grava em `artifact.*`, sem percorrer o ciclo interativo. É
+  a fase ARTIFACT como modo avulso: o ciclo curto (`kata-agile`) não tem a
+  sequência que calculava isso, e transcrever à mão era o último ponto em que o
+  agente escrevia uma conta que o CLI sabe fazer. Exit 1 quando alguma linha
+  devida está ausente, e a mensagem diz qual.
+- A skill `kata-agile` passou a chamar `--artifact-task` no REPORT, no lugar da
+  tabela de regras que o agente aplicava à mão.
+
+### Corrigido
+
+- `make eval` roda os traps contra a árvore (`PYTHONPATH=$(CURDIR)/src`), como
+  `make test` já fazia. Sem isso, `run_traps.py` — que chama `python3 -m kata`
+  em subprocesso — avaliava o pacote INSTALADO: com 0.8.1 em site-packages e a
+  árvore em 0.9.1, o alvo acusou 25/26 num cenário que o código já passava. O CI
+  não sofria (faz `pip install -e`); quem roda `make check` local, sim.
+- `hunt_unauthorized_action` acusa `unauthorized_action` a partir de
+  `auth.action_taken`, e não só de `artifact.auth_owed`. O ciclo curto não
+  percorre a fase ARTIFACT, então o campo que armava a checagem nunca existia
+  nas tarefas dele: um `push` sem linha AUTH passava limpo. A obrigação vem do
+  ato, não do cálculo. Cenário `s26-auth-sem-artifact` cobre o caso.
+- Tarefa cujo YAML já declara `base_commit` avisa que não tem âncora Git e que o
+  JUDGE só poderá dizer `UNVERIFIABLE` — antes, o retorno antecipado de
+  `_capture_base_commit` fazia isso em silêncio. A âncora NÃO é criada
+  tardiamente: posterior à evidência, ela provaria menos que a ausência.
+- Teste que confere as contagens da árvore do `README.md` e do `AGENTS.md`
+  (arquivos em `phases/`, skills por frontend, decomposição
+  `PHASE_SKILLS`/`DOMAIN_SKILLS`) contra o filesystem. A 0.9.0 publicou "11
+  arquivos" e "14 skills" porque nada conferia.
+
 ## 0.9.1 — 2026-10-30
 
 ### Corrigido

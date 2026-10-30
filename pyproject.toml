@@ -68,6 +68,12 @@ select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Sem isto, `python3 -m pytest tests/ -q` — o comando que .kata/config.yaml
+# declara — importa o kata do site-packages e cai na guarda do conftest. O
+# `make test` mascarava a divergência definindo PYTHONPATH, então o JUDGE
+# re-executava o gate declarado e reportava false_completion sobre um
+# repositório limpo. pythonpath é ini do pytest e vale nos três SOs.
+pythonpath = ["src"]
 addopts = "--tb=short"
 markers = [
     "unit: testes unitários rápidos sem dependências externas",

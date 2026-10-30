@@ -163,33 +163,75 @@ sintáticas e confessa pontos cegos. Se o veredito mecânico for REFUTED ou
 houver falha de execução, o ciclo para imediatamente — a tarefa é reprovada
 sem necessidade de revisão semântica adicional.
 
-### Estágio 2: Verificação Semântica Adversarial (Advisor)
+### Estágio 2: Verificação Semântica Adversarial
 
-Quando o Estágio 1 é aprovado e a tarefa não é trivial (`fit.trivial == false`):
-O Advisor entra como "Hostile Reviewer" com capacidade cognitiva superior ou
-nível de thinking elevado para caçar o que regex e linters não alcançam:
+Roda só quando o Estágio 1 aprovou e a tarefa não é trivial
+(`fit.trivial == false`). Ele cobre o que regex, AST e linters não alcançam:
+
 - Testes tautológicos ou superficiais que passam nos checks mas não testam a regra real;
 - Desvios sutis de especificação ou intenção do usuário;
 - Complexidade acidental que violou o minimalismo (YAGNI);
 - Edge cases e riscos de concorrência ou quebra de contratos.
 
+**O Kata não exige um modelo de IA específico para isso**, nem pressupõe
+que o revisor seja mais capaz do que quem escreveu o diff. O Estágio 2 é um
+procedimento com saída em formato fixo; quem o executa depende do que existe
+no ambiente:
+
+| Situação | Quem executa o Estágio 2 |
+|---|---|
+| Host com revisor adversarial próprio | o revisor do host (subagente ou comando) |
+| Sem revisor, com humano no loop | o usuário, pelo checklist abaixo |
+| Sem revisor e sem humano | o Estágio 2 não roda — registre em `caveats` do veredito |
+
+#### Checklist executável (independente de modelo)
+
+Todo revisor — humano, subagente do host ou outro — responde os quatro itens
+no mesmo formato. Nenhum item pede julgamento sem âncora: cada um se ancora em
+`arquivo:linha` ou em uma frase citada.
+
+1. **Tautologia**: para cada teste novo ou alterado no diff, descreva o que
+   deixaria de falhar se a implementação fosse removida ou a asserção
+   invertida. Se nada falharia, o teste é tautológico. Saída: `arquivo:linha`
+   do teste + comportamento que ele deveria pegar.
+2. **Desvio de spec**: cite a frase da especificação, do pedido do usuário ou
+   do docstring, e a linha do diff que a implementa. Saída: as duas citações +
+   concorda / diverge.
+3. **YAGNI**: liste cada símbolo novo (função, classe, parâmetro, chave de
+   config) e o caller real que o usa. Sem caller, é achado. Saída:
+   `arquivo:linha` do símbolo + caller, ou "sem caller".
+4. **Contrato e borda**: nomeie uma entrada que o código não trata (vazio,
+   `None`, caminho inexistente, concorrência) e o que acontece. Saída: a
+   entrada + o efeito observado ou esperado.
+
+Item sem problema se escreve "sem achado". Item que não pôde ser checado se
+escreve "não verificado" e entra em `caveats` — nunca em "sem achado". Um
+Estágio 2 inteiro "não verificado" não produz VERIFIED.
+
 **Configuração (.kata/config.yaml):**
-Se o projeto declarar a seção `advisor:`, suas diretrizes são obedecidas:
+Se o projeto declarar a seção `advisor:`, suas diretrizes são obedecidas.
+Todas as chaves são opcionais e descrevem o **host**, não um fornecedor:
 
 ```yaml
 advisor:
   enabled: true                        # true | false | auto | never
-  model: "provider/model#variant"      # modelo frontier opcional (ex.: claude-opus, gemini-2.5-pro#thinking)
-  effort: "high"                       # nível de thinking / effort
+  model: "<provedor>/<modelo>#<variante>"  # opcional; o Kata só repassa a string
+  effort: "high"                       # nível de esforço/thinking do host, se ele tiver
   skip_trivial: true                   # bypass automático se fit.trivial == true
 ```
+
+O CLI não interpreta `model` nem `effort`: valida que são strings e deixa a
+escolha para o host. Um projeto sem `advisor:` roda o Estágio 2 pelo
+checklist acima, sem perda de contrato.
 
 **No OpenCode:**
 Acione o subagente `kata-advisor` (armazenado em `.opencode/agents/kata-advisor.md`
 ou `~/.config/opencode/agents/kata-advisor.md`). Se `advisor.model` estiver
 configurado em `.kata/config.yaml`, passe-o explicitamente no parâmetro `model`
 da ferramenta `subagent`. O subagente opera em modo *read-only* (`edit: deny`,
-`shell: deny`) e retorna seu veredito semântico (VERIFIED / CAVEATS / REFUTED).
+`shell: deny`) e retorna seu veredito semântico (VERIFIED / CAVEATS / REFUTED)
+seguindo o checklist acima. Se o subagente não estiver instalado, execute o
+checklist na conversa principal.
 
 ## Registro no YAML
 

@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -316,9 +317,60 @@ def _comando_portatil(cmd: list[str]) -> str:
     (A9 da revisão estrutural). A comparação do juiz normaliza o interpretador
     de qualquer forma (`judge.normaliza_comando`).
     """
-    if cmd and cmd[0] == sys.executable:
+    if cmd and _eh_interpretador(cmd[0]):
         return " ".join(["python", *cmd[1:]])
     return " ".join(cmd)
+
+
+def _eh_interpretador(token: str) -> bool:
+    """O token é um executável de Python, absoluto e fora do PATH?"""
+    caminho = Path(token)
+    if not caminho.is_absolute():
+        return False
+    return caminho.name.lower().startswith("python")
+
+
+# Interpretador de ambiente virtual do projeto, na ordem em que se procura.
+# A convenção `.venv/` é a do ecossistema onde o kata roda; `venv/` aparece
+# nos projetos mais velhos. No Windows o binário mora em Scripts/.
+_VENV_PYTHONS: tuple[Path, ...] = (
+    Path(".venv") / "bin" / "python",
+    Path(".venv") / "Scripts" / "python.exe",
+    Path("venv") / "bin" / "python",
+    Path("venv") / "Scripts" / "python.exe",
+)
+
+
+@lru_cache(maxsize=64)
+def _interpretador_do_projeto(cwd: str, modulos: tuple[str, ...]) -> str:
+    """Interpretador para rodar o gate: o do projeto se ele serve, senão o do kata.
+
+    `sys.executable` é o Python do kata — num `pipx install kata-dev` ele não
+    tem as dependências do projeto alvo, e o pytest re-executado falharia por
+    `ModuleNotFoundError` num repositório limpo (falso negativo de VERIFY e
+    `false_completion` no JUDGE). A raiz `AGENTS.md` do ecossistema registra o
+    mesmo sintoma: "pytest puro usa o interpretador errado; use .venv/bin/python".
+
+    O interpretador do projeto só é adotado quando ele importa os módulos do
+    papel (`ruff`, `pytest`, `pytest_cov`) — um `.venv` sem as ferramentas
+    continua caindo em `sys.executable`, e a falha real aparece no output em
+    vez de virar troca silenciosa de ambiente. A sonda roda uma vez por
+    processo e por diretório (`lru_cache`).
+    """
+    raiz = Path(cwd)
+    for relativo in _VENV_PYTHONS:
+        candidato = raiz / relativo
+        if not candidato.is_file():
+            continue
+        sonda = _run([str(candidato), "-c", f"import {', '.join(modulos)}"], cwd=raiz)
+        if sonda.returncode == 0:
+            return str(candidato)
+    return sys.executable
+
+
+def _interpretador(cwd: Path | None, *modulos: str) -> str:
+    """Atalho tipado para `_interpretador_do_projeto`."""
+    return _interpretador_do_projeto(str(cwd or Path.cwd()), modulos)
 
 
 def run_ruff(
@@ -336,7 +388,7 @@ def run_ruff(
     """
     if paths is None:
         paths = ["src/", "tests/"]
-    cmd = [sys.executable, "-m", "ruff", "check", *paths]
+    cmd = [_interpretador(cwd, "ruff"), "-m", "ruff", "check", *paths]
     result = _run(cmd, cwd=cwd)
     return VerifyResult(
         ok=result.returncode == 0,
@@ -364,7 +416,7 @@ def run_pytest(
     """
     if testpaths is None:
         testpaths = ["tests/"]
-    cmd = [sys.executable, "-m", "pytest", *testpaths, "--tb=short", "-q"]
+    cmd = [_interpretador(cwd, "pytest"), "-m", "pytest", *testpaths, "--tb=short", "-q"]
     if ignore:
         for path in ignore:
             cmd.extend(["--ignore", path])
@@ -405,7 +457,7 @@ def run_coverage(
         testpaths = ["tests/"]
     sources = [source] if isinstance(source, str) else source
     cmd = [
-        sys.executable,
+        _interpretador(cwd, "pytest", "pytest_cov"),
         "-m",
         "pytest",
         *testpaths,

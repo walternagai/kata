@@ -517,6 +517,13 @@ Each of the first three runs the command declared in `.kata/config.yaml` for
 that role, or the Python default (`ruff check`, pytest, pytest-cov with
 `--cov-fail-under`) when the role is not declared.
 
+In the default path the interpreter is the project's (`.venv/bin/python`,
+`.venv/Scripts/python.exe`, or `venv/`) when it can import the modules of the
+role, and `sys.executable` otherwise. `sys.executable` is Kata's own Python —
+under `pipx install kata-dev` it lacks the target project's dependencies, so a
+correct tree would fail with `ModuleNotFoundError` and the judge would read the
+failure as `false_completion`.
+
 Coverage is short-circuited when the test step fails. A task is `approved` only when
 all checks and the success criterion pass; otherwise it is `rejected`.
 

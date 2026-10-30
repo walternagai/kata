@@ -45,6 +45,7 @@ from kata.config import (
 from kata.fit import diff_stats, is_trivial, untracked_stats
 from kata.install import FRONTENDS_VALIDOS, config_dir_de, run_install, run_uninstall
 from kata.judge import (
+    _read_baseline_ref,
     is_debris_file,
     judge_task,
     record_baseline_ref,
@@ -536,6 +537,23 @@ def _stamp_approved_commit(task: str, commit: str | None = None) -> int:
     return 0
 
 
+def _avisa_ancora_ausente(task: str, motivo: str) -> None:
+    """Diz que o baseline desta tarefa não tem registro independente no Git.
+
+    Silêncio aqui é caro: o `--judge` devolve UNVERIFIABLE e o usuário não tem
+    como saber que a causa é o arquivo, não a verificação. Não criamos a âncora
+    neste ponto de propósito — ela seria criada depois do trabalho, e uma
+    âncora tardia prova menos que a ausência dela.
+    """
+    print(
+        f"  ⚠  baseline sem âncora Git ({motivo}): o JUDGE só vai poder dizer "
+        f"UNVERIFIABLE para '{task}'.\n"
+        "     A âncora é o registro independente do piso; sem ela o juiz depende "
+        "só do YAML.\n"
+        "     Tarefas criadas com `kata --init` ganham âncora automaticamente."
+    )
+
+
 def _capture_base_commit(data: dict[str, Any], task: str | None = None) -> dict[str, Any]:
     """Registra o HEAD do git no início da tarefa, uma única vez.
 
@@ -545,13 +563,21 @@ def _capture_base_commit(data: dict[str, Any], task: str | None = None) -> dict[
     que é o caso que o JUDGE existe para verificar.
     """
     if data.get("base_commit"):
+        # B1 (revisão 2026-10-30): o retorno antecipado é o caminho de toda
+        # tarefa escrita à mão — o YAML já traz `base_commit`, então a âncora
+        # `refs/kata/base/<hash>` nunca nasce e o juiz fica sem o único
+        # registro independente do piso. Medido: `kata-agile` (YAML à mão)
+        # saiu UNVERIFIABLE e `release-0-9-1` (base capturado pelo CLI) saiu
+        # VERIFIED, na mesma sessão.
+        if task and _read_baseline_ref(task, cwd=_cwd()) is None:
+            _avisa_ancora_ausente(task, "o YAML já declara base_commit")
         return data
     result = _run_git(["git", "rev-parse", "HEAD"])
     sha = result.stdout.strip()
     if result.returncode == 0 and sha:
         data["base_commit"] = sha
-        if task:
-            record_baseline_ref(task, sha, cwd=_cwd())
+        if task and not record_baseline_ref(task, sha, cwd=_cwd()):
+            _avisa_ancora_ausente(task, "não foi possível gravar a ref")
     return data
 
 

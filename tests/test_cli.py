@@ -1243,6 +1243,43 @@ class TestMainCheckOnly:
                 assert e.code == 1
 
 
+class TestAncoraDeBaseline:
+    """B1: `base_commit` escrito à mão deixava o juiz sem registro independente.
+
+    Medido na revisão de 2026-10-30: `kata-agile` (YAML escrito à mão, com
+    `base_commit` no arquivo) saiu UNVERIFIABLE, e `release-0-9-1` (base
+    capturado pelo CLI) saiu VERIFIED — na mesma sessão, com o mesmo código.
+    O retorno antecipado de `_capture_base_commit` era a diferença.
+    """
+
+    def test_base_commit_declarado_avisa_que_falta_ancora(self, repo_git, monkeypatch, capsys):
+        from kata.judge import _read_baseline_ref
+
+        monkeypatch.chdir(repo_git)
+        data = {"base_commit": "0" * 40}
+
+        cli._capture_base_commit(data, task="tarefa-escrita-a-mao")
+
+        saida = capsys.readouterr().out
+        assert "sem âncora Git" in saida
+        assert "UNVERIFIABLE" in saida
+        # Não criamos a âncora tardiamente: criada depois do trabalho, ela
+        # provaria menos que a ausência dela.
+        assert _read_baseline_ref("tarefa-escrita-a-mao") is None
+
+    def test_base_commit_capturado_cria_ancora_sem_aviso(self, repo_git, monkeypatch, capsys):
+        from kata.judge import _read_baseline_ref
+
+        monkeypatch.chdir(repo_git)
+        data: dict = {}
+
+        cli._capture_base_commit(data, task="tarefa-normal")
+
+        assert data["base_commit"]
+        assert _read_baseline_ref("tarefa-normal") == data["base_commit"]
+        assert "sem âncora" not in capsys.readouterr().out
+
+
 class TestMainVerifyTask:
     """`--verify-task`: o gate de um ciclo curto, gravado na tarefa.
 

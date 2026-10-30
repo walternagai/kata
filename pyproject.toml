@@ -37,6 +37,7 @@ Homepage = "https://github.com/walternagai/kata"
 Repository = "https://github.com/walternagai/kata"
 Issues = "https://github.com/walternagai/kata/issues"
 Documentation = "https://github.com/walternagai/kata/blob/main/DOCUMENTATION.md"
+Changelog = "https://github.com/walternagai/kata/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

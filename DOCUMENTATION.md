@@ -10,6 +10,7 @@ disciplined development cycle.
 - [Specific uses](#specific-uses)
 - [Architecture](#architecture)
 - [Installation](#installation)
+- [Distribution and versions](#distribution-and-versions)
 - [CLI](#cli)
   - [Project configuration](#project-configuration)
 - [Development cycle](#development-cycle)
@@ -54,8 +55,8 @@ Two frontends share the same Python backend and cycle logic:
   Reviewer that performs Stage 2 of the JUDGE.
 - **Claude Code**: a `kata` skill (`claude-code/skills/kata/SKILL.md`) that
   plays the same orchestration role, backed by the same 10 phase-specific
-  skills ported to Claude Code's tool set. Stage 2 uses the native
-  `/advisor` command instead of a bundled subagent. See
+  skills ported to Claude Code's tool set. Stage 2 runs the JUDGE checklist in
+  the main conversation, with no bundled subagent. See
   [Claude Code integration](#claude-code-integration).
 
 Only the orchestration/interaction layer differs between the two — the
@@ -140,6 +141,10 @@ scripts/build_skills.py           Renders phases/ and domains/ into both fronten
 scripts/install.sh                OpenCode symlink installer
 scripts/install-claude-code.sh    Claude Code symlink installer
 paper/jserd/compile-paper.sh      Builds paper/jserd/paper.pdf (xelatex + bibtex)
+
+README.md                         The PyPI page (readme = "README.md")
+CHANGELOG.md                      What changed in each published version
+RELEASING.md                      How a version is published to PyPI
 ```
 
 ### Module responsibilities
@@ -337,6 +342,35 @@ only — no subagent. The cycle asks a question at nearly every phase, which
 fits the main conversation better than an isolated subagent that only
 reports a summary at the end.
 
+## Distribution and versions
+
+| | |
+|---|---|
+| Distribution | [`kata-dev`](https://pypi.org/project/kata-dev/) on PyPI |
+| Command | `kata` (`kata.cli:main` in `pyproject.toml`) |
+| Python | 3.11 and 3.12 (`requires-python` plus classifiers) |
+| License | MIT (SPDX expression, PEP 639) |
+| Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
+
+The wheel carries the code **and** `src/kata/assets/` — the orchestrator
+agent, the `kata-advisor` subagent and the skills of both frontends. That is
+what makes `kata --install` work with no checkout (`install.py` reads the
+assets through `importlib.resources`). Installing the distribution therefore
+gives you the CLI only; the skills enter the frontend's config dir through
+`kata --install opencode|claude-code|all`, and `kata --doctor` reports what is
+installed, in which mode (link, copy or mixed) and whether the installed
+skills version matches the running package.
+
+The PyPI page is this repository's `README.md` (`readme` in
+`pyproject.toml`); the technical reference is this file.
+
+The version lives in exactly two files — `pyproject.toml` (`[project]
+version`) and `src/kata/__init__.py` (`__version__`) — and
+`tests/test_cli.py::test_version_matches_pyproject` fails when they diverge.
+`CHANGELOG.md` is the third place a release touches:
+`test_changelog_menciona_a_versao_atual` fails when the version has no
+section. The release procedure itself is [`RELEASING.md`](RELEASING.md).
+
 ## CLI
 
 ### Modes
@@ -423,7 +457,7 @@ advisor:
 | `verify.gate` | Minimum coverage percentage. A `--gate` flag overrides it |
 | Unknown key under `advisor` | A named error, same reason: `enabld: false` (typo) used to be dropped and the advisor stayed on, while a misspelled `model` silently fell back to the default |
 | `advisor.enabled` | Whether semantic adversarial review is active (`true`, `false`, `auto`, `never`). Default `true` |
-| `advisor.model` | Model identifier for the advisor subagent (e.g., `anthropic/claude-opus-4#high`, `google/gemini-2.5-pro#thinking`) |
+| `advisor.model` | Optional model identifier passed to the host's reviewer (e.g. `<provider>/<model>#<variant>`). Kata validates it as a non-empty string and never interprets it — no model is required to run Stage 2 |
 | `advisor.effort` | Thinking / reasoning effort level (`low`, `medium`, `high`, `max`) |
 | `advisor.skip_trivial` | Bypass advisor review on trivial tasks (`fit.trivial=true`). Default `true` |
 
@@ -651,9 +685,10 @@ does not need one.
 The `kata-advisor` subagent is optional in the same way: on a frontend that
 has the phase skills but not the subagent, `--doctor` prints a hint and still
 exits `0`. Without it the JUDGE degrades to Stage 1 (the mechanical,
-deterministic check) — which remains valid — and only the semantic review of
-Stage 2 is lost. Claude Code never expects it: the advisor there is the native
-`/advisor`.
+deterministic check) — which remains valid — and Stage 2 is run by whoever is
+available: a human through the phase's checklist, or the host's own reviewer.
+Claude Code never expects the subagent; it runs the same checklist in the main
+conversation.
 
 When a skill fails to load mid-cycle, the orchestrator is instructed not to
 improvise: it falls back to a per-phase minimum contract documented in the
@@ -718,16 +753,24 @@ The JUDGE phase supports two complementary stages:
 1. **Stage 1: Mechanical verification (Deterministic)**: The offline Python CLI (`kata --judge`)
    re-executes linters and tests, scans the Git diff and AST against the 7 structural frauds,
    and confesses observable blind spots. If Stage 1 fails or is REFUTED, the cycle stops immediately.
-2. **Stage 2: Semantic verification (Advisor / Hostile Reviewer)**: When Stage 1 passes and the
-   task is not trivial (`fit.trivial=false`), a model with higher reasoning capacity or elevated
-   thinking (`effort: high|max`) acts as a Hostile Reviewer to hunt semantic flaws that linters
-   and regex cannot catch (tautological tests, specification drift, accidental complexity/YAGNI,
-   and unhandled edge cases).
-   - In **OpenCode**: Triggered via the `kata-advisor` subagent (`.opencode/agents/kata-advisor.md`
-     or `~/.config/opencode/agents/kata-advisor.md`) with read-only permissions (`edit: deny`, `shell: deny`).
-   - In **Claude Code**: Triggered via `/advisor <model>` or by raising `/effort` to high/max.
-   - **Configuration (`.kata/config.yaml`)**:
-     Configured under the `advisor:` block (`model`, `effort`, `skip_trivial`, `enabled`).
+2. **Stage 2: Semantic verification**: When Stage 1 passes and the task is not trivial
+   (`fit.trivial=false`), an adversarial reviewer hunts what linters and regex cannot catch
+   (tautological tests, specification drift, accidental complexity/YAGNI, and unhandled edge
+   cases). No specific model is required, and the stage never assumes the reviewer is more
+   capable than whoever wrote the diff: it is a procedure with a fixed output shape.
+   - **Executed by**: the host's own reviewer (the `kata-advisor` subagent in OpenCode, with
+     read-only permissions `edit: deny` and `shell: deny`), or the user through the checklist,
+     or not at all — an absent reviewer is recorded as a caveat, never as a pass.
+   - **Checklist** (same for a human, a subagent or any other reviewer, each item anchored on
+     `file:line` or a quoted sentence): tautology (what would stop failing if the
+     implementation were removed), spec drift (quotations from both sides), YAGNI (each new
+     symbol plus its real caller), and contract/edge (one input the code does not handle plus
+     what happens). An unchecked item is written as "not verified" and becomes a caveat; a
+     fully unverified Stage 2 never yields VERIFIED.
+   - **Configuration (`.kata/config.yaml`)**: the `advisor:` block (`enabled`, `model`,
+     `effort`, `skip_trivial`) is optional and describes the host. The CLI validates `model`
+     and `effort` as strings and never interprets them; a project without the block runs
+     Stage 2 through the checklist with no loss of contract.
 
 ## Task files
 

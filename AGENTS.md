@@ -51,6 +51,8 @@ eval/           cenários de trap adversarial (python3 eval/run_traps.py)
 scripts/check_package.py          confere o wheel publicado contra src/kata/assets/
 scripts/install.sh                instala via symlinks em ~/.config/opencode/
 scripts/install-claude-code.sh    instala via symlinks em ~/.claude/
+CHANGELOG.md      marcos de uso de cada versão publicada (o README é a página do PyPI)
+DOCUMENTATION.md  referência técnica; RELEASING.md é o processo de publicação
 ```
 
 Os dois frontends compartilham o mesmo backend Python: só a camada de
@@ -162,7 +164,8 @@ make uninstall-claude-code   # remove os symlinks
 
 Rodar um único teste: `python3 -m pytest tests/test_verify.py::TestRunRuff -v`
 
-Release: [`RELEASING.md`](RELEASING.md) — bump nos dois arquivos, `make package`,
+Release: [`RELEASING.md`](RELEASING.md) — bump nos dois arquivos, seção da
+versão em [`CHANGELOG.md`](CHANGELOG.md) (um teste reprova sem ela), `make package`,
 tag anotada, `twine` (não `uv publish`) e a verificação de sha256 em venv limpo.
 
 Ordem recomendada: `make lint && make test` (e `make format-check` antes de

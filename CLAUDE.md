@@ -17,9 +17,10 @@ Two frontends share one Python backend, and both are **generated from a single s
   4 domain adapters (`opencode/skills/kata-*/`), plus the `kata-advisor` subagent
   (`opencode/agents/kata-advisor.md`) for Stage 2 semantic adversarial review.
 - **Claude Code**: `kata` orchestrator skill (`claude-code/skills/kata/SKILL.md`) backed by the same
-  10 phase skills + the 4 domain adapters (`claude-code/skills/kata-*/`). Uses `/advisor` or
-  `/effort` for Stage 2 semantic review. No orchestrator subagent — the cycle is interactive
-  (asks a question at nearly every phase), so it runs in the main conversation.
+  10 phase skills + the 4 domain adapters (`claude-code/skills/kata-*/`). Stage 2 runs the JUDGE
+  checklist in the main conversation — no subagent, no model requirement. No orchestrator
+  subagent — the cycle is interactive (asks a question at nearly every phase), so it runs in the
+  main conversation.
 
 Only the orchestration layer differs between frontends; Ruff/pytest/coverage/judge logic always runs
 through the `kata` Python package (`src/kata/`).
@@ -48,8 +49,9 @@ make package                  # build the wheel/sdist and check the contents aga
 python3 -m pytest tests/test_verify.py::TestRunRuff -v      # a single class
 python3 -m pytest tests/test_judge.py -k escrituracao -v    # by name fragment
 
-# Releasing: RELEASING.md — bump both version files, `make package`, annotated tag,
-# `twine` (not `uv publish`), then verify sha256 in a clean venv.
+# Releasing: RELEASING.md — bump both version files, add the CHANGELOG section,
+# `make package`, annotated tag, `twine` (not `uv publish`), then verify sha256
+# in a clean venv. `test_changelog_menciona_a_versao_atual` fails without it.
 
 make install                  # symlink @kata agent + skills into ~/.config/opencode/
 make uninstall
@@ -118,8 +120,9 @@ src/kata/
 - `judge.py`: Stage 1 of adversarial verification. Treats a task's `.kata/<task>.yaml` as a set of claims,
   diffs them against Git reality, re-runs claimed checks, and hunts seven fraud categories: weakened checks,
   false completion, scope creep, unauthorized action, spec betrayal, debris, and baseline tampering.
-  When Stage 1 passes on a non-trivial task, Stage 2 (Hostile Reviewer / Advisor) performs semantic review
-  via `kata-advisor` (OpenCode) or `/advisor` (Claude Code).
+  When Stage 1 passes on a non-trivial task, Stage 2 (semantic review) runs the checklist in
+  `phases/kata-judge.md` — by the `kata-advisor` subagent in OpenCode, by the user in Claude Code,
+  or not at all (recorded as a caveat). No specific model is required or assumed.
   (`_LANGUAGES`: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift); a test in an unlisted language becomes a
   declared blind spot instead of silence. Verdicts: `VERIFIED`, `VERIFIED WITH CAVEATS`
   (medium/low findings only), `UNVERIFIABLE` (no fraud, but nothing could be

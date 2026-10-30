@@ -1,6 +1,8 @@
 # Kata (型)
 
 [![CI](https://github.com/walternagai/kata/actions/workflows/ci.yml/badge.svg)](https://github.com/walternagai/kata/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/kata-dev?label=PyPI)](https://pypi.org/project/kata-dev/)
+[![Python](https://img.shields.io/pypi/pyversions/kata-dev)](https://pypi.org/project/kata-dev/)
 
 > Python 3.11+ | CLI + OpenCode Agent + Claude Code Skills | Karpathy Development Cycle + Fable Method
 
@@ -153,6 +155,39 @@ e o JUDGE descobrirem o que verificar, o projeto alvo deve ter:
 Sem `pyproject.toml` nem `.kata/config.yaml`, o kata assume um projeto Python
 com `src/` e `tests/` — se o seu projeto não é assim, declare o config.
 
+## Distribuição (PyPI)
+
+| | |
+|---|---|
+| Pacote | [`kata-dev`](https://pypi.org/project/kata-dev/) no PyPI |
+| Comando | `kata` (o `pyproject.toml` registra `kata.cli:main`) |
+| Python | 3.11 e 3.12 (declarado em `requires-python` e nos classifiers) |
+| Licença | MIT |
+| Changelog | [`CHANGELOG.md`](CHANGELOG.md) — o que mudou em cada versão |
+
+O wheel leva o código e os **assets** (`src/kata/assets/`: agentes, subagente
+e as skills dos dois frontends). Por isso `kata --install` funciona sem
+checkout, e o PyPI é a rota de quem só quer o CLI e as skills:
+
+```bash
+pipx install kata-dev            # ou: uv tool install kata-dev
+kata --version                   # versão instalada
+pipx upgrade kata-dev            # atualizar
+pipx uninstall kata-dev          # remover o pacote (as skills ficam: use
+                                 # `kata --uninstall all` antes, se quiser)
+```
+
+**Só o CLI não instala skill nenhuma.** As skills entram com
+`kata --install opencode|claude-code|all`, que copia os assets para o config
+dir do frontend; `kata --doctor` mostra o que está instalado, o modo (link,
+cópia ou misto) e se a versão das skills bate com a do pacote em execução.
+
+O texto desta página é o `README.md` deste repositório (`readme` no
+`pyproject.toml`); a documentação técnica fica em
+[`DOCUMENTATION.md`](DOCUMENTATION.md). Publicar uma versão nova é o
+[`RELEASING.md`](RELEASING.md) — e toda versão publicada precisa de seção no
+`CHANGELOG.md`, que um teste cobra.
+
 ## Uso
 
 ### No OpenCode
@@ -242,8 +277,8 @@ verify:
 
 advisor:
   enabled: true                        # ativa revisão adversarial semântica (Estágio 2)
-  model: anthropic/claude-opus-4#high  # modelo frontier opcional
-  effort: high                         # nível de thinking
+  model: <provedor>/<modelo>#<variante> # opcional: o CLI só repassa a string ao host
+  effort: high                         # nível de esforço/thinking do host, se ele tiver
   skip_trivial: true                   # bypass automático se fit.trivial == true
 ```
 
@@ -315,13 +350,14 @@ Verificação adversarial em dois estágios complementares:
    re-executa as verificações afirmadas, confronta o diff com o relatório e caça fraudes em 7
    categorias (weakened checks, false completion, scope creep, unauthorized action, spec betrayal,
    debris, baseline tampering). Se reprovado ou com falha, o ciclo para imediatamente.
-2. **Estágio 2: Verificação Semântica Adversarial (Advisor)**: Se o Estágio 1 for aprovado e a tarefa
-   não for trivial (`fit.trivial == false`), um modelo mais robusto ou com thinking elevado atua como
-   Hostile Reviewer para caçar fraudes conceituais (testes tautológicos, desvios sutis de especificação,
-   complexidade YAGNI e edge cases).
-   - No **OpenCode**: subagente `kata-advisor` (`mode: subagent`, somente leitura);
-   - No **Claude Code**: comando `/advisor` ou `/effort high|max`;
-   - Configurado via `.kata/config.yaml` (`advisor:`).
+2. **Estágio 2: Verificação Semântica Adversarial**: Se o Estágio 1 for aprovado e a tarefa
+   não for trivial (`fit.trivial == false`), um revisor adversarial caça o que linter não alcança:
+   testes tautológicos, desvios sutis de especificação, complexidade YAGNI e edge cases.
+   O Estágio 2 **não exige modelo específico**: vale o revisor do host (subagente `kata-advisor`
+   no OpenCode, `mode: subagent`, somente leitura), o checklist de quatro itens executado pelo
+   humano no Claude Code, ou o mesmo checklist numa sessão sem advisor — sempre com saída ancorada
+   em `arquivo:linha`. Item não checado vira caveat; estágio inteiro não verificado nunca produz
+   VERIFIED. As diretrizes opcionais ficam em `.kata/config.yaml` (`advisor:`).
 
 Se o juiz mecânico não encontrar fraude mas também não tiver tido como observar — nada
 re-executado (o caso de todo toolchain que não é Python), ou teste numa
@@ -356,7 +392,9 @@ make uninstall-claude-code   # remove symlinks do Claude Code
 make paper                   # compila paper/jserd/paper.pdf (exige TeX Live)
 ```
 
-Para publicar uma versão no PyPI, siga [`RELEASING.md`](RELEASING.md).
+Para publicar uma versão no PyPI, siga [`RELEASING.md`](RELEASING.md); toda
+versão publicada precisa da seção dela em [`CHANGELOG.md`](CHANGELOG.md), e um
+teste reprova se o número do `pyproject.toml` não tiver seção.
 
 `make test` já aponta para `src/`; rodar `pytest` direto exige
 `pip install -e '.[dev]'` (o conftest aborta se `kata` vier de outro lugar).
@@ -383,6 +421,10 @@ sem o adapter — ver `domains/TEMPLATE.md` para criar um novo.
 
 ```
 kata/
+├── README.md                          ← esta página; é também o texto publicado no PyPI
+├── CHANGELOG.md                       ← o que mudou em cada versão (teste cobra a atual)
+├── DOCUMENTATION.md                   ← referência técnica completa
+├── RELEASING.md                       ← processo de publicação no PyPI
 ├── phases/                            ← FONTE ÚNICA dos prompts (11 arquivos:
 │                                         kata.md + as 10 skills de fase —
 │                                         9 fases + JUDGE + QUESTION). É aqui

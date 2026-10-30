@@ -54,8 +54,14 @@ test:
 # rodava, e foi assim que ele ficou 0/23 desde 0b31c07 sem que `make test`
 # reclamasse (achado A2 da revisão estrutural de 2026-10). Com alvo próprio,
 # `make check` alcança o mesmo conjunto que o CI.
+#
+# `PYTHONPATH` porque `run_traps.py` chama `python3 -m kata` em subprocesso: sem
+# ele, o `-m` resolve o pacote INSTALADO, não a árvore. Medido em 2026-10-30:
+# com 0.8.1 no site-packages e a árvore em 0.9.1, o alvo acusou `25/26` num
+# cenário que o código da árvore já passava. O CI não sofre (faz `pip install
+# -e`), quem roda local sim — e o alarme falso ensina a ignorar o alvo.
 eval:
-	python3 eval/run_traps.py
+	PYTHONPATH="$(CURDIR)/src" python3 eval/run_traps.py
 
 # O conjunto que o CI verifica, num comando. Cada passo é o mesmo alvo que o
 # workflow chama: o que é verde local não pode ser vermelho remoto.

@@ -8,6 +8,17 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
+## 0.9.1 — 2026-10-30
+
+### Corrigido
+
+- A árvore de diretórios do `README.md` — que é o texto publicado no PyPI —
+  dizia "11 arquivos" em `phases/` e "14 skills" em `opencode/skills/`. Com a
+  0.9.0 são 12, 15 e 16 (o `claude-code` soma o orquestrador `kata`). A
+  contagem foi publicada errada porque nada a confere: `test_docs_eval.py`
+  guarda os números do `eval/README.md`, não os do README principal.
+- `AGENTS.md` passou a descrever `--verify-task` na responsabilidade do `cli.py`.
+
 ## 0.9.0 — 2026-10-30
 
 Primeira *minor* do pacote: o número sobe porque `kata-agile` muda **como o

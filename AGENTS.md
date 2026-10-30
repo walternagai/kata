@@ -148,6 +148,9 @@ Fases com lógica objetiva (FIT, VERIFY, JUDGE) continuam existindo também em
   `fit.py`, `verify.py`, `judge.py`; o I/O de relatório/auditoria
   (`_step_report`, `_print_judge_verdict`, `_audit_task`, `_print_doctor`) vive
   em `report.py` (S7-refactor) e é re-exportado pelo `cli` para os testes.
+  `--verify-task` é o gate avulso de uma tarefa: roda o mesmo `_step_verify` e
+  grava a evidência no YAML, que é o que um ciclo curto precisa — `--check-only`
+  não salva nada e não combina com `--task`.
 - Entry point do CLI: `kata.cli:main` (declarado em `pyproject.toml`).
 
 ## Desenvolvimento

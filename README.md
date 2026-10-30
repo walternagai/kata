@@ -444,16 +444,18 @@ kata/
 ├── CHANGELOG.md                       ← o que mudou em cada versão (teste cobra a atual)
 ├── DOCUMENTATION.md                   ← referência técnica completa
 ├── RELEASING.md                       ← processo de publicação no PyPI
-├── phases/                            ← FONTE ÚNICA dos prompts (11 arquivos:
-│                                         kata.md + as 10 skills de fase —
-│                                         9 fases + JUDGE + QUESTION). É aqui
+├── phases/                            ← FONTE ÚNICA dos prompts (12 arquivos:
+│                                         kata.md + as 10 skills de fase +
+│                                         kata-agile, o ciclo curto). É aqui
 │                                         que se edita; o resto é gerado.
 ├── opencode/                          ← GERADO (make build-skills)
 │   ├── agent/kata.md                  ← Agente @kata (OpenCode)
-│   └── skills/kata-*/SKILL.md         ← 14 skills (10 de fase + 4 domain
-│                                         adapters; TWIN CHECK vive no orquestrador)
+│   └── skills/kata-*/SKILL.md         ← 15 skills (10 de fase + 4 domain
+│                                         adapters + kata-agile; TWIN CHECK
+│                                         vive no orquestrador)
 ├── claude-code/                       ← GERADO (make build-skills)
-│   └── skills/kata-*/SKILL.md         ← 15 skills (orquestrador kata + as 14 acima)
+│   └── skills/kata-*/SKILL.md         ← 16 skills (orquestrador kata + as 15
+│                                         acima)
 ├── domains/                           ← FONTE ÚNICA dos domain adapters
 │   ├── TEMPLATE.md                    ← schema de um adapter (não gera skill)
 │   ├── kata-devops.md                 ← adapters (um .md por skill kata-*)

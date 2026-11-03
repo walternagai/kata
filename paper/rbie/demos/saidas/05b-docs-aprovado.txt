@@ -1,4 +1,4 @@
-▶ verificações de /tmp/tmp.0UxaXpgaro/docs/.kata/config.yaml (declaradas pelo projeto)
+▶ verificações de /tmp/tmp.82BtZ7TqkG/docs/.kata/config.yaml (declaradas pelo projeto)
 
 ┌──────────────────────────────────────────────────────────┐
 │ 4. GOAL-DRIVEN — Verificação de qualidade                │
@@ -11,7 +11,7 @@
   ✅ passou
 
 ▶ coverage (gate ≥ 25%)
-  ✅ passou (31.6%)
+  ✅ passou (26.1%)
 
 ▶ Critério de sucesso da tarefa
   (modo check-only — assumido satisfeito)

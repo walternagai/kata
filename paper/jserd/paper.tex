@@ -125,7 +125,10 @@ or degraded. Two agent frontends are generated from a single source, and the
 paper describes each executable phase as a code-anchored listing. Version
 0.8.0 adds the declared typecheck role, execution evidence in the task file,
 \texttt{kata --stamp} to close the JUDGE's diff window, strict project
-configuration, and the eighth fraud category.
+configuration, and the eighth fraud category; versions 0.9.0 and 0.10.0 add a
+short cycle (\texttt{kata-agile}) and two modes that write the gate result
+and the owed report lines into the task file instead of leaving them to be
+transcribed by hand.
 
 On 19 trap scenarios we wrote ourselves, the JUDGE returned every expected
 verdict. In an executed comparison on the same scenarios, three related gates
@@ -358,7 +361,7 @@ in both hosts. The third consideration was self-verification: Kata's own
 lint, tests, and coverage are measured, and in the evaluated version
 (defined in the Declarations) 19 adversarial trap scenarios ran in continuous integration to
 check that the JUDGE catches planted frauds and does not accuse honest
-work; the current release, 0.8.0, runs 25.
+work; the current release, 0.10.0, runs 26.
 
 \subsection{Recent research on agent verification}
 
@@ -587,7 +590,7 @@ weakened checks, false completion, scope creep, unauthorized actions,
 specification betrayal, debris, baseline tampering, and a triviality claim
 the measured diff does not support
 (Listings~\ref{alg:judge}--\ref{alg:weakened}). The evaluated version hunted
-the first seven; the eighth was added in 0.8.0. \texttt{kata.cli}
+the first seven; the eighth was added in 0.8.0 and is unchanged in 0.10.0. \texttt{kata.cli}
 orchestrates the nine phases, persists the task file, and exposes the audit
 and judge modes (Listing~\ref{alg:cycle}). Section~\ref{sec:algorithms}
 presents these algorithms in full as numbered Listings.
@@ -663,14 +666,14 @@ dialogue, Kata runs directly in the primary conversation through skills
 alone (\texttt{skills/kata/} orchestrating the phase skills).
 The script measures the shared
 fraction by rendering every source for both frontends and diffing the
-outputs line by line: 92.8\% of the rendered lines are shared at tag
-\texttt{v0.8.0} (93\% at whole-number precision), and the remainder is
+outputs line by line: 93.2\% of the rendered lines are shared at tag
+\texttt{v0.10.0} (93\% at whole-number precision), and the remainder is
 declared difference --- host
 tool names, identity wording, and capability blocks such as the
 closed-choice ask --- reported by
 \texttt{python3 scripts/build\_skills.py -{}-stats}. The figure moves as the
-phase sources grow: the same command reported 92.6\% at \texttt{v0.7.0} and
-92.8\% at \texttt{v0.8.0}. The 395 divergent
+phase sources grow: the same command reported 92.6\% at \texttt{v0.7.0},
+92.8\% at \texttt{v0.8.0} and 93.2\% at \texttt{v0.10.0}. The 395 divergent
 lines are the count we observed between the two hand-maintained
 copies before the single-source migration; that figure is historical and
 the script does not re-derive it. This
@@ -1064,7 +1067,7 @@ each such decision is covered by a unit test in \texttt{tests/}.
 \label{sec:release-080}
 
 The evaluation in this paper was run against the code identified in the
-Declarations as the evaluated version. The current release, 0.8.0, is not
+Declarations as the evaluated version. Release 0.8.0 was not
 that code: it keeps the nine-phase cycle and the verdict model, and changes
 the evidence it records and the edges it checks. The additions are:
 
@@ -1108,10 +1111,70 @@ the evidence it records and the edges it checks. The additions are:
 \end{itemize}
 
 These changes are covered by the unit suite and by the current trap suite of
-25 scenarios (s20--s25 were added after the evaluation, together with the
+26 scenarios (s20--s26 were added after the evaluation, together with the
 fixes they guard). They do not alter the 19-scenario results reported in
-Section~\ref{sec:impact}, and we did not re-run the evaluation on 0.8.0; the
-Declarations state which commit produced each number.
+Section~\ref{sec:impact}, and we did not re-run the evaluation on 0.8.0 or on
+later versions; the Declarations state which commit produced each number.
+
+\subsection{Changes in versions 0.8.1 to 0.10.0}
+\label{sec:release-0100}
+
+Four further releases (0.8.1, 0.9.0, 0.9.1 and 0.10.0) followed 0.8.0 within two days. They keep the
+nine-phase cycle, the verdict model and the eight fraud categories; they
+change how the cycle is opened and which values the agent no longer types by
+hand. None of them was part of the evaluated version, and none was
+re-evaluated.
+
+\begin{itemize}
+\item \textbf{A semantic stage independent of any model (0.8.1).} Stage~2
+  of the JUDGE, the semantic review that runs only when Stage~1 passes on a
+  non-trivial task, follows the checklist in the JUDGE phase source. It is run
+  by the \texttt{kata-advisor} subagent in OpenCode, by the user in Claude
+  Code, or not at all, in which case the absence is recorded as a caveat. No
+  model is required or assumed.
+\item \textbf{A short cycle (0.9.0).} The optional skill \texttt{kata-agile}
+  runs FIT, THINK, DECLARE, VERIFY and REPORT, with four interactions
+  instead of thirteen or more. DECLARE merges INTENT, SURGICAL and SIMPLIFY
+  but still writes \texttt{surgical.files}, \texttt{intent.*} and
+  \texttt{simplify.*}, so \texttt{--audit}, \texttt{--judge} and
+  \texttt{--report} apply unchanged. The skill is an \emph{optional} phase:
+  \texttt{--doctor} warns when it is missing and never fails, because the full
+  cycle loses nothing without it.
+\item \textbf{Gate results written by the CLI (0.9.0).}
+  \texttt{kata --verify-task TASK [--criterion-met|--no-criterion-met]} runs
+  the gate and writes \texttt{verify.*}, \texttt{status} and
+  \texttt{kata\_version} into the task file. Before, \texttt{--check-only}
+  ran the checks over a local dictionary and saved nothing, so an
+  orchestrator that skipped the nine phases could only transcribe the result
+  by hand --- typed evidence, which is exactly the false completion the
+  JUDGE hunts.
+\item \textbf{Owed lines computed by the CLI (0.10.0).}
+  \texttt{kata --artifact-task TASK} computes the INTENT, AUTH, PENDING and
+  TWINS lines owed by the task and writes them into \texttt{artifact.*}
+  without the interactive cycle; it exits~1 and names the missing line when
+  one is absent. The short cycle calls it at REPORT in place of a rule table
+  the agent applied by hand.
+\item \textbf{Unauthorized action from the act, not from the calculation
+  (0.10.0).} \texttt{hunt\_unauthorized\_action} now accuses from
+  \texttt{auth.action\_taken}, not only from \texttt{artifact.auth\_owed}.
+  The short cycle does not run the ARTIFACT phase, so the field that armed the
+  check never existed in its tasks, and a \texttt{push} with no AUTH line
+  passed clean. Scenario s26 covers the case.
+\item \textbf{Smaller guards.} A task that declares \texttt{base\_commit}
+  without a Git anchor now warns that the JUDGE can only answer
+  \texttt{UNVERIFIABLE}; the anchor is not created late, because one made
+  after the evidence would prove less than its absence. \texttt{make eval}
+  runs the traps against the source tree, not the installed package: with
+  0.8.1 installed and the tree at 0.9.1, the target reported a scenario as
+  failing that the code already passed. A test now checks the counts in the
+  README tree against the filesystem, after 0.9.0 published ``11 files'' and
+  ``14 skills'' where there were 12 and 16.
+\end{itemize}
+
+The unit suite of the current release has 1143 tests, all passing, and the
+trap suite has 26 scenarios, all passing; neither figure was
+produced for the evaluation, and the 19-scenario table of
+Section~\ref{sec:impact} remains the only measured result.
 
 \section{The development cycle in action}
 \label{sec:cycle}
@@ -1145,11 +1208,11 @@ control flow is Figure~\ref{fig:fit}.
 
 A trivial task (at most one file, fewer than ten lines) would skip the
 planning phases and go directly to VERIFY --- the triviality gate of the
-Fable Method. In the evaluated version, and still in 0.8.0, the measured diff
+Fable Method. In the evaluated version, and still in 0.10.0, the measured diff
 counts untracked \texttt{.kata/*.yaml} files (the task file itself and the
 project configuration), so in a project that does not ignore \texttt{.kata/}
 a one-line change is no longer trivial: one file becomes two files and three
-lines in our reproduction on 0.8.0. The JUDGE and the SURGICAL file list
+lines in our reproduction on 0.8.0 (on 0.10.0 the file count rises the same way). The JUDGE and the SURGICAL file list
 filter this bookkeeping, but \texttt{fit.diff\_stats} does not; the trap
 harness hides the defect because it git-excludes \texttt{.kata/} in every
 fixture. No trap scenario covers it. This is a
@@ -1638,7 +1701,7 @@ distinguishes ``no defect'' from ``not checked''.
 task: fix-division-by-zero
 status: approved
 done: test test_dividir_por_zero passes and coverage >= 70%
-kata_version: 0.8.0
+kata_version: 0.10.0
 fit:
   trivial: false
   route: code-loop
@@ -2091,7 +2154,7 @@ interface, so that the demonstrations of
 Sections~\ref{sec:cycle}--\ref{sec:audit} can be reproduced. Kata is
 published on the Python Package Index (PyPI) as \texttt{kata-dev} (the
 command stays \texttt{kata}); the installable package version is
-\texttt{0.8.0}. The package, the release tag \texttt{v0.8.0} and the code
+\texttt{0.10.0}. The package, the release tag \texttt{v0.10.0} and the code
 that was measured are three different revisions, and the Declarations
 (Section~\ref{sec:declarations}) define them once, together with the term
 ``evaluated version'' used throughout this paper. A DOI will
@@ -2429,7 +2492,7 @@ and were already cited in place --- s20 the empty diff window, s21 a resolved
 intent conflict, and s22 a moved baseline anchor
 (Section~\ref{sec:threat-model}). s23 exercises the artifacts the judge's own
 re-execution leaves behind, which a second run in the same tree once read as
-scope creep. s24 and s25 exercise the attribution added in 0.8.0: s24 pairs
+scope creep. s26 exercises the 0.10.0 rule that accuses an unauthorized action from \texttt{auth.action\_taken} in a task that never ran the ARTIFACT phase. s24 and s25 exercise the attribution added in 0.8.0: s24 pairs
 an approved task with a sibling task whose commit is stamped inside its
 window and expects \texttt{VERIFIED}, while s25 removes the sibling's stamp
 and expects \texttt{UNVERIFIABLE}, because the judge cannot tell the
@@ -3391,7 +3454,7 @@ would have revealed.
 Kata is open-source software distributed under the MIT License. It is
 published on the Python Package Index as
 \href{https://pypi.org/project/kata-dev/}{\texttt{kata-dev}} (command
-\texttt{kata}); the installable package version is \texttt{0.8.0}.
+\texttt{kata}); the installable package version is \texttt{0.10.0}.
 Installable with \texttt{pipx install kata-dev} or \texttt{pip install
 kata-dev} (Section~\ref{sec:usage}).
 
@@ -3400,17 +3463,18 @@ same commit. The \emph{evaluated version} is the code that was measured:
 commit \texttt{230e81a} for the trap suite, which identifies itself as 0.6.0,
 and commit \texttt{6f56b35} for the comparison and the external study. The
 logic under \texttt{src/kata/} was unchanged between the two. The
-\emph{release} is tag \texttt{v0.8.0}, 91 commits after \texttt{230e81a}. Its
+\emph{release} is tag \texttt{v0.10.0}, 106 commits after \texttt{230e81a}. Its
 tree contains every tool cited here, including the \texttt{--stats}
 measurement of Section~\ref{sec:design}, the session-audit tooling of
-Section~\ref{sec:external-evaluation}, and the 0.8.0 additions described in
-Section~\ref{sec:release-080}. Because those additions include logic changes
+Section~\ref{sec:external-evaluation}, the 0.8.0 additions described in
+Section~\ref{sec:release-080}, and the changes of
+Section~\ref{sec:release-0100}. Because those additions include logic changes
 --- the declared typecheck role, the eighth fraud category, the finer
 false-completion rule, and the attribution of sibling commits ---
-\texttt{v0.8.0} is not the evaluated version. (The earlier tag
+\texttt{v0.10.0} is not the evaluated version. (The earlier tag
 \texttt{v0.7.0} was 24 commits after \texttt{230e81a} and differed from the
 evaluated version in version metadata and help text, not in logic.) The
-\emph{package} is \texttt{0.8.0} on PyPI and matches the tag. It contains
+\emph{package} is \texttt{0.10.0} on PyPI and matches the tag. It contains
 fixes made after the evaluated version (commits \texttt{3cacc5a},
 \texttt{3454fc7} and \texttt{15ccb7a}, discussed in
 Sections~\ref{sec:threat-model} and \ref{sec:external-evaluation}) plus the

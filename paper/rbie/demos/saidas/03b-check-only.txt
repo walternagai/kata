@@ -14,6 +14,10 @@
      3 | from src.calculadora import dividir
        |
      help: Remove unused import: `pytest`
+       |
+       - import pytest
+     1 |
+       |
      
      Found 1 error.
      [*] 1 fixable with the `--fix` option.

@@ -1,4 +1,4 @@
-▶ verificações de /tmp/tmp.0UxaXpgaro/pesquisa/.kata/config.yaml (declaradas pelo projeto)
+▶ verificações de /tmp/tmp.82BtZ7TqkG/pesquisa/.kata/config.yaml (declaradas pelo projeto)
 
 ┌──────────────────────────────────────────────────────────┐
 │ 4. GOAL-DRIVEN — Verificação de qualidade                │

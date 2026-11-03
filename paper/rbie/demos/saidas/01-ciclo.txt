@@ -1,4 +1,4 @@
-✅  /tmp/tmp.0UxaXpgaro/calc/.kata/dividir-por-zero.yaml criado. Preencha as respostas com o modo interativo.
+✅  /tmp/tmp.82BtZ7TqkG/calc/.kata/dividir-por-zero.yaml criado. Preencha as respostas com o modo interativo.
 
 ┌──────────────────────────────────────────────────────────┐
 │ 0. FIT — Classificação da tarefa                         │
@@ -28,7 +28,7 @@ Pergunte-se:
   O que NÃO sei? (preciso perguntar antes?) nada
   O que é 'pronto'? (critério de sucesso + como vou verificar) o teste test_dividir_por_zero passa e a cobertura fica em pelo menos 70%
 
-📝  FIT + THINK salvos em /tmp/tmp.0UxaXpgaro/calc/.kata/dividir-por-zero.yaml
+📝  FIT + THINK salvos em /tmp/tmp.82BtZ7TqkG/calc/.kata/dividir-por-zero.yaml
 
 (fit gate já respondido)
 
@@ -131,7 +131,7 @@ Arquivos alterados:
   ✅ critério de sucesso satisfeito
 
   Evidência:
-    executado em: 2026-10-29T01:58:46+00:00
+    executado em: 2026-11-03T23:39:41+00:00
     gate: 70%
     lint: python -m ruff check src/ tests/
     test: python -m pytest tests/ --tb=short -q
@@ -144,5 +144,5 @@ Arquivos alterados:
 
 ──────────────────────────────────────────────────────────
 
-📝  Resultado salvo em /tmp/tmp.0UxaXpgaro/calc/.kata/dividir-por-zero.yaml
+📝  Resultado salvo em /tmp/tmp.82BtZ7TqkG/calc/.kata/dividir-por-zero.yaml
 

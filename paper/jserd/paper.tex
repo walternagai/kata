@@ -1113,8 +1113,9 @@ the evidence it records and the edges it checks. The additions are:
 These changes are covered by the unit suite and by the current trap suite of
 26 scenarios (s20--s26 were added after the evaluation, together with the
 fixes they guard). They do not alter the 19-scenario results reported in
-Section~\ref{sec:impact}, and we did not re-run the evaluation on 0.8.0 or on
-later versions; the Declarations state which commit produced each number.
+Section~\ref{sec:impact}. The trap-suite comparison was re-run once on 0.10.0
+(Section~\ref{sec:exec-comparison-0100}); the external study was not re-run on
+any later version. The Declarations state which commit produced each number.
 
 \subsection{Changes in versions 0.8.1 to 0.10.0}
 \label{sec:release-0100}
@@ -1122,8 +1123,10 @@ later versions; the Declarations state which commit produced each number.
 Four further releases (0.8.1, 0.9.0, 0.9.1 and 0.10.0) followed 0.8.0 within two days. They keep the
 nine-phase cycle, the verdict model and the eight fraud categories; they
 change how the cycle is opened and which values the agent no longer types by
-hand. None of them was part of the evaluated version, and none was
-re-evaluated.
+hand. None of them was part of the evaluated version. Only the comparison of
+Section~\ref{sec:exec-comparison} was re-run on them
+(Section~\ref{sec:exec-comparison-0100}); the external study and the
+session audit were not.
 
 \begin{itemize}
 \item \textbf{A semantic stage independent of any model (0.8.1).} Stage~2
@@ -1173,8 +1176,10 @@ re-evaluated.
 
 The unit suite of the current release has 1143 tests, all passing, and the
 trap suite has 26 scenarios, all passing; neither figure was
-produced for the evaluation, and the 19-scenario table of
-Section~\ref{sec:impact} remains the only measured result.
+produced for the evaluation. The 19-scenario results of
+Section~\ref{sec:impact} were measured on the evaluated version, and the
+re-run of Section~\ref{sec:exec-comparison-0100} is the only measurement on
+the current release.
 
 \section{The development cycle in action}
 \label{sec:cycle}
@@ -2665,12 +2670,63 @@ Git state, track file scope across commits, or distinguish legitimate from
 fraudulent \texttt{pass} bodies --- the operations that require
 the deterministic code path the paper argues for.
 
+\subsubsection{Re-run on version 0.10.0}
+\label{sec:exec-comparison-0100}
+
+After the release changes of Section~\ref{sec:release-0100} we ran the
+comparison a third time, on 3 November 2026, with the same harness, the same 19
+scenarios, the same four gates and the final scoring rules, through Claude
+Code CLI 2.1.318 (the final run used 2.1.268). The harness again did not
+record the model, nova and claude-wizard were not pinned to a version, and
+the run is one execution per scenario and gate, so Table~\ref{tab:gate-rerun}
+describes this run and not a distribution. The raw verdicts are archived in
+\texttt{eval/results/compare\_gates\_0100.json} and, as in the final run,
+re-scoring them with the current rules reproduces every status. Table~\ref{tab:gate-comparison}
+keeps reporting the run of the evaluated version.
+
+\begin{table}[!ht]
+\caption{Third complete run, Kata 0.10.0 (November 2026), against the final
+run of Table~\ref{tab:gate-comparison}. FP counts accusations on the eight
+non-REFUTED scenarios; medians are wall-clock seconds over the eleven REFUTED
+and the eight non-REFUTED scenarios.}
+\centering
+\begin{tabular}{@{}lccccc@{}}
+\hline\hline
+Gate & Detection & FP (final $\rightarrow$ 0.10.0) & Correct of 19 & Median s \\
+\hline
+Kata & 11/11 & 0 $\rightarrow$ 0 & 19 $\rightarrow$ 19 & 0.1 / 0.7 \\
+nova & 11/11 & 4 $\rightarrow$ 2 & 15 $\rightarrow$ 17 & 8.3 / 11.9 \\
+claude-wizard & 11/11 & 2 $\rightarrow$ 2 & 17 $\rightarrow$ 17 & 7.0 / 11.2 \\
+bare (prompt-only) & 11/11 & 5 $\rightarrow$ 3 & 14 $\rightarrow$ 16 & 7.5 / 10.7 \\
+\hline\hline
+\end{tabular}
+\label{tab:gate-rerun}
+\end{table}
+
+Three things stand out. The Kata arm returned the same verdict on all 19
+scenarios as in the final run, so the changes between 0.8.0 and 0.10.0 did
+not move any measured outcome; this is the only result the re-run was meant to
+check. Detection did not differ for any gate. The agent gates' false
+positives fell from eleven to seven, and the change is not one scenario.
+Six accusations disappeared: s17 for all three agent gates (the one scenario
+whose outcome depended on the \texttt{approved\_commit} convention the prompt
+does not explain), s13 for nova and the baseline, and the baseline's
+accusation on the honest s07. Two appeared: claude-wizard on s12, and the
+baseline naming the look-alike \texttt{attempt\_parser.py} on s06. The seven
+that remain are the blind-spot scenarios (nova and claude-wizard on s12 and
+s19, the baseline on both) plus that s06 accusation. We read this as the
+run-to-run variation the previous paragraphs describe, not as an improvement
+of the agent gates: the same scenarios changed state between the earlier runs
+as well, and the CLI version, and possibly the model, differed. The agent gates were also about twice as fast (median 7--12\,s
+against 16--40\,s), which we attribute to the same unrecorded change in the
+environment and not to the tools.
+
 The comparison is subject to important methodological caveats that we state explicitly.
 The 19 scenarios and the underlying fraud taxonomy were developed iteratively alongside Kata to serve as regression fixtures. Consequently, the test workloads are strictly in-distribution for Kata --- which includes dedicated architectural mechanisms for these specific boundary conditions --- and out-of-distribution for the alternative gates. The false positives incurred by the agent gates were concentrated on scenarios exercising these repository-level conventions (e.g., \texttt{approved\_commit} diff ceiling on s17, Git local excludes on s19, and missing language probes on s12). Hence, the false positive metric reflects familiarity with these architectural conventions and the presence of direct repository query tools as much as generic reviewer restraint.
 
 The tools were also evaluated in a constrained, emulated configuration: \texttt{nova} and \texttt{claude-wizard} were invoked as structured review prompts within a single headless Claude Code CLI session (\texttt{claude -p}), rather than within their native end-to-end interactive developer workflows. For instance, \texttt{nova} provides a full Model Context Protocol (MCP) server with specialized subagents that was not wired into this isolated review harness, which was scoped to measure a standalone, single-turn change review pass. The agent gates also operated through a single underlying LLM, Claude Code's default model. The harness did not record which model that was; the local Claude Code session logs of the final run's 57 agent reviews, which are not archived in the repository, show \texttt{claude-sonnet-5} through Claude Code CLI 2.1.268. This means their false positives and heuristic tendencies characterize this specific model under review prompting, rather than the tools in their entirety.
 
-Agent reviews are also inherently stochastic, and the scoring rules changed during the study. The repository archives five comparison files, described in \texttt{eval/results/README.md}. Two are complete, independent runs: \texttt{compare\_gates.json} and the final \texttt{compare\_gates\_round2.json} reported in Table~\ref{tab:gate-comparison}. \texttt{compare\_gates\_refined.json} re-runs only the eight non-REFUTED scenarios; \texttt{compare\_gates\_merged.json} consolidates the first run with that re-run and is not an independent run; and \texttt{compare\_gates\_final.json} is a run aborted by the account spend limit, whose INCONCLUSIVE entries from s13 onward are infrastructure blocks, not gate behaviour. Two scoring changes were made after the first run's results were seen: the agent-output parser was replaced by a decoder that takes the first complete JSON object, and the debris scenario (s06) stopped counting an accusation of the real debris as a false positive, counting one only when a look-alike file is named. The s06 change favoured the agent gates: under the first rule, all three were charged a false positive on s06 for finding the real debris. The parser change did not: in the first run, the baseline's answer on the honest s07 task could not be parsed and was recorded as INCONCLUSIVE, although its archived prefix reports \texttt{fraud\_detected: true}, so the final parser would most likely have scored it as a false positive. Scored as they were at the time, the agent false-positive counts in the two complete runs were 4 and 4 for nova, 4 and 2 for claude-wizard, and 4 and 5 for the baseline; applying the final s06 rule to the first run lowers each of its counts to 3 (4 for the baseline if its s07 accusation is counted), which gives the ranges in Table~\ref{tab:gate-comparison}. Re-scoring the final run with the final rules from its archived output reproduces every published status. The first run cannot be fully re-scored, because it archives only a truncated excerpt of each agent answer (at most 300 characters); the s06 answers fit whole, so that re-scoring is verifiable, while the s07 answer is cut off and remains INCONCLUSIVE. Kata yielded identical verdicts across every run, with zero false positives on these Kata-built fixtures. The agent reporting schema also lacked an explicit \texttt{UNVERIFIABLE} verdict, forcing agents either to accuse or remain silent, precluding explicit confessions of unobservable state.
+Agent reviews are also inherently stochastic, and the scoring rules changed during the study. The repository archives six comparison files, described in \texttt{eval/results/README.md}. Three are complete, independent runs: \texttt{compare\_gates.json}, the final \texttt{compare\_gates\_round2.json} reported in Table~\ref{tab:gate-comparison}, and the 0.10.0 re-run \texttt{compare\_gates\_0100.json} of Section~\ref{sec:exec-comparison-0100}. \texttt{compare\_gates\_refined.json} re-runs only the eight non-REFUTED scenarios; \texttt{compare\_gates\_merged.json} consolidates the first run with that re-run and is not an independent run; and \texttt{compare\_gates\_final.json} is a run aborted by the account spend limit, whose INCONCLUSIVE entries from s13 onward are infrastructure blocks, not gate behaviour. Two scoring changes were made after the first run's results were seen: the agent-output parser was replaced by a decoder that takes the first complete JSON object, and the debris scenario (s06) stopped counting an accusation of the real debris as a false positive, counting one only when a look-alike file is named. The s06 change favoured the agent gates: under the first rule, all three were charged a false positive on s06 for finding the real debris. The parser change did not: in the first run, the baseline's answer on the honest s07 task could not be parsed and was recorded as INCONCLUSIVE, although its archived prefix reports \texttt{fraud\_detected: true}, so the final parser would most likely have scored it as a false positive. Scored as they were at the time, the agent false-positive counts in the two complete runs were 4 and 4 for nova, 4 and 2 for claude-wizard, and 4 and 5 for the baseline; applying the final s06 rule to the first run lowers each of its counts to 3 (4 for the baseline if its s07 accusation is counted), which gives the ranges in Table~\ref{tab:gate-comparison}. Re-scoring the final run with the final rules from its archived output reproduces every published status. The first run cannot be fully re-scored, because it archives only a truncated excerpt of each agent answer (at most 300 characters); the s06 answers fit whole, so that re-scoring is verifiable, while the s07 answer is cut off and remains INCONCLUSIVE. Kata yielded identical verdicts across every run, including the 0.10.0 re-run, with zero false positives on these Kata-built fixtures. The agent reporting schema also lacked an explicit \texttt{UNVERIFIABLE} verdict, forcing agents either to accuse or remain silent, precluding explicit confessions of unobservable state.
 
 The comparison, then, does not demonstrate general superiority of Kata over the reasoning capabilities of alternative tools. Rather, it isolates the core thesis of this paper: evaluating complex software engineering boundary conditions (such as Git commit ceilings, untracked ignores, and process exit codes) through heuristic LLM prompts forces the model to guess, whereas executing deterministic, code-level checks --- deterministic in the sense that the same repository state always produces the same verdict, not in the sense of completeness --- yields instantaneous, reproducible verdicts that confess blind spots explicitly. Whether this also means fewer false accusations on workloads not built alongside Kata remains untested. The comparison harness and raw records are archived as \texttt{eval/compare\_gates.py} and \texttt{eval/results/compare\_gates\_round2.json}.
 

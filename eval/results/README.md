@@ -9,6 +9,7 @@ status, tempo, linhas de output e o veredito bruto do agente.
 | Arquivo | O que é |
 |---|---|
 | `compare_gates_round2.json` | **Campanha final citada no artigo JSERD** (§3.3): 19 cenários × 4 braços (kata, nova, claude-wizard, bare), uma execução por par cenário×braço. |
+| `compare_gates_0100.json` | **Terceira campanha completa, na 0.10.0** (2026-11-03): os mesmos 19 cenários × 4 braços, com a pontuação final e `stdout` arquivado (até 2000 caracteres). Claude Code CLI 2.1.318; o harness continua sem gravar o modelo. Citada no artigo JSERD (§3.3) como reexecução, sem substituir a campanha final. O braço kata reproduz os vereditos da `round2`. |
 | `compare_gates.json` | Primeira campanha exploratória completa (parser JSON inicial). |
 | `compare_gates_refined.json` | Re-execução dos 8 cenários não-REFUTED com o parser `raw_decode` e a regra de look-alikes do s06. |
 | `compare_gates_merged.json` | Consolidação exploratória (rodada 1 + refinada) usada durante o desenvolvimento; foi substituída no artigo pela campanha final. |

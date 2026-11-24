@@ -34,6 +34,7 @@ except ImportError:  # pragma: no cover — PyYAML é dependência dura do pacot
 from kata.verify import (
     COMMAND_LABELS,
     ROLE_LABELS,
+    VERIFY_FIELDS,
     VerifyResult,
     _is_tool_artifact,  # noqa: F401
     # Re-exportados para os testes e para quem importa de `kata.judge`: os
@@ -45,6 +46,7 @@ from kata.verify import (
     _sem_escrituracao,
     changed_files,
     consistency_failures,
+    git_path,
     is_inspectable,
     is_kata_bookkeeping,  # noqa: F401
     run_all,
@@ -87,6 +89,8 @@ class LanguageProbes:
             — trocar `expect(x).toBe(1)` por `expect(x).toBe(2)` é
             ALTERAÇÃO, não remoção. `None` desliga o par-par (a linha é
             acusada imediatamente).
+        pair_assertions_locally: cada asserção adicionada compensa uma remoção
+            no mesmo bloco de mudanças, sem atravessar linhas de contexto.
         docstring: (abertura, fechamento) de docstring por linguagem, para a
             varredura de corpo vazio tratar a docstring entre a declaração
             e o `pass` como linha sem significado (K-07) — a mesma classe
@@ -101,6 +105,7 @@ class LanguageProbes:
     noop_body: tuple[tuple[str, str], ...] = ()
     assertion_family: re.Pattern[str] | None = None
     docstring: tuple[str, str] | None = None
+    pair_assertions_locally: bool = False
 
 
 _PY_PROBES = LanguageProbes(
@@ -343,6 +348,29 @@ _SWIFT_PROBES = LanguageProbes(
     assertion_family=re.compile(r"\bXCTAssert\w*\s*\("),
 )
 
+# Macros do ExUnit, com ou sem parênteses. A âncora exclui comentários e strings.
+_EXUNIT_ASSERTION = (
+    r"(?:assert(?:_in_delta|_raise|_receive|_received)?"
+    r"|refute(?:_in_delta|_receive|_received)?)\b(?=\s|\()"
+)
+_EXUNIT_NOOP = (
+    r"^\+\s*(?:assert(?:\s+true|\s*\(\s*true\s*\))"
+    r"|refute(?:\s+false|\s*\(\s*false\s*\)))\s*(?:#.*)?$"
+)
+_EXUNIT_PROBES = LanguageProbes(
+    weakened=(
+        (rf"^-\s*{_EXUNIT_ASSERTION}", "asserção ExUnit removida"),
+        (_EXUNIT_NOOP, "asserção ExUnit sem efeito"),
+    ),
+    test_declaration=re.compile(r'^\+\s*test\s*(?:["\']|\()'),
+    empty_body=re.compile(r"^\+\s*end\s*(?:#.*)?$"),
+    empty_inline=re.compile(r"\bdo\s+end\s*(?:#.*)?$"),
+    skippable=re.compile(r"^\+\s*(?:#.*)?$"),
+    noop_body=((_EXUNIT_NOOP, "asserção ExUnit sem efeito"),),
+    assertion_family=re.compile(rf"^\+\s*{_EXUNIT_ASSERTION}"),
+    pair_assertions_locally=True,
+)
+
 # Extensão → o que o juiz sabe procurar ali. Uma extensão ausente daqui é um
 # ponto cego declarado, não um silêncio: ver `_unreadable_test_files`.
 _LANGUAGES: dict[str, LanguageProbes] = {
@@ -361,6 +389,8 @@ _LANGUAGES: dict[str, LanguageProbes] = {
     ".cs": _CS_PROBES,
     ".php": _PHP_PROBES,
     ".swift": _SWIFT_PROBES,
+    ".exs": _EXUNIT_PROBES,
+    ".ex": _EXUNIT_PROBES,
 }
 
 
@@ -432,21 +462,23 @@ class JudgeResult:
 # ── claims ────────────────────────────────────────────────────────────────
 
 
-def collect_claims(task_data: dict[str, Any]) -> list[str]:
-    """Extrai as claims que o juiz consegue confrontar com a realidade.
-
-    O critério de sucesso fica de fora de propósito — ver
-    collect_unverifiable_claims.
-    """
+def _claims_de_checks(verify: dict[str, Any]) -> list[str]:
+    """Extrai as afirmações de sucesso dos checks objetivos."""
     claims: list[str] = []
-    verify = task_data.get("verify", {})
     if verify.get("ruff_clean"):
         claims.append(f"{ROLE_LABELS['ruff']} limpo (sem erros de lint)")
+    if verify.get("typecheck_clean"):
+        claims.append("typecheck passou")
     if verify.get("tests_pass"):
         claims.append("todos os testes passam")
     if verify.get("coverage_pass"):
         claims.append(f"coverage ≥ gate ({verify.get('coverage_pct', '?')}%)")
+    return claims
 
+
+def collect_claims(task_data: dict[str, Any], *, include_checks: bool = True) -> list[str]:
+    """Extrai claims confrontáveis; o critério de sucesso fica de fora."""
+    claims = _claims_de_checks(task_data.get("verify", {})) if include_checks else []
     surgical = task_data.get("surgical", {})
     files = surgical.get("files", [])
     if files:
@@ -651,6 +683,7 @@ def _untracked_diff(files: list[str], cwd: Path | None = None) -> str:
             continue
         chunks.append(f"diff --git a/{f} b/{f}")
         chunks.append("new file mode 100644")
+        chunks.append(f"+++ b/{f}\t")
         chunks.extend(f"+{line}" for line in content.splitlines())
     return "\n".join(chunks)
 
@@ -681,30 +714,27 @@ def _run_git_diff(
     K-03: git ausente/indisponível vira diff vazio — o veredito sai com o
     ponto cego, nunca traceback (exit 1 = mesmo código de REFUTED).
     """
+    # O parser usa a/ e b/ mesmo quando o usuário configura outros prefixos.
+    cmd = ["git", "diff", "--src-prefix=a/", "--dst-prefix=b/"]
     if base_commit and _base_commit_resolves(base_commit, cwd=cwd):
-        if diff_end:
-            try:
-                diff = _run(["git", "diff", base_commit, diff_end], cwd=cwd).stdout
-            except OSError:
-                return ""
-        else:
-            try:
-                diff = _run(["git", "diff", base_commit], cwd=cwd).stdout
-            except OSError:
-                return ""
+        refs = [base_commit, diff_end] if diff_end else [base_commit]
+        try:
+            diff = _run([*cmd, *refs], cwd=cwd).stdout
+        except OSError:
+            return ""
     else:
         try:
-            result = _run(["git", "diff", "HEAD"], cwd=cwd)
+            result = _run([*cmd, "HEAD"], cwd=cwd)
         except OSError:
             result = None
         if result is None or result.returncode != 0:
             try:
-                result = _run(["git", "diff"], cwd=cwd)
+                result = _run(cmd, cwd=cwd)
             except OSError:
                 return ""
             if not result.stdout.strip():
                 try:
-                    result = _run(["git", "diff", "--cached"], cwd=cwd)
+                    result = _run([*cmd, "--cached"], cwd=cwd)
                 except OSError:
                     return ""
         diff = result.stdout
@@ -763,7 +793,9 @@ def _is_test_file(filepath: str) -> bool:
     return _looks_like_test_name(filepath.rsplit("/", 1)[-1])
 
 
-def _unreadable_test_files(changed: list[str]) -> list[str]:
+def _unreadable_test_files(
+    changed: list[str], test_files: frozenset[str] = frozenset()
+) -> list[str]:
     """Testes cuja linguagem o juiz não sabe ler.
 
     Existe para o juiz confessar, não para acusar: num repositório poliglota
@@ -777,9 +809,8 @@ def _unreadable_test_files(changed: list[str]) -> list[str]:
 
     Reconhece teste pela convenção do nome, e não por morar em `tests/`:
     incluir todo arquivo do diretório marcaria `tests/fixtures/dados.json`
-    como teste ilegível em todo projeto que tem fixture, e uma ressalva que
-    aparece sempre é uma ressalva que ninguém lê. O preço é não flagrar
-    `__tests__/index.js`, que não traz token nenhum no nome.
+    como teste ilegível. Caminhos explícitos dispensam essa heurística e a
+    lista de exclusões: o projeto afirmou que são testes.
     """
     # Sufixos que nunca são código de teste executável — um `test_data.csv`
     # ou `test_notes.md` tem nome de teste mas é dado/fixture, e flagrá-lo
@@ -805,9 +836,13 @@ def _unreadable_test_files(changed: list[str]) -> list[str]:
     return [
         f
         for f in changed
-        if _looks_like_test_name(Path(f).name)
-        and Path(f).suffix.lower() not in non_executable
-        and probes_for(f) is None
+        if probes_for(f) is None
+        and (
+            f in test_files
+            or (
+                _looks_like_test_name(Path(f).name) and Path(f).suffix.lower() not in non_executable
+            )
+        )
     ]
 
 
@@ -817,10 +852,10 @@ def _ignored_files(cwd: Path | None = None) -> list[str]:
         ["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
         cwd=cwd,
     )
-    return [f for f in result.stdout.strip().split("\n") if f.strip()]
+    return [git_path(line) for line in result.stdout.split("\n") if line]
 
 
-def _ignored_code_files(files: list[str]) -> list[str]:
+def _ignored_code_files(files: list[str], test_files: frozenset[str] = frozenset()) -> list[str]:
     """Remove caches conhecidos e preserva candidatos relevantes para revisão."""
     # Diretórios que o projeto nunca revisa mesmo ignorados: caches, build
     # dirs por linguagem (target/vendor/Pods/.gradle/coverage/.next/out/bin/obj)
@@ -853,12 +888,15 @@ def _ignored_code_files(files: list[str]) -> list[str]:
     return [
         f
         for f in files
-        if not noise.intersection(Path(f).parts)
-        and not any(part.endswith(".egg-info") for part in Path(f).parts)
-        and (
-            Path(f).suffix.lower() in _LANGUAGES
-            or _is_test_file(f)
-            or source_dirs.intersection(Path(f).parts)
+        if f in test_files
+        or (
+            not noise.intersection(Path(f).parts)
+            and not any(part.endswith(".egg-info") for part in Path(f).parts)
+            and (
+                Path(f).suffix.lower() in _LANGUAGES
+                or _is_test_file(f)
+                or source_dirs.intersection(Path(f).parts)
+            )
         )
     ]
 
@@ -1023,7 +1061,7 @@ def _empty_test_bodies(added_lines: list[str], probes: LanguageProbes) -> list[t
     return achados
 
 
-def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
+def hunt_weakened_checks(diff: str, test_files: frozenset[str] = frozenset()) -> list[JudgeFraud]:
     """Caça 1: verificações enfraquecidas — asserts removidos/relaxados.
 
     Arquivos novos são pulados. "Enfraquecer" pressupõe algo que existia
@@ -1041,6 +1079,7 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
     """
     frauds: list[JudgeFraud] = []
     current_file = ""
+    antes_do_hunk = False
     is_new_file = False
     is_deleted_file = False
     new_test_bodies: dict[str, list[str]] = {}
@@ -1049,9 +1088,8 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
     # remoção só é fraude se nenhuma linha `+` do MESMO arquivo (em
     # qualquer hunk) contiver asserção da mesma família — trocar
     # `expect(x).toBe(1)` por `expect(x).toBe(2)` é ALTERAÇÃO, não remoção.
-    # A linha `+` pode vir depois da `-` (modificação no lugar) ou antes
-    # (linha movida dentro do hunk); por isso a decisão é adiada para o fim
-    # de cada arquivo (flush no próximo `diff --git`), e não tomada na hora.
+    # A sonda ExUnit usa pares locais: uma substituição não compensa várias
+    # remoções, nem atravessa um trecho inalterado do arquivo.
     removals_pendentes: list[tuple[str, str]] = []  # (linha, descrição)
 
     def _flush_pendentes(file_atual: str) -> None:
@@ -1072,10 +1110,19 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
             # Fim do arquivo anterior: as remoções pendentes não revogadas
             # viram fraude, com o nome do arquivo a que pertencem.
             _flush_pendentes(current_file)
-            parts = line.split()
-            current_file = parts[3].replace("b/", "", 1) if len(parts) >= 4 else ""
+            # Diffs sintéticos e testes podem não trazer +++; o caminho no
+            # marcador real é preferido (espaços, aspas e renomes).
+            current_file = line.rpartition(" b/")[2] if " b/" in line else ""
+            antes_do_hunk = True
             is_new_file = False
             is_deleted_file = False
+        elif antes_do_hunk and line.startswith("+++ "):
+            destino = git_path(line[4:].split("\t", 1)[0])
+            current_file = destino.removeprefix("b/")
+            antes_do_hunk = False
+            continue
+        elif line.startswith("@@"):
+            antes_do_hunk = False
         elif line.startswith("new file mode"):
             is_new_file = True
         elif line.startswith("deleted file mode"):
@@ -1084,7 +1131,7 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
             # (arquivo novo é pulado porque "enfraquecer" pressupõe algo que
             # existia antes): arquivo deletado também é pulado.
             is_deleted_file = True
-        if not current_file or not _is_test_file(current_file):
+        if not current_file or (current_file not in test_files and not _is_test_file(current_file)):
             continue
         probes = probes_for(current_file)
         if probes is None:
@@ -1097,15 +1144,17 @@ def hunt_weakened_checks(diff: str) -> list[JudgeFraud]:
             continue
         if is_deleted_file:
             continue
-        if line.startswith("+"):
-            # K-01: uma linha `+` com asserção da família revoga as remoções
-            # pendentes do MESMO arquivo (qualquer hunk) — a asserção foi
-            # alterada, não removida. A revogação NÃO se aplica a padrões de
-            # adição suspeitos (`+ pass`, `+ noqa`, `+ // comentário`), que
-            # acusam abaixo; a asserção adicionada é o teste REAL que
-            # substitui o que a linha `-` tinha. Linguagem sem
-            # `assertion_family` acusa na hora, sem buffer.
-            if probes.assertion_family is not None and probes.assertion_family.search(line):
+        if probes.pair_assertions_locally and line.startswith(("@@", " ")):
+            _flush_pendentes(current_file)
+        if (
+            line.startswith("+")
+            and probes.assertion_family
+            and probes.assertion_family.search(line)
+        ):
+            if probes.pair_assertions_locally:
+                if removals_pendentes:
+                    removals_pendentes.pop()
+            else:
                 removals_pendentes.clear()
         for pattern, desc in probes.weakened:
             if re.match(pattern, line):
@@ -1599,19 +1648,51 @@ def _normaliza_task(task_data: Any) -> tuple[dict[str, Any], list[str]]:
 def _eh_interpretador(token: str) -> bool:
     """O token é o executável do Python (linux, macOS ou Windows)?"""
     nome = token.replace("\\", "/").rsplit("/", 1)[-1].lower()
-    return nome.startswith("python") or nome in {"py", "py.exe"}
+    return re.fullmatch(r"(?:py|python(?:\d+(?:\.\d+)?)?)(?:\.exe)?", nome) is not None
 
 
 def normaliza_comando(comando: str) -> str:
     """Comando comparável entre máquinas: o interpretador vira `<python>`.
 
-    `verify.commands` grava o argv real, e nos defaults Python ele começa com
-    o caminho absoluto do interpretador (`/usr/bin/python3`, o do venv, o do
-    runner do CI). Comparar a string crua acusaria divergência em toda
-    re-execução feita noutra máquina — o oposto do que a comparação existe
-    para detectar, que é o comando do projeto ter mudado.
+    Compatibilidade com tarefas que só gravaram `verify.commands` como
+    texto de exibição, sem preservar os limites dos argumentos.
     """
-    return " ".join("<python>" if _eh_interpretador(tok) else tok for tok in comando.split())
+    return " ".join(_normaliza_argv(tuple(comando.split())))
+
+
+def _normaliza_argv(argv: tuple[str, ...]) -> tuple[str, ...]:
+    """Preserva os limites dos argumentos; só normaliza o executável Python."""
+    if argv and _eh_interpretador(argv[0]):
+        return ("<python>", *argv[1:])
+    return argv
+
+
+def _comando_divergente(
+    verify: dict[str, Any], role: str, result: VerifyResult, *, default_python: bool
+) -> tuple[object, object] | None:
+    """Compara argv quando gravado, com compatibilidade para evidência legada."""
+    if "command_argv" in verify:
+        aprovados = verify["command_argv"]
+        aprovado = aprovados.get(role) if isinstance(aprovados, dict) else None
+        if (
+            not isinstance(aprovado, list)
+            or not aprovado
+            or not all(isinstance(arg, str) for arg in aprovado)
+        ):
+            return aprovado, list(result.argv)
+        argv = tuple(aprovado)
+        iguais = (
+            _normaliza_argv(argv) == _normaliza_argv(result.argv)
+            if default_python
+            else argv == result.argv
+        )
+        return None if iguais else (aprovado, list(result.argv))
+    comandos_legados = verify.get("commands")
+    legado = comandos_legados.get(role) if isinstance(comandos_legados, dict) else None
+    atual = result.details.get("command", "")
+    if isinstance(legado, str) and legado and normaliza_comando(legado) != normaliza_comando(atual):
+        return legado, atual
+    return None
 
 
 def judge_task(
@@ -1794,7 +1875,7 @@ def judge_task(
 
     diff = _run_git_diff(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
     changed = _changed_files(cwd=cwd, base_commit=diff_base, diff_end=diff_end)
-    claims = collect_claims(task_data)
+    claims = collect_claims(task_data, include_checks=False)
     unverifiable = collect_unverifiable_claims(task_data)
 
     # A25: janela que veio vazia É uma janela vazia. A checagem (d) acima mede
@@ -1855,19 +1936,17 @@ def judge_task(
                 )
 
     verify = task_data.get("verify", {})
-    claimed_checks: list[str] = []
-    if verify.get("ruff_clean"):
-        claimed_checks.append("ruff")
-    if verify.get("typecheck_clean"):
-        claimed_checks.append("typecheck")
-    if verify.get("tests_pass"):
-        claimed_checks.append("pytest")
-    if verify.get("coverage_pass"):
-        claimed_checks.append("coverage")
+    claimed_checks = [key for key, field in VERIFY_FIELDS.items() if verify.get(field)]
+    gate_usado = verify.get("gate_used")
+    gate_diferente = (
+        isinstance(gate_usado, (int, float))
+        and not isinstance(gate_usado, bool)
+        and gate_usado != gate
+    )
 
     verify_results: dict[str, VerifyResult] = {}
     re_ran: dict[str, bool] = {}
-    nao_executados: list[tuple[str, str]] = []
+    caveats: list[str] = []
 
     if claimed_checks:
         results = run_all(
@@ -1880,29 +1959,54 @@ def judge_task(
             config=config,
         )
         for key in claimed_checks:
-            if key in results:
-                resultado = results[key]
-                # Comando que não chegou a rodar não é evidência contra a
-                # task: fica fora da re-execução e vira ressalva de ambiente.
-                # Contá-lo como `False` faria o juiz dizer "re-execução falhou"
-                # sobre algo que nunca rodou (A23).
-                if not resultado.executed:
-                    motivo = resultado.output.strip().splitlines()
-                    nao_executados.append(
-                        (ROLE_LABELS.get(key, key), motivo[0][:160] if motivo else "sem detalhe")
-                    )
-                    continue
+            role = COMMAND_LABELS[key]
+            resultado = results.get(key)
+            pendencia = ""
+            if resultado is None:
+                pendencia = f"{role} não pôde ser re-executado: papel não configurado"
+            elif not resultado.executed:
+                linhas = resultado.output.strip().splitlines()
+                motivo = linhas[0][:160] if linhas else "sem detalhe"
+                pendencia = f"{role} não pôde ser re-executado: {motivo}"
+            elif divergencia := _comando_divergente(
+                verify,
+                role,
+                resultado,
+                default_python=config is None or getattr(config, role) is None,
+            ):
+                aprovado, atual = divergencia
+                pendencia = (
+                    f"re-execução rodou comando diferente do aprovado em `{role}`: "
+                    f"aprovado `{aprovado}`, reexecutado `{atual}`"
+                )
+            elif key == "coverage" and gate_diferente:
+                pendencia = "coverage não comparável: gate diferente do aprovado"
+            elif (
+                key == "coverage"
+                and "coverage_pattern_used" in verify
+                and verify["coverage_pattern_used"] != resultado.details.get("pattern")
+            ):
+                pendencia = "coverage não comparável: padrão diferente do aprovado"
+            else:
                 verify_results[key] = resultado
                 re_ran[key] = resultado.ok
+            if pendencia:
+                blind_spots.append(pendencia)
+                caveats.append(pendencia)
+
+    claims_reproduzidas: dict[str, Any] = {VERIFY_FIELDS[key]: ok for key, ok in re_ran.items()}
+    if re_ran.get("coverage"):
+        claims_reproduzidas["coverage_pct"] = verify_results["coverage"].details.get(
+            "coverage_pct", "?"
+        )
+    claims = _claims_de_checks(claims_reproduzidas) + claims
 
     frauds: list[JudgeFraud] = [*baseline_frauds]
-    caveats: list[str] = []
-    for label, motivo in nao_executados:
-        caveats.append(f"{label} não pôde ser re-executado: {motivo}")
     # A24: a subtração nunca é silenciosa — o jogo de task-sombra carimbada
     # fica visível aqui, com commit e responsável nomeados.
     caveats.extend(avisos_de_scopo)
-    frauds.extend(hunt_weakened_checks(diff))
+    test_files = frozenset(config.test_files) if config is not None else frozenset()
+    frauds.extend(hunt_weakened_checks(diff, test_files))
     frauds.extend(hunt_false_completion(task_data, verify_results))
     frauds.extend(hunt_scope_creep(task_data, changed))
     trivialidade = hunt_triviality_claim(task_data, changed, diff)
@@ -1935,14 +2039,8 @@ def judge_task(
             "check que o juiz saiba reproduzir"
         )
     elif not re_ran:
-        # Havia o que reexecutar e nada rodou: é o mesmo nada observado, dito
-        # pelo motivo certo. Sem isto o veredito seria VERIFIED limpo com uma
-        # ressalva escondida (A23).
-        blind_spots.append(
-            "nenhuma verificação pôde ser re-executada — os comandos declarados "
-            "não rodaram neste ambiente"
-        )
-    unreadable = _unreadable_test_files(changed)
+        blind_spots.append("nenhuma verificação pôde ser re-executada de forma comparável")
+    unreadable = _unreadable_test_files(changed, test_files)
     if unreadable:
         blind_spots.append(
             f"{len(unreadable)} arquivo(s) de teste sem padrão de enfraquecimento "
@@ -1954,7 +2052,7 @@ def judge_task(
             "Para cobrir uma linguagem, adicione a sonda em "
             "kata.judge.LanguageProbes e registre a extensão em _LANGUAGES."
         )
-    ignored = _ignored_code_files(_ignored_files(cwd=cwd))
+    ignored = _ignored_code_files(_ignored_files(cwd=cwd), test_files)
     if ignored:
         blind_spots.append(
             f"{len(ignored)} arquivo(s) ignorado(s) com aparência de código/teste "
@@ -1972,34 +2070,8 @@ def judge_task(
     # S4: o gate em vigor na aprovação, contra o da re-execução. Sem isso,
     # aprovar com `--gate 90` e reexecutar com o default 70 apagava a diferença
     # e o veredito saía como se o gate nunca tivesse mudado.
-    gate_usado = verify.get("gate_used")
-    if (
-        isinstance(gate_usado, (int, float))
-        and not isinstance(gate_usado, bool)
-        and float(gate_usado) != float(gate)
-    ):
-        caveats.append(f"gate da aprovação era {gate_usado}%; a re-execução usou {gate:.0f}%")
-    # A4: o comando APROVADO, contra o que o juiz de fato rodou. Sem isto o
-    # juiz reexecutava o `.kata/config.yaml` de hoje e apresentava o resultado
-    # como re-execução do claim aprovado: se `verify.test` mudou entre os dois
-    # momentos, ele rodou outra coisa e disse "confere".
-    comandos_aprovados = verify.get("commands")
-    if isinstance(comandos_aprovados, dict):
-        for chave, rotulo in COMMAND_LABELS.items():
-            if chave not in verify_results:
-                continue
-            aprovado = comandos_aprovados.get(rotulo)
-            atual = verify_results[chave].details.get("command", "")
-            if (
-                isinstance(aprovado, str)
-                and aprovado
-                and atual
-                and normaliza_comando(aprovado) != normaliza_comando(atual)
-            ):
-                caveats.append(
-                    f"re-execução rodou comando diferente do aprovado em `{rotulo}`: "
-                    f"aprovado `{aprovado}`, reexecutado `{atual}`"
-                )
+    if gate_diferente:
+        caveats.append(f"gate da aprovação era {gate_usado}%; a re-execução usou {gate:g}%")
     if janela_confiavel:
         caveats.append(
             f"{janela_confiavel}: base_commit e approved_commit do YAML não definem a janela"

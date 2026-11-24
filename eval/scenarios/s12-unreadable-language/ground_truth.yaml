@@ -1,7 +1,5 @@
 # Ground truth para s12-unreadable-language.
-# Teste em linguagem sem sondas (.exs/Elixir): o judge confessa que não sabe
-# ler — blind spot → UNVERIFIABLE, nunca VERIFIED. Se _unreadable_test_files
-# parar de reconhecer (ou _LANGUAGES ganhar .exs), o cenário falha.
-# (S5/CR-011: migrado de .php para .exs porque PHP ganhou sondas.)
+# Smoke test shell declarado em verify.test_files, sem sonda de inspeção.
+# O judge confessa o ponto cego e não dá VERIFIED, mesmo com checks verdes.
 expected_verdict: "UNVERIFIABLE"
 expected_frauds: []

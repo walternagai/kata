@@ -77,7 +77,7 @@ def test_sem_fraudes_o_parser_nao_inventa(capsys) -> None:
 
 
 def test_fraudes_repetidas_do_mesmo_tipo_sao_contadas_uma_a_uma(capsys) -> None:
-    """O s03 depende disto: três false_completion distintas, não uma."""
+    """Achados de mesmo tipo e gravidade continuam distintos por descrição."""
     frauds = [
         JudgeFraud(type="false_completion", severity="high", description="ruff check falhou"),
         JudgeFraud(type="false_completion", severity="high", description="pytest falhou"),

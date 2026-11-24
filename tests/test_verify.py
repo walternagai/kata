@@ -220,7 +220,7 @@ class TestRunCoverage:
         )
         result = run_coverage()
         assert result.ok is False
-        assert result.details["coverage_pct"] == 0.0
+        assert result.details["coverage_pct"] is None
         assert "TOTAL" in result.output
 
     @patch("kata.verify._run")
@@ -377,7 +377,8 @@ class TestRunAll:
         assert results["pytest"].ok is False
         assert results["coverage"].ok is False
         assert "(skipped" in results["coverage"].output
-        assert results["coverage"].details["coverage_pct"] == 0.0
+        assert results["coverage"].executed is False
+        assert results["coverage"].details["coverage_pct"] is None
 
 
 class TestSearchPattern:
@@ -848,7 +849,7 @@ class TestRunCommandCoverage:
         mock_run.return_value = MagicMock(returncode=0, stdout="nada aqui", stderr="")
         r = run_command_coverage(["npm", "run", "cov"], pattern=r"Cobertura: ([\d.]+)")
         assert r.ok is False
-        assert r.details["coverage_pct"] == 0.0
+        assert r.details["coverage_pct"] is None
         assert "nenhum percentual casou" in r.output
 
     @patch("kata.verify._run")
@@ -861,7 +862,7 @@ class TestRunCommandCoverage:
         mock_run.return_value = MagicMock(returncode=0, stdout="coverage: N/A", stderr="")
         r = run_command_coverage(["npm", "run", "cov"], pattern=r"coverage:\s+([\w.]+)")
         assert r.ok is False
-        assert r.details["coverage_pct"] == 0.0
+        assert r.details["coverage_pct"] is None
         assert "não é um número" in r.output
 
     @patch("kata.verify._run")
@@ -884,8 +885,22 @@ class TestRunCommandCoverage:
             pattern=r"All files\s+\|\s+[\d.]+",
         )
         assert r.ok is False
-        assert r.details["coverage_pct"] == 0.0
+        assert r.details["coverage_pct"] is None
         assert "não tem grupo de captura" in r.output
+
+    @pytest.mark.parametrize("valor", ["150", "-10", "nan", "inf"])
+    @patch("kata.verify._run")
+    def test_percentual_invalido_fica_sem_medicao(self, mock_run: MagicMock, valor: str) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"TOTAL {valor}%", stderr="")
+        r = run_command_coverage(["runner"], pattern=r"TOTAL (\S+)%", gate=0)
+        assert not r.ok and r.details["coverage_pct"] is None
+        assert r.argv == ("runner",)
+
+    @patch("kata.verify._run")
+    def test_zero_real_passa_com_gate_zero(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="TOTAL 0%", stderr="")
+        r = run_command_coverage(["runner"], gate=0)
+        assert r.ok and r.details["coverage_pct"] == 0
 
     @patch("kata.verify._run")
     def test_padrao_default_le_a_linha_total(self, mock_run: MagicMock) -> None:
@@ -898,7 +913,16 @@ class TestRunCommandCoverage:
 
 
 class TestRunAllComConfig:
-    """Papel declarado é executado verbatim; papel omitido cai no default."""
+    """Papel declarado é executado verbatim; default só no perfil Python."""
+
+    @patch("kata.verify._run")
+    def test_declared_coverage_sem_papel_test(self, mock_run: MagicMock) -> None:
+        cmd = ["runner", "coverage"]
+        mock_run.return_value = MagicMock(returncode=0, stdout="TOTAL 90%", stderr="")
+        results = run_all(config=VerifyConfig(profile="declared", coverage=cmd))
+        assert list(results) == ["coverage"]
+        assert results["coverage"].ok
+        mock_run.assert_called_once_with(cmd, cwd=None)
 
     @patch("kata.verify._run")
     def test_config_vazia_mantem_o_comportamento_anterior(self, mock_run: MagicMock) -> None:

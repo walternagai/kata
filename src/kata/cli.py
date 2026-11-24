@@ -70,7 +70,7 @@ from kata.skills import DOMAIN_SKILLS, doctor
 from kata.verify import (
     COMMAND_LABELS,
     ROLE_LABELS,
-    VerifyResult,
+    VERIFY_FIELDS,
     changed_files,
     consistency_failures,
     run_all,
@@ -1009,8 +1009,6 @@ def _step_verify(
     # que o contador de tentativas sobreviva entre retomadas da tarefa.
     # K-11: seção não-mapa (YAML à mão) vira {} — nunca AttributeError.
     verify: dict[str, Any] = dict(_secao(data, "verify"))
-    all_ok = True
-
     results = run_all(
         ruff_paths=ruff_paths,
         test_paths=test_paths,
@@ -1020,60 +1018,32 @@ def _step_verify(
         config=config,
     )
 
-    # ── lint ──
-    ruff_res: VerifyResult = results["ruff"]
-    print(f"▶ {ruff_res.details.get('command', 'lint')}")
-    verify["ruff_clean"] = ruff_res.ok
-    if ruff_res.ok:
-        print("  ✅ limpo")
-    else:
-        all_ok = False
-        print("  ❌ falhou — saída:")
-        for line in ruff_res.output.split("\n"):
-            print(f"     {line}")
-
-    # ── typecheck ──
-    # Só quando o projeto declarou o comando: sem declaração não há gate de
-    # tipos, e um `True` gravado aqui afirmaria uma verificação inexistente.
-    # Exibido na ordem em que roda (lint → typecheck → teste → coverage):
-    # imprimir depois do teste faria o relatório contar a execução fora de ordem.
-    tc_res: VerifyResult | None = results.get("typecheck")
-    if tc_res is not None:
-        print(f"\n▶ {tc_res.details.get('command', 'typecheck')}")
-        verify["typecheck_clean"] = tc_res.ok
-        if tc_res.ok:
-            print("  ✅ passou")
+    all_ok = bool(results) and all(result.ok for result in results.values())
+    verify["coverage_pct"] = None
+    verify.pop("coverage_pattern_used", None)
+    for key, field in VERIFY_FIELDS.items():
+        result = results.get(key)
+        # Não herda sucesso de um papel removido desde o último VERIFY.
+        if result is None:
+            verify.pop(field, None)
+            continue
+        verify[field] = result.ok
+        label = result.details.get("command", COMMAND_LABELS[key])
+        message = "limpo" if key == "ruff" else "passou"
+        if key == "coverage":
+            coverage = result.details.get("coverage_pct")
+            verify["coverage_pct"] = coverage
+            verify["coverage_pattern_used"] = result.details.get("pattern")
+            label = f"coverage (gate ≥ {gate:g}%)"
+            if coverage is not None:
+                message = f"passou ({coverage:.1f}%)"
+        print(f"\n▶ {label}")
+        if result.ok:
+            print(f"  ✅ {message}")
         else:
-            all_ok = False
-            print("  ❌ falhou — saída:")
-            for line in tc_res.output.split("\n"):
+            print("  ❌ falhou — saída:" if result.executed else "  ❌ não executado — motivo:")
+            for line in result.output.splitlines():
                 print(f"     {line}")
-
-    # ── teste ──
-    pytest_res: VerifyResult = results["pytest"]
-    print(f"\n▶ {pytest_res.details.get('command', 'test')}")
-    verify["tests_pass"] = pytest_res.ok
-    if pytest_res.ok:
-        print("  ✅ passou")
-    else:
-        all_ok = False
-        print("  ❌ falhou — últimas linhas:")
-        for line in pytest_res.output.split("\n"):
-            print(f"     {line}")
-
-    # ── coverage ──
-    cov_res: VerifyResult = results["coverage"]
-    cov_pct = cov_res.details.get("coverage_pct", 0.0)
-    print(f"\n▶ coverage (gate ≥ {gate:.0f}%)")
-    verify["coverage_pct"] = cov_pct
-    verify["coverage_pass"] = cov_res.ok
-    if cov_res.ok:
-        print(f"  ✅ passou ({cov_pct:.1f}%)")
-    else:
-        all_ok = False
-        print(f"  ❌ falhou ({cov_pct:.1f}% — gate: {gate:.0f}%)")
-        for line in cov_res.output.split("\n"):
-            print(f"     {line}")
 
     # ── evidência da execução ──
     # O que rodou, com que gate e quando. Antes o YAML guardava só
@@ -1081,11 +1051,16 @@ def _step_verify(
     # produzia arquivos indistinguíveis, e o juiz reexecutava com o gate
     # resolvido na hora dele. O relatório do Fable Step 6 pede os comandos
     # executados; eles passam a estar no arquivo, não só no terminal.
-    verify["gate_used"] = gate
+    verify["gate_used"] = gate if "coverage" in results else None
     verify["commands"] = {
         COMMAND_LABELS[chave]: results[chave].details.get("command", "")
         for chave in COMMAND_LABELS
-        if chave in results and results[chave].details.get("command")
+        if chave in results and results[chave].executed and results[chave].details.get("command")
+    }
+    verify["command_argv"] = {
+        COMMAND_LABELS[key]: list(result.argv)
+        for key, result in results.items()
+        if result.executed and result.argv
     }
     verify["ran_at"] = datetime.now(UTC).isoformat(timespec="seconds")
 
@@ -1565,15 +1540,13 @@ def _step_report(task: str, data: dict[str, Any]) -> None:
             f"{'passou' if tests else 'falhou'}"
         )
     cov = verify.get("coverage_pass")
-    # `or 0.0` e não `get(..., 0)`: a chave existe com valor None no template
-    # de --init e nos YAMLs escritos à mão pelas skills, então o default do
-    # get nunca entra e o format de None levanta TypeError.
-    cov_pct = verify.get("coverage_pct") or 0.0
+    cov_pct = verify.get("coverage_pct")
     if cov is not None:
-        label = (
-            f"  {'✅' if cov else '❌'} {ROLE_LABELS['coverage']} "
-            f"{cov_pct:.1f}% {'≥' if cov else '<'} gate"
-        )
+        label = f"  {'✅' if cov else '❌'} {ROLE_LABELS['coverage']}"
+        if cov_pct is None:
+            label += " sem medição"
+        else:
+            label += f" {cov_pct:.1f}% ({'passou' if cov else 'falhou'})"
         checks.append(label)
     success = verify.get("success_criteria_met")
     if success is not None:
@@ -1761,6 +1734,8 @@ def _init_task(task: str) -> bool:
             # versão antes de acreditar no resto.
             "gate_used": None,
             "commands": {},
+            "command_argv": {},
+            "coverage_pattern_used": None,
             "ran_at": "",
         },
         "auth": {"action_taken": False, "authorized": False, "action": "", "quote": ""},
@@ -2174,7 +2149,9 @@ def main() -> None:
     # várias — e cai na mesma resolução do gate (nargs="*" com default None
     # não pode rodar _detect_cov_source() no próprio argumento, que é avaliado
     # no parse, quando o pyproject ainda é do CWD de quem invoca).
-    cov_source = args.cov_source if args.cov_source is not None else _detect_cov_source()
+    cov_source = args.cov_source
+    if cov_source is None:
+        cov_source = _detect_cov_source() if config.profile == "python" else "src"
 
     if config.customizado:
         print(f"▶ verificações de {config_path()} (declaradas pelo projeto)")

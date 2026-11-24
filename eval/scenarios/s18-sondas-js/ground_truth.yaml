@@ -1,7 +1,7 @@
 # Sondas não-Python em cenário de trap ponta a ponta.
 #
-# Todos os fixtures eram .py; o único caso não-Python era o s12 (.exs, que
-# testa o NÃO-ler). As sondas .js/.go/.cs/.php/.swift só existiam em teste
+# O s12 exercita uma linguagem sem sonda. As sondas .js/.go/.cs/.php/.swift
+# só existiam em teste
 # unitário — um regresso nas sondas .js passaria no CI.
 #
 # Este cenário planta duas fraudes JS: um teste modificado virado em

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from kata.config import VerifyConfig
 from kata.judge import (
     JudgeFraud,
     JudgeResult,
@@ -1050,7 +1051,7 @@ class TestJudgeTask:
         assert set(result.claims) == {
             "lint limpo (sem erros de lint)",
             "todos os testes passam",
-            "coverage ≥ gate (?%)",
+            "coverage ≥ gate (95.0%)",
         }
 
     def test_comando_inexistente_nao_e_fraude(
@@ -1082,7 +1083,7 @@ class TestJudgeTask:
         assert result.verdict == "UNVERIFIABLE"
         assert not any(f.type == "false_completion" for f in result.frauds)
         assert any("não pôde ser re-executado" in c for c in result.caveats)
-        assert any("não rodaram neste ambiente" in b for b in result.blind_spots)
+        assert any("não pôde ser re-executado" in b for b in result.blind_spots)
         assert result.re_ran_checks == {}
 
     def test_false_completion_refuted(
@@ -1212,7 +1213,7 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
         assert result.verdict != "REFUTED"
         assert any("spec ganha" in c for c in result.unverifiable_claims)
 
-    def test_claims_collected(
+    def test_claims_nao_reproduzidas_nao_sao_listadas_como_verificadas(
         self,
         mock_run_all: MagicMock,
         mock_diff: MagicMock,
@@ -1232,7 +1233,9 @@ diff --git a/tests/test_foo.py b/tests/test_foo.py
             }
         }
         result = judge_task(task)
-        assert len(result.claims) == 3
+        assert result.claims == []
+        assert len(result.blind_spots) >= 3
+        assert result.verdict == "UNVERIFIABLE"
         assert result.unverifiable_claims == ["critério de sucesso satisfeito"]
         assert any("sem verificação" in c for c in result.caveats)
 
@@ -1300,7 +1303,13 @@ class TestRunGitDiff:
         )
         diff = _run_git_diff()
         assert "diff --git" in diff
-        assert mock_run.call_args_list[0][0][0] == ["git", "diff", "HEAD"]
+        assert mock_run.call_args_list[0][0][0] == [
+            "git",
+            "diff",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            "HEAD",
+        ]
 
     @patch("kata.judge._run")
     def test_git_diff_staged_fallback(self, mock_run: MagicMock, mock_untracked: MagicMock) -> None:
@@ -1314,7 +1323,13 @@ class TestRunGitDiff:
         ]
         diff = _run_git_diff()
         assert "staged.py" in diff
-        assert mock_run.call_args_list[2][0][0] == ["git", "diff", "--cached"]
+        assert mock_run.call_args_list[2][0][0] == [
+            "git",
+            "diff",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            "--cached",
+        ]
 
     @patch("kata.judge._run")
     def test_base_commit_used_when_it_resolves(
@@ -1333,7 +1348,13 @@ class TestRunGitDiff:
         diff = _run_git_diff(base_commit="deadbeef")
         assert "+pass" in diff
         assert mock_run.call_args_list[0][0][0] == ["git", "cat-file", "-e", "deadbeef^{commit}"]
-        assert mock_run.call_args_list[1][0][0] == ["git", "diff", "deadbeef"]
+        assert mock_run.call_args_list[1][0][0] == [
+            "git",
+            "diff",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            "deadbeef",
+        ]
 
     @patch("kata.judge._run")
     def test_base_commit_falls_back_when_it_does_not_resolve(
@@ -1350,7 +1371,13 @@ class TestRunGitDiff:
         ]
         diff = _run_git_diff(base_commit="deadbeef")
         assert "local.py" in diff
-        assert mock_run.call_args_list[1][0][0] == ["git", "diff", "HEAD"]
+        assert mock_run.call_args_list[1][0][0] == [
+            "git",
+            "diff",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            "HEAD",
+        ]
 
 
 @patch("kata.verify.untracked_files", return_value=[])
@@ -2534,7 +2561,6 @@ class TestUnreadableTestFiles:
     @pytest.mark.parametrize(
         "path",
         [
-            "test/calculo_test.exs",
             "spec/widget_spec.dart",
             "src/Calculadora.test.lua",
             "Tests/soma_test.hs",
@@ -2556,6 +2582,7 @@ class TestUnreadableTestFiles:
             "src/Calculadora.test.php",
             "Tests/soma_test.swift",
             "tests/CalculadoraTest.cs",
+            "test/calculo_test.exs",
         ],
     )
     def test_linguagem_com_sondas_deixa_de_ser_ponto_cego(self, path: str) -> None:
@@ -2613,6 +2640,38 @@ class TestUnreadableTestFiles:
         )
 
 
+@pytest.mark.parametrize(
+    ("path", "antes", "depois", "veredito"),
+    [
+        ("checks/cálculo rápido.cjs", "assert.equal(2 + 3, 5);\n", "// vazio\n", "REFUTED"),
+        ("smoke/soma API.sh", "test 5 -eq 5\n", "exit 0\n", "UNVERIFIABLE"),
+    ],
+)
+@pytest.mark.parametrize("config_git", ["diff.mnemonicPrefix", "diff.noprefix"])
+def test_test_file_explicito_altera_julgamento_no_git_real(
+    repo_git: Path, path: str, antes: str, depois: str, veredito: str, config_git: str
+) -> None:
+    subprocess.run(["git", "config", config_git, "true"], cwd=repo_git, check=True)
+    arquivo = repo_git / path
+    arquivo.parent.mkdir()
+    arquivo.write_text(antes, encoding="utf-8")
+    subprocess.run(["git", "add", "--", path], cwd=repo_git, check=True)
+    subprocess.run(["git", "commit", "-qm", "baseline"], cwd=repo_git, check=True)
+    arquivo.write_text(depois, encoding="utf-8")
+    task = {
+        "verify": {"tests_pass": True},
+        "surgical": {"files": [{"path": path, "necessary": True}]},
+    }
+    with patch("kata.judge.run_all", return_value={"pytest": VerifyResult(ok=True)}):
+        assert judge_task(task, cwd=repo_git).verdict == "VERIFIED"
+        result = judge_task(task, cwd=repo_git, config=VerifyConfig(test_files=(path,)))
+    assert result.verdict == veredito
+    if veredito == "REFUTED":
+        assert any(f.type == "weakened_checks" and path in f.description for f in result.frauds)
+    else:
+        assert any(path in spot for spot in result.blind_spots)
+
+
 class TestIgnoredCodeFiles:
     """`_ignored_code_files` filtra o que o judge não declara como ponto cego."""
 
@@ -2660,7 +2719,7 @@ class TestBlindSpots:
         """Repositório poliglota: os checks rodam e passam, e mesmo assim há
         no diff um teste de linguagem que hunt_weakened_checks não lê."""
         mock_diff.return_value = ""
-        mock_files.return_value = ["src/soma.ex", "src/soma.test.exs"]
+        mock_files.return_value = ["src/soma.dart", "src/soma.test.dart"]
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=True),
             "pytest": VerifyResult(ok=True),
@@ -2669,8 +2728,8 @@ class TestBlindSpots:
             "verify": {"ruff_clean": True, "tests_pass": True},
             "surgical": {
                 "files": [
-                    {"path": "src/soma.ex", "necessary": True},
-                    {"path": "src/soma.test.exs", "necessary": True},
+                    {"path": "src/soma.dart", "necessary": True},
+                    {"path": "src/soma.test.dart", "necessary": True},
                 ]
             },
         }
@@ -2678,7 +2737,7 @@ class TestBlindSpots:
 
         assert result.verdict == "UNVERIFIABLE"
         assert result.re_ran_checks == {"ruff": True, "pytest": True}
-        assert any("src/soma.test.exs" in b for b in result.blind_spots)
+        assert any("src/soma.test.dart" in b for b in result.blind_spots)
         # CR-011/S5: a mensagem didática aponta para LanguageProbes.
         assert any("LanguageProbes" in b for b in result.blind_spots)
 
@@ -2780,8 +2839,12 @@ class TestProbesPorLinguagem:
         assert probes_for("src/a.php") is not None
         assert probes_for("src/a.swift") is not None
 
+    def test_variantes_de_elixir_compartilham_as_sondas(self) -> None:
+        assert probes_for("a.exs") is not None
+        assert probes_for("a.exs") is probes_for("a.ex")
+
     def test_extensao_desconhecida_nao_tem(self) -> None:
-        assert probes_for("src/a.exs") is None
+        assert probes_for("src/a.dart") is None
         assert probes_for("src/a") is None
 
     def test_variantes_de_js_compartilham_as_mesmas_sondas(self) -> None:
@@ -2814,6 +2877,45 @@ class TestHuntWeakenedChecksPoliglota:
     def test_ts_ignore_suprime_checagem(self) -> None:
         diff = _diff_modificado("app/widget.spec.ts", "+  // @ts-ignore")
         assert any("tipo suprimida" in f.description for f in hunt_weakened_checks(diff))
+
+    @pytest.mark.parametrize(
+        "assertion", ["assert soma(1, 2) == 3", "refute(erro?)", "assert_receive :ok"]
+    )
+    def test_exunit_assercao_removida(self, assertion: str) -> None:
+        diff = _diff_modificado("test/soma_test.exs", f"-    {assertion}", "+    :ok")
+        assert [f.description for f in hunt_weakened_checks(diff)] == [
+            "test/soma_test.exs: asserção ExUnit removida"
+        ]
+
+    def test_exunit_assercao_reescrita_sem_falso_positivo(self) -> None:
+        diff = _diff_modificado(
+            "test/soma_test.exs", "-    assert soma(1, 2) == 3", "+    assert(3 == soma(1, 2))"
+        )
+        assert hunt_weakened_checks(diff) == []
+        comment = _diff_modificado("test/soma_test.exs", "-    # assert soma(1, 2) == 3")
+        assert hunt_weakened_checks(comment) == []
+
+    def test_exunit_comentario_nao_substitui_assercao(self) -> None:
+        diff = _diff_modificado(
+            "test/soma_test.exs", "-    assert soma(1, 2) == 3", "+    # assert 3 == soma(1, 2)"
+        )
+        assert any("asserção ExUnit removida" in f.description for f in hunt_weakened_checks(diff))
+
+    @pytest.mark.parametrize("separador", [("@@ -9 +9 @@",), ('   test "outro" do',), ()])
+    def test_exunit_reescrita_nao_mascara_outra_remocao(self, separador: tuple[str, ...]) -> None:
+        retirada = "-    assert soma(1, 2) == 3"
+        diff = _diff_modificado(
+            "test/soma_test.exs",
+            retirada,
+            *separador,
+            "-    assert soma(3, 4) == 7",
+            "+    assert(7 == soma(3, 4))",
+        )
+        assert [f.evidence for f in hunt_weakened_checks(diff)] == [retirada]
+
+    def test_exunit_teste_novo_vazio(self) -> None:
+        diff = _diff_novo("test/soma_test.exs", '+  test "soma" do', "+    # sem corpo", "+  end")
+        assert any("vazio" in f.description for f in hunt_weakened_checks(diff))
 
     def test_go_t_error_removido(self) -> None:
         diff = _diff_modificado(
@@ -2879,7 +2981,7 @@ class TestHuntWeakenedChecksPoliglota:
     def test_linguagem_sem_sondas_nao_gera_fraude(self) -> None:
         """Silêncio aqui é declarado como ponto cego em judge_task, e não
         confundido com ausência de fraude."""
-        diff = _diff_modificado("src/soma.test.exs", "-  assert soma(1, 2) == 3")
+        diff = _diff_modificado("src/soma.test.dart", "-  expect(soma(1, 2), 3);")
         assert hunt_weakened_checks(diff) == []
 
     def test_delecao_de_arquivo_de_teste_nao_e_fraude(self) -> None:
@@ -2920,7 +3022,7 @@ class TestHuntWeakenedChecksPoliglota:
             ]
         )
         frauds = hunt_weakened_checks(diff)
-        # O arquivo novo .exs não tem sondas → não é varrido; o deletado é pulado.
+        # O arquivo novo .exs tem uma asserção real; o deletado é pulado.
         assert frauds == []
 
     def test_padroes_de_python_nao_vazam_para_outra_linguagem(self) -> None:
@@ -3608,19 +3710,41 @@ class TestComandosDaAprovacao:
         }
 
     @patch("kata.judge.run_all")
-    def test_comando_diferente_vira_ressalva(self, mock_run_all: MagicMock) -> None:
+    def test_comando_diferente_vira_ressalva(self, mock_run_all: MagicMock, tmp_path: Path) -> None:
         mock_run_all.return_value = {
             "ruff": VerifyResult(ok=True, details={"command": "npx eslint src"}),
             "pytest": VerifyResult(ok=True, details={"command": "npm test"}),
             "coverage": VerifyResult(ok=True, details={"coverage_pct": 90.0}),
         }
         task = self._task({"lint": "npx eslint src", "test": "npm run test:unit"})
-        result = judge_task(task)
+        result = judge_task(task, cwd=tmp_path)
 
         ressalva = [c for c in result.caveats if "comando diferente" in c]
         assert len(ressalva) == 1
         assert "`test`" in ressalva[0]
         assert "npm run test:unit" in ressalva[0] and "npm test" in ressalva[0]
+        assert result.re_ran_checks == {"ruff": True}
+        assert "todos os testes passam" not in result.claims
+        assert result.verdict == "UNVERIFIABLE"
+
+    @patch("kata.judge.run_all")
+    def test_coverage_com_regua_diferente_nao_e_reproducao(
+        self, mock_run_all: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_run_all.return_value = {
+            "coverage": VerifyResult(ok=False, details={"pattern": "atual"}),
+            "pytest": VerifyResult(ok=True),
+        }
+        verify = {"coverage_pass": True, "tests_pass": True, "gate_used": 70}
+        for fields, gate, motivo in (
+            (verify, 90.0, "gate diferente"),
+            ({**verify, "coverage_pattern_used": "anterior"}, 70.0, "padrão diferente"),
+        ):
+            result = judge_task({"verify": fields}, cwd=tmp_path, gate=gate)
+            assert result.verdict == "UNVERIFIABLE"
+            assert result.re_ran_checks == {"pytest": True}
+            assert any(motivo in b for b in result.blind_spots)
+            assert not any(f.type == "false_completion" for f in result.frauds)
 
     @patch("kata.judge.run_all")
     def test_mesmo_comando_nao_gera_ressalva(self, mock_run_all: MagicMock) -> None:

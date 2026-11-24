@@ -3601,7 +3601,8 @@ class TestStepReport:
         cli._step_report("test-task", data)
         out = capsys.readouterr().out
         assert "REJEITADO" in out
-        assert "0.0%" in out
+        assert "coverage sem medição" in out
+        assert "0.0%" not in out
 
     @patch("kata.cli._detect_scratch_files", return_value=[])
     def test_rejected_report_has_caveats(self, mock_scratch, capsys) -> None:

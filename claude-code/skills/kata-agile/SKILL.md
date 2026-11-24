@@ -165,9 +165,9 @@ python -m kata --verify-task <task> --criterion-met
 
 (no Windows, `py -m kata ...`)
 
-- `--verify-task` roda lint, typecheck (se declarado em `.kata/config.yaml`),
-  teste e coverage, grava `verify.commands`, `verify.gate_used`,
-  `verify.ran_at`, os booleanos e o `status`. **Não transcreva resultado à
+- `--verify-task` roda os checks aplicáveis ao perfil de `.kata/config.yaml`
+  e grava `verify.command_argv`, os resultados e o `status`. Com
+  `verify.profile: declared`, só rodam os comandos declarados. **Não transcreva resultado à
   mão** — evidência digitada é afirmação, e é isso que o `--judge` chama de
   `false_completion`.
 - `--criterion-met` afirma que o `done` do THINK foi satisfeito. **Pergunte ao

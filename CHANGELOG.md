@@ -8,6 +8,25 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
+## Não publicado
+
+### Adicionado
+
+- `verify.profile: declared` roda somente os checks configurados em
+  `.kata/config.yaml`, sem fallback Python. O perfil padrão não muda.
+- Fluxos VERIFY → JUDGE de ponta a ponta no CI com Node.js, Go e Rust.
+- `verify.test_files` reconhece arquivos de teste fora das convenções de nome
+  e registra um ponto cego quando não há sonda para um teste alterado.
+- Sonda para Elixir/ExUnit (`.ex`, `.exs`), com casos de remoção, reescrita
+  legítima e teste vazio.
+
+### Corrigido
+
+- JUDGE compara a lista exata de argumentos quando disponível. Check ausente,
+  não executado ou não comparável não sustenta `VERIFIED`.
+- Coverage não medido fica `null`, diferente de `0%`; medições não finitas
+  ou fora de 0 a 100 são rejeitadas.
+
 ## 0.12.0 — 2026-11-24
 
 ### Adicionado

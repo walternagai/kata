@@ -480,6 +480,7 @@ rewriting the task.
 
 ```yaml
 verify:
+  profile: declared
   lint: npx eslint src tests
   typecheck: npx tsc --noEmit
   test: npx vitest run
@@ -496,10 +497,12 @@ advisor:
 
 | Key | Meaning |
 |---|---|
-| `verify.lint` / `typecheck` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list. `typecheck` has no default: undeclared, it does not run and `verify.typecheck_clean` stays `null` |
+| `verify.profile` | `python` (default) fills omitted roles with the built-in Python checks; `declared` runs only the configured commands and requires at least one |
+| `verify.lint` / `typecheck` / `test` / `coverage` | Command for that role, as a string (split the way a shell would) or an already-split list. `typecheck` has no default in either profile |
 | Unknown key at the top level | A named error. A misspelled section (`veirfy:`) used to fall back to the Python defaults with `customizado=False` and no warning — and the error for an unknown key *inside* `verify` made that more likely, because the intuitive fix is moving the key out. Only `verify` and `advisor` are accepted |
 | Unknown key under `verify` | A named error, never a silent default: a misspelled or newer-version role would otherwise be dropped and the cycle would approve having run nothing for it |
 | Shell operators | Commands run **without a shell**, so `&&`, `\|\|`, `\|`, `;`, `>`, `<` are refused as standalone tokens. `npm run check && npm run test:db` reaches npm as arguments and exits 0 with the second tier never executed; declare a project script (`npm run check:all`) or an explicit shell (`bash -c "..."`) |
+| `verify.test_files` | Exact Git-relative file paths (forward slashes, no globs) to additionally recognize as tests in JUDGE. This is inspection metadata, not a command, and does not change test runner selection |
 | `verify.coverage_pattern` | Regex whose first group is the coverage percentage. Default reads the `TOTAL` line pytest-cov prints |
 | `verify.gate` | Minimum coverage percentage. A `--gate` flag overrides it |
 | Unknown key under `advisor` | A named error, same reason: `enabld: false` (typo) used to be dropped and the advisor stayed on, while a misspelled `model` silently fell back to the default |
@@ -508,18 +511,19 @@ advisor:
 | `advisor.effort` | Thinking / reasoning effort level (`low`, `medium`, `high`, `max`) |
 | `advisor.skip_trivial` | Bypass advisor review on trivial tasks (`fit.trivial=true`). Default `true` |
 
-Every key is optional. A role that is not declared falls back to the Python
-default for that role (`ruff` / `pytest` / `pytest-cov`) and keeps obeying the
-path flags, so a project can replace only its linter and keep pytest. With no
-file at all, behaviour is identical to before the option existed.
+With no file or with `profile: python`, omitted roles keep their Python
+defaults (`ruff` / `pytest` / `pytest-cov`) and path flags. With `profile:
+declared`, any nonempty subset of commands is valid. For example, a Node
+project with only `verify.test: [node, --test]` has no lint or coverage gate.
+Polyglot projects can use one repository script per role to run multiple
+stacks and propagate their failures.
 
 A declared role is run verbatim and judged by its exit code, the one contract
 every lint and test tool honours. Coverage is the exception: the built-in path
 delegates the gate to `--cov-fail-under`, which does not exist outside Python,
 so a declared coverage command has its percentage extracted with
-`coverage_pattern` and compared here. **If the pattern matches nothing, the
-check fails** rather than recording 0.0% as a pass — "could not measure" is not
-"measured and passed".
+`coverage_pattern` and compared here. Missing, non-finite, or out-of-range
+measurements fail the check and are recorded as `null`, distinct from `0%`.
 
 A config file that exists but is invalid **aborts with exit code 1**. Falling
 back to ruff silently would report the success of a check the project never
@@ -544,6 +548,10 @@ By default, `VERIFIED WITH CAVEATS` (findings of low or medium severity) and
 gate accept only `VERIFIED`, run `kata --judge --task TASK --require-verified`.
 This changes the exit status, not the verdict or its explanation. A `VERIFIED`
 report may still include informational notes, such as the use of `--trusted-base`.
+An approved check that is no longer configured, cannot run, or ran with a
+different command, coverage threshold, or coverage extraction pattern cannot
+support `VERIFIED`. New task files record exact argument lists; old files
+without them retain the legacy display-string comparison when available.
 
 ## Development cycle
 
@@ -821,11 +829,13 @@ comes out. It used to be an `AttributeError`, and a traceback exits 1 — the
 same code as `REFUTED` — which made a malformed file indistinguishable from
 fraud found for anything reading the exit code.
 
-The first blind spot is disarmed by declaring the project's commands in
-`.kata/config.yaml`. The second knows Python, JS/TS, Go, Ruby, Rust,
-Java/Kotlin, C#, PHP and Swift; a
-`.exs` test is still confessed rather than passed over
-in silence. With no fraud at all, any blind spot yields `UNVERIFIABLE`
+Configure the project's commands in `.kata/config.yaml` to make approved
+checks reproducible. Diff inspection has probes for Python, JS/TS, Go, Ruby,
+Rust, Java/Kotlin, C#, PHP, Swift, and Elixir/ExUnit (`.ex`, `.exs`).
+`verify.test_files` adds exact, repository-relative paths to the existing
+heuristics. If a listed file changed and no probe exists for its extension
+(e.g. `smoke/api.sh`), JUDGE reports a blind spot even if the tests pass.
+With no fraud at all, any blind spot yields `UNVERIFIABLE`
 instead of `VERIFIED`: "I could not look" must never be reported as "all
 clear". With fraud present, the fraud decides the verdict and the blind
 spots are still listed.
@@ -966,6 +976,8 @@ verify:
                        # indistinguishable task files
   commands: {}         # role -> command that ran ("lint", "typecheck",
                        # "test", "coverage"): evidence of what executed
+  command_argv: {}     # role -> exact argument list, preferred by JUDGE
+  coverage_pattern_used: null  # extraction pattern for declared coverage; null for Python default
   ran_at: ""           # UTC timestamp of the run (ISO 8601)
 auth:
   action_taken: false

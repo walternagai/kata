@@ -214,6 +214,8 @@ verify:
   commands: {}         # papel → comando que rodou ("lint", "typecheck",
                        # "test", "coverage"): a evidência do que foi
                        # executado, não só do resultado
+  command_argv: {}     # papel → lista exata de argumentos executados
+  coverage_pattern_used: null  # padrão do coverage declarado; null para o default Python
   ran_at: ""           # instante UTC da execução (ISO 8601)
 preflight:
   skills_missing: []    # skills de fase que não carregaram nesta execução.
@@ -387,54 +389,28 @@ O adapter define:
 4. **Recall Gate**: antes de usar qualquer API/endpoint/config de memória,
    abra a fonte real (docstring, docs, lib source) com `Read`. Se não acessível, marque
    como low-confidence no relatório.
-5. Verifique imports órfãos: `ruff check --select F401 <paths>` via `Bash`
+5. Verifique imports órfãos com a ferramenta do projeto, se houver; caso
+   contrário, revise o diff e registre o que não pôde verificar.
 6. Pergunte: "Imports removidos são só os que sua mudança tornou inúteis?"
 7. Registre a lista de arquivos com `necessary: true/false` no YAML sob `surgical`
 
 ### Fase 4: VERIFY
 
 1. Carregue a skill `kata-verify` com `Skill`.
-2. **Leia `.kata/config.yaml` primeiro.** Se declarar `verify.lint`,
-   `verify.test` ou `verify.coverage`, use aqueles comandos verbatim no papel
-   correspondente — eles substituem os defaults Python abaixo, e as flags de
-   caminho daquele papel deixam de valer. `verify.gate` e
-   `verify.coverage_pattern` valem junto. Rodar `kata --verify-task <task>`
-   (ou `--check-only`, quando não há tarefa) já faz tudo isso sozinho. Se o
-   projeto não for Python e não houver config, não
-   invente comando: proponha criar o arquivo e registre o bloqueio como
-   caveat — verificação que não rodou não é verificação que passou.
-2. **Lint** (default): `python -m ruff check <paths>` via `Bash` (ou `py -m ruff` no Windows)
-   - Paths padrão: `src/ tests/`. Adapte ao projeto (ex: `app/ services/ tests/`)
-   - OK se returncode == 0
-   - Se falhou, mostre o output completo
-
-3. **Teste** (default): `python -m pytest <test_paths> --tb=short -q` (ou `py -m pytest` no Windows)
-   - Test paths padrão: `tests/`. Adapte ao projeto
-   - Se houver arquivos que precisam de `--ignore`, inclua-os
-   - OK se returncode == 0
-   - Se falhou, mostre o output completo
-
-4. **Coverage** (default): `python -m pytest <test_paths> --cov=<source> --cov-report=term-missing --cov-fail-under=70 -q` (ou `py -m pytest` no Windows)
-   - Source padrão: `src`. Adapte ao projeto (ex: `app`)
-   - O `--cov-fail-under` já garante que o gate seja verificado pelo pytest-cov
-   - Extraia o percentual do output para exibição (regex: `TOTAL\s+\d+\s+\d+\s+(\d+)%`)
-   - Gate: 70%. OK se returncode == 0 (já inclui o gate)
-
-5. **Critério de sucesso**: confronte o critério declarado no THINK (`done`)
-   com o resultado final e pergunte ao usuário via `AskUserQuestion`
-   "O critério de sucesso da tarefa está satisfeito?"
-   - Em modo `--check-only`, assuma satisfeito
-
-6. **Hard bound (Fable Step 5)**: registre `verify.attempts` (contador de
-   execuções do VERIFY). Após 3 tentativas falhas, grave `verify.hand_back:
-   true` e devolva a tarefa ao usuário com o que foi tentado, o output real
-   e a hipótese atual — não fique repetindo o mesmo fix-verify.
-
-7. Calcule o resultado final:
-   - Aprovado se: ruff ✅ AND pytest ✅ AND coverage ✅ AND sucesso ✅
-   - Rejeitado caso contrário
-
-8. Atualize `status` para `approved` ou `rejected` no YAML
+2. **Leia `.kata/config.yaml` primeiro.** Em `verify.profile: declared`, só
+   os comandos declarados rodam. O perfil padrão `python` preenche papéis
+   omitidos com Ruff/pytest/pytest-cov; `typecheck` não tem default. Se o
+   projeto não usa esses defaults e não há configuração suficiente, proponha
+   os comandos do projeto e registre o bloqueio, sem declarar sucesso.
+3. Confronte o resultado da tarefa com o critério declarado no THINK (`done`)
+   e pergunte via `AskUserQuestion`: "O critério de sucesso da tarefa está satisfeito?"
+4. Use `kata --verify-task <task>` via `Bash` para rodar os checks e gravar
+   a evidência no YAML. Sem terminal, repasse a resposta via `--criterion-met`
+   ou `--no-criterion-met`. Use `--check-only` só para CI sem tarefa; ele não
+   grava evidência.
+5. A tarefa só é aprovada se todos os checks aplicáveis passarem e o critério
+   for satisfeito. Mostre as falhas. Após 3 tentativas falhas, respeite
+   `verify.hand_back` e devolva a tarefa com o output real e a hipótese atual.
 
 ### Fase 4.2: TWIN CHECK
 

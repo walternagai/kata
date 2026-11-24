@@ -119,16 +119,14 @@ configuração, ou valor que você está escrevendo de memória:
 Pergunte:
 > "Imports removidos são só os que sua mudança tornou inúteis?"
 
-**Detecção automática** (opcional, via `Bash`):
-```bash
-# Encontra imports não utilizados com ruff
-python -m ruff check --select F401 <caminhos-do-projeto>
-```
+**Detecção automática** (opcional, via `Bash`): consulte `.kata/config.yaml`
+e os scripts do projeto para identificar o linter aplicável. Em um projeto
+Python que usa Ruff, por exemplo, rode `python -m ruff check --select F401
+<caminhos-do-projeto>`. Não use Ruff como fallback em outra linguagem.
+Se não houver ferramenta aplicável, revise o diff e registre a limitação.
 
-Se `python` não estiver disponível no Windows, use `py -m ruff`.
-
-Se houver imports F401 que **não** são resultado da sua mudança, são efeito
-colateral desnecessário — questione.
+Se a ferramenta encontrar imports órfãos anteriores à tarefa, não os remova
+neste diff.
 
 ## Output no YAML
 

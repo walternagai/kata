@@ -321,6 +321,7 @@ Quem sabe verificar um projeto é o projeto. Declare os comandos em
 
 ```yaml
 verify:
+  profile: declared
   lint: npx eslint src tests
   test: npx vitest run
   coverage: npx vitest run --coverage
@@ -334,13 +335,27 @@ advisor:
   skip_trivial: true                   # bypass automático se fit.trivial == true
 ```
 
-Cada papel aceita string ou lista, e todo papel é opcional: o que for
-omitido cai no default Python (ruff/pytest/pytest-cov), então dá para
-trocar só o linter e manter o pytest. Sem o arquivo, nada muda.
+Com `profile: declared`, só rodam os comandos declarados (ao menos um).
+Um projeto Node pode declarar apenas `test: [node, --test]`, sem lint ou
+coverage. Em um monorepo poliglota, cada papel pode chamar um script do
+projeto que combina as ferramentas e propaga as falhas. Sem o perfil
+explícito, continuam valendo os defaults Python para papéis omitidos.
 
-O JUDGE segue a mesma linha: ele conhece a sintaxe de teste de Python,
-JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP e Swift. Linguagem fora
-dessa lista (ex.: Elixir `.exs`) vira ponto cego declarado, não silêncio.
+Executar os comandos e inspecionar o diff dos testes são coisas diferentes.
+A inspeção do JUDGE usa heurísticas de nome e sondas para Python, JS/TS, Go,
+Ruby, Rust, Java/Kotlin, C#, PHP, Swift e Elixir/ExUnit. Para testes fora das
+convenções de nome, declare os caminhos exatos, relativos à raiz do repositório:
+
+```yaml
+verify:
+  profile: declared
+  test: [npm, test]
+  test_files: [checks/smoke.cjs, checks/api.sh]
+```
+
+`test_files` complementa as heurísticas do JUDGE: não seleciona o que o
+runner executa. Se um teste alterado não tiver sonda (como `checks/api.sh`),
+o JUDGE registra um ponto cego mesmo que o comando de testes passe.
 
 ## Fases do Ciclo
 

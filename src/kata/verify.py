@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+from ast import literal_eval
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -41,6 +42,13 @@ ROLE_LABELS: dict[str, str] = {
 # primeira (A20 da revisão estrutural de 2026-10).
 COMMAND_LABELS: dict[str, str] = {**ROLE_LABELS, "pytest": "test"}
 
+VERIFY_FIELDS: dict[str, str] = {
+    "ruff": "ruff_clean",
+    "typecheck": "typecheck_clean",
+    "pytest": "tests_pass",
+    "coverage": "coverage_pass",
+}
+
 # Códigos de saída que significam "o shell não achou o comando", e não "o check
 # reprovou": 127 no POSIX, 9009 no Windows. Só aparecem quando o comando
 # declarado é executado por um shell (`sh -c`, `cmd /c`); com argv direto o
@@ -63,6 +71,7 @@ class VerifyResult:
     output: str = ""
     details: dict[str, Any] = field(default_factory=dict)
     executed: bool = True
+    argv: tuple[str, ...] = ()
 
 
 def consistency_failures(task_data: dict[str, Any]) -> list[str]:
@@ -152,6 +161,19 @@ def is_inspectable(path: Path) -> bool:
         return False
 
 
+def git_path(value: str) -> str:
+    """Decodifica um caminho que o Git pode ter escapado com aspas C."""
+    if not (value.startswith('"') and value.endswith('"')):
+        return value
+    escaped = re.sub(
+        r"[^\x00-\x7f]", lambda match: "".join(f"\\{b:03o}" for b in match[0].encode()), value
+    )
+    try:
+        return literal_eval(f"b{escaped}").decode("utf-8", errors="surrogateescape")
+    except (SyntaxError, ValueError):
+        return value
+
+
 def untracked_files(cwd: Path | None = None) -> list[str]:
     """Arquivos que o git ainda não rastreia.
 
@@ -165,7 +187,7 @@ def untracked_files(cwd: Path | None = None) -> list[str]:
     maneira de enxergá-los.
     """
     result = _run(["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd)
-    return [f for f in result.stdout.strip().split("\n") if f.strip()]
+    return [git_path(line) for line in result.stdout.split("\n") if line]
 
 
 # Nomes de arquivo que são dados de ferramenta, nunca trabalho da tarefa.
@@ -302,7 +324,7 @@ def changed_files(
                     return []
 
     tracked = _sem_escrituracao(
-        _remove_tool_artifacts([f for f in result.stdout.strip().split("\n") if f.strip()])
+        _remove_tool_artifacts([git_path(line) for line in result.stdout.split("\n") if line])
     )
     seen = set(tracked)
     novos = _sem_escrituracao(_remove_tool_artifacts(untracked_files(cwd=cwd)))
@@ -373,6 +395,16 @@ def _interpretador(cwd: Path | None, *modulos: str) -> str:
     return _interpretador_do_projeto(str(cwd or Path.cwd()), modulos)
 
 
+def _run_python_check(cmd: list[str], cwd: Path | None) -> VerifyResult:
+    """Executa um default, distinguindo ferramenta ausente de check reprovado."""
+    result = run_command(cmd, cwd=cwd)
+    result.details["command"] = _comando_portatil(cmd)
+    faltando = f": No module named {cmd[2]}"
+    if not result.ok and result.output.rstrip().endswith(faltando):
+        result.executed = False
+    return result
+
+
 def run_ruff(
     paths: list[str] | None = None,
     cwd: Path | None = None,
@@ -389,12 +421,7 @@ def run_ruff(
     if paths is None:
         paths = ["src/", "tests/"]
     cmd = [_interpretador(cwd, "ruff"), "-m", "ruff", "check", *paths]
-    result = _run(cmd, cwd=cwd)
-    return VerifyResult(
-        ok=result.returncode == 0,
-        output=result.stdout + result.stderr,
-        details={"command": _comando_portatil(cmd)},
-    )
+    return _run_python_check(cmd, cwd)
 
 
 def run_pytest(
@@ -422,12 +449,7 @@ def run_pytest(
             cmd.extend(["--ignore", path])
     if extra_args:
         cmd.extend(extra_args)
-    result = _run(cmd, cwd=cwd)
-    return VerifyResult(
-        ok=result.returncode == 0,
-        output=result.stdout + result.stderr,
-        details={"command": _comando_portatil(cmd)},
-    )
+    return _run_python_check(cmd, cwd)
 
 
 def run_coverage(
@@ -468,7 +490,10 @@ def run_coverage(
     if ignore:
         for path in ignore:
             cmd.extend(["--ignore", path])
-    result = _run(cmd, cwd=cwd)
+    result = _run_python_check(cmd, cwd)
+    result.details.update(coverage_pct=None, gate=gate)
+    if not result.executed:
+        return result
 
     # Extrai percentual de coverage da linha TOTAL. O percentual é sempre a
     # última coluna, mas quantas colunas o antecedem varia: branch coverage
@@ -476,25 +501,18 @@ def run_coverage(
     # número de colunas fazia o regex falhar calado e gravar 0.0 junto de
     # coverage_pass=True — um YAML internamente contraditório que o JUDGE
     # depois lê como verdade.
-    match = re.search(r"^TOTAL\s+.*?(\d+(?:\.\d+)?)%", result.stdout, re.MULTILINE)
+    match = re.search(DEFAULT_COVERAGE_PATTERN, result.output, re.MULTILINE)
     if match is None:
-        return VerifyResult(
-            ok=False,
-            output=result.stdout + result.stderr + "\n(kata: linha TOTAL de coverage ausente)",
-            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
-        )
+        result.ok = False
+        result.output += "\n(kata: linha TOTAL de coverage ausente)"
+        return result
     cov_pct = float(match.group(1))
-
-    passed = result.returncode == 0
-    return VerifyResult(
-        ok=passed,
-        output=result.stdout + result.stderr,
-        details={
-            "coverage_pct": cov_pct,
-            "gate": gate,
-            "command": _comando_portatil(cmd),
-        },
-    )
+    if not 0 <= cov_pct <= 100:
+        result.ok = False
+        result.output += f"\n(kata: percentual fora do intervalo de 0 a 100: {cov_pct})"
+        return result
+    result.details["coverage_pct"] = cov_pct
+    return result
 
 
 def run_command(cmd: list[str], cwd: Path | None = None) -> VerifyResult:
@@ -518,12 +536,14 @@ def run_command(cmd: list[str], cwd: Path | None = None) -> VerifyResult:
             output=f"não foi possível executar {' '.join(cmd)}: {exc}",
             details={"command": " ".join(cmd)},
             executed=False,
+            argv=tuple(cmd),
         )
     return VerifyResult(
         ok=result.returncode == 0,
         output=result.stdout + result.stderr,
         details={"command": " ".join(cmd)},
         executed=result.returncode not in _NAO_ENCONTRADO,
+        argv=tuple(cmd),
     )
 
 
@@ -542,59 +562,34 @@ def run_command_coverage(
     porque "não consegui medir" não é "mediu e passou".
     """
     result = run_command(cmd, cwd=cwd)
+    result.details.update(coverage_pct=None, gate=gate, pattern=pattern)
     if not result.executed:
-        # O comando não rodou: não há percentual a procurar, e "não medi" não
-        # pode virar "mediu 0,0%" nem "reprovou o gate".
-        return VerifyResult(
-            ok=False,
-            output=result.output,
-            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
-            executed=False,
-        )
+        return result
+
+    def falha(motivo: str) -> VerifyResult:
+        result.ok = False
+        result.output += f"\n(kata: {motivo})"
+        return result
+
     try:
         match = re.search(pattern, result.output, re.MULTILINE)
     except re.error as exc:
-        return VerifyResult(
-            ok=False,
-            output=result.output + f"\n(kata: padrão de coverage inválido: {exc})",
-            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
-        )
+        return falha(f"padrão de coverage inválido: {exc}")
     if match is None:
-        return VerifyResult(
-            ok=False,
-            output=result.output + f"\n(kata: nenhum percentual casou com o padrão {pattern!r})",
-            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
-        )
-
+        return falha(f"nenhum percentual casou com o padrão {pattern!r}")
     try:
-        cov_pct = float(match.group(1))
+        valor = match.group(1)
     except IndexError:
-        # O padrão CASOU mas não tem grupo de captura (ex.: "coverage:\s+\d+%"):
-        # não há percentual a extrair, e não é possível medir. Reprovar nomeado
-        # em vez de estourar VERIFY e JUDGE com traceback (R10-1).
-        return VerifyResult(
-            ok=False,
-            output=result.output
-            + f"\n(kata: o padrão {pattern!r} não tem grupo de captura para o percentual)",
-            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
-        )
-    except ValueError:
-        # O padrão CASOU mas o grupo não é número (ex.: "N/A"). Não conseguiu
-        # medir não é reprovação silenciosa nem 0.0 aprovado: é o mesmo
-        # contrato do padrão que não casa, e estourar aqui derrubaria VERIFY
-        # e JUDGE com traceback em vez de reprovar a checagem.
-        return VerifyResult(
-            ok=False,
-            output=result.output
-            + f"\n(kata: o percentual casado {match.group(1)!r} não é um número)",
-            details={"coverage_pct": 0.0, "gate": gate, "command": _comando_portatil(cmd)},
-        )
-
-    return VerifyResult(
-        ok=result.ok and cov_pct >= gate,
-        output=result.output,
-        details={"coverage_pct": cov_pct, "gate": gate, "command": " ".join(cmd)},
-    )
+        return falha(f"o padrão {pattern!r} não tem grupo de captura para o percentual")
+    try:
+        cov_pct = float(valor)
+    except (TypeError, ValueError):
+        return falha(f"o percentual casado {valor!r} não é um número")
+    if not 0 <= cov_pct <= 100:
+        return falha(f"percentual fora do intervalo de 0 a 100: {cov_pct}")
+    result.ok = result.ok and cov_pct >= gate
+    result.details["coverage_pct"] = cov_pct
+    return result
 
 
 @dataclass
@@ -733,10 +728,8 @@ def run_all(
     ausente é o que o CLI e o JUDGE leem como "este projeto não tem esse gate".
 
     `config` traz os comandos que o projeto alvo declarou em
-    `.kata/config.yaml`. Cada papel declarado é executado verbatim; cada
-    papel omitido cai no default Python (ruff/pytest/pytest-cov) e continua
-    obedecendo aos parâmetros de caminho. Sem config, o comportamento é
-    idêntico ao de antes.
+    `.kata/config.yaml`. Cada comando declarado é executado verbatim.
+    Apenas no perfil `python` papéis omitidos usam os defaults disponíveis.
 
     `cov_source` default é "src" — este módulo é genérico e não deve supor
     o nome do pacote de nenhum projeto, inclusive o próprio kata. Quem
@@ -755,7 +748,7 @@ def run_all(
 
     if cfg.lint is not None:
         results["ruff"] = run_command(cfg.lint, cwd=cwd)
-    else:
+    elif cfg.profile == "python":
         results["ruff"] = run_ruff(paths=ruff_paths, cwd=cwd)
 
     if cfg.typecheck is not None:
@@ -763,10 +756,12 @@ def run_all(
 
     if cfg.test is not None:
         results["pytest"] = run_command(cfg.test, cwd=cwd)
-    else:
+    elif cfg.profile == "python":
         results["pytest"] = run_pytest(testpaths=test_paths, ignore=ignore, cwd=cwd)
 
-    if results["pytest"].ok:
+    if cfg.coverage is None and cfg.profile == "declared":
+        return results
+    if "pytest" not in results or results["pytest"].ok:
         if cfg.coverage is not None:
             results["coverage"] = run_command_coverage(
                 cfg.coverage,
@@ -786,7 +781,8 @@ def run_all(
         results["coverage"] = VerifyResult(
             ok=False,
             output="(skipped — tests failed)",
-            details={"coverage_pct": 0.0, "gate": gate},
+            details={"coverage_pct": None, "gate": gate},
+            executed=False,
         )
 
     return results

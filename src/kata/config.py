@@ -12,6 +12,7 @@ exatamente o comportamento anterior — nenhum projeto Python existente muda.
 
 ```yaml
 verify:
+  profile: declared
   lint: npx eslint src tests
   typecheck: npx tsc --noEmit
   test: npx vitest run
@@ -21,10 +22,9 @@ verify:
 ```
 
 Cada comando aceita string (dividida como o shell dividiria) ou lista já
-dividida. Um papel não declarado cai no default Python daquele papel —
-exceto `typecheck`, que não tem default: não existe verificador de tipos
-universal, e inventar um faria o kata reportar como verificada uma checagem
-que o projeto nunca pediu.
+dividida. No perfil padrão `python`, um papel omitido usa o default quando
+existe (`typecheck` não tem default). No perfil `declared`, só rodam os
+comandos configurados; pelo menos um é obrigatório.
 
 Chave desconhecida é erro nos três níveis — topo, `verify` e `advisor`. Quem
 escreve `typecheck` num kata antigo acreditava ter declarado o gate de tipos;
@@ -43,7 +43,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     import yaml
@@ -55,7 +55,7 @@ except ImportError:
 # Percentual na linha TOTAL do `coverage report` — o formato que pytest-cov
 # emite. É o default porque é o que o kata sempre leu; projetos com outro
 # formato declaram o seu em `verify.coverage_pattern`.
-DEFAULT_COVERAGE_PATTERN = r"^TOTAL\s+.*?(\d+(?:\.\d+)?)%"
+DEFAULT_COVERAGE_PATTERN = r"^TOTAL[^\S\n]+(?:[^\n]*[ \t])?([+-]?\d+(?:\.\d+)?)%[ \t]*\r?$"
 
 DEFAULT_GATE = 70.0
 
@@ -65,7 +65,7 @@ _ROLES = ("lint", "typecheck", "test", "coverage")
 # O que pode aparecer dentro de `verify`. Qualquer outra chave é erro nomeado
 # (ver o docstring do módulo): antes, `verify.typecheck` num kata que não
 # conhecia o papel era lido, descartado e o VERIFY aprovava sem ele.
-_VERIFY_KEYS = frozenset({*_ROLES, "coverage_pattern", "gate"})
+_VERIFY_KEYS = frozenset({*_ROLES, "coverage_pattern", "gate", "profile", "test_files"})
 
 # O que pode aparecer no topo do arquivo. Fechar o nível de cima é tão
 # necessário quanto fechar `verify`: um `veirfy:` (typo) caía em
@@ -120,11 +120,9 @@ class AdvisorConfig:
 class VerifyConfig:
     """Comandos de verificação declarados pelo projeto alvo.
 
-    `None` em um papel significa "não declarado": o papel cai no default
-    Python e continua obedecendo às flags de caminho (`--ruff-paths`,
-    `--test-paths`, `--cov-source`). Um papel declarado é usado verbatim, e
-    as flags de caminho daquele papel deixam de valer — o projeto já disse
-    o comando inteiro.
+    `None` em um papel significa "não declarado": no perfil `python`, usa o
+    default quando existir; no perfil `declared`, não roda. Um papel
+    declarado é executado verbatim, sem aplicar as flags de caminho Python.
     """
 
     lint: list[str] | None = None
@@ -136,6 +134,8 @@ class VerifyConfig:
     coverage: list[str] | None = None
     coverage_pattern: str = DEFAULT_COVERAGE_PATTERN
     gate: float | None = None
+    profile: Literal["python", "declared"] = "python"
+    test_files: tuple[str, ...] = ()
 
     @property
     def customizado(self) -> bool:
@@ -282,14 +282,35 @@ def load_verify_config(cwd: Path | None = None) -> VerifyConfig:
             "de captura para o percentual"
         )
 
-    return VerifyConfig(
+    profile = verify.get("profile", "python")
+    if profile not in ("python", "declared"):
+        raise ConfigError(f"{caminho}: `verify.profile` deve ser 'python' ou 'declared'")
+
+    test_files = verify.get("test_files", [])
+    if not isinstance(test_files, list) or any(
+        not isinstance(path, str)
+        or not path.strip()
+        or re.search(r"[\\\x00-\x1f]|^[a-zA-Z]:", path)
+        or any(part in {"", ".", ".."} for part in path.split("/"))
+        for path in test_files
+    ):
+        raise ConfigError(
+            f"{caminho}: `verify.test_files` deve ser uma lista de caminhos relativos ao repo"
+        )
+
+    config = VerifyConfig(
         lint=_parse_command(verify.get("lint"), "lint"),
         typecheck=_parse_command(verify.get("typecheck"), "typecheck"),
         test=_parse_command(verify.get("test"), "test"),
         coverage=_parse_command(verify.get("coverage"), "coverage"),
         coverage_pattern=pattern,
         gate=float(gate) if gate is not None else None,
+        profile=profile,
+        test_files=tuple(test_files),
     )
+    if profile == "declared" and not config.customizado:
+        raise ConfigError(f"{caminho}: `verify.profile: declared` exige ao menos um comando")
+    return config
 
 
 def load_advisor_config(cwd: Path | None = None) -> AdvisorConfig:

@@ -57,12 +57,12 @@ python -m kata --judge
 
 ### Evidência da execução
 
-O arquivo da tarefa carrega `kata_version`, `verify.gate_used`,
-`verify.commands` e `verify.ran_at`. O juiz confronta versão e gate com os
-seus e, quando divergem, **não** acusa fraude: registra ressalva. "Aprovado
-sob a versão 0.7.5 e reexecutado sob 0.8.0" e "aprovado com `--gate 38` e
-reexecutado com o gate 70" são verdades diferentes que, sem esses campos,
-sairiam idênticas no relatório.
+O juiz distingue checks reproduzidos, reprovados, não executados e não
+comparáveis. Compara `verify.command_argv` (ou `verify.commands` em tarefas
+legadas) com o comando que rodou. Compara também o gate e o padrão de
+extração de coverage, quando registrados. Se um check aprovado não rodou
+ou não é comparável, registre um ponto cego: não prova sucesso nem fraude,
+e impede `VERIFIED`. Mudança da versão do Kata, por si só, é informativa.
 
 A escrituração do próprio kata (`.kata/*.yaml`, `.kata/config.yaml`) não conta
 como arquivo alterado: ela é criada pela ferramenta, não pelo autor da tarefa,
@@ -81,15 +81,17 @@ e contá-la acusava trabalho honesto de scope creep (R11-3).
 
 Um ponto cego é o juiz confessando o que não conseguiu observar. Não é
 acusação: não ter observado não é evidência de fraude nem de honestidade.
-Oito disparam hoje:
+Entre os pontos cegos que o CLI detecta:
 
-1. **Nenhuma verificação re-executada** — o relatório não afirma nenhum
-   check (`ruff_clean`, `typecheck_clean`, `tests_pass`, `coverage_pass`) que o juiz saiba
-   reproduzir, então nada é re-executado. Declarar os comandos do projeto em
-   `.kata/config.yaml` é o que desarma este ponto cego.
-2. **Teste em linguagem sem sondas** — o juiz conhece a sintaxe de Python,
-   JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP e Swift. Um teste fora dessa
-   lista (`.exs`…) não pode ser lido, e o juiz diz isso em vez de calar.
+1. **Verificação sem reprodução comparável** — nenhum check aprovado foi
+   declarado, ou pelo menos um não rodou ou mudou desde o VERIFY. Ver outro
+   check passar não fecha essa lacuna. Use os comandos do projeto em
+   `.kata/config.yaml` e preserve as condições da aprovação.
+2. **Teste em linguagem sem sondas** — o juiz tem sondas para Python,
+   JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift e Elixir/ExUnit. Use
+   `verify.test_files` em `.kata/config.yaml` para indicar testes fora das
+   convenções de nome (caminhos exatos relativos à raiz, sem glob). Se um
+   teste reconhecido não tiver sonda, o juiz registra um ponto cego.
 3. **Código/teste ignorado pelo Git** — candidatos relevantes sob `.gitignore`
    não entram no diff e são listados como ponto cego.
 4. **Seção da tarefa ilegível** — `verify`, `surgical`, `intent` ou `artifact`

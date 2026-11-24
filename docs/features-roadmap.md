@@ -29,7 +29,9 @@ agente OpenCode + skills Claude Code.
 | Verificação ruff/pytest/coverage com gate (default 70%) e `--cov-fail-under` | `verify.py` | ✅ |
 | Múltiplos sources de coverage via `--cov-source` | `verify.py`/`cli.py` (R12-02) | ✅ |
 | JUDGE adversarial: 7 fraudes, pontos cegos, vereditos VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED | `judge.py` | ✅ |
-| Sondas de linguagem (9 famílias de sondas, 15 extensões: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift) | `judge.py` `_LANGUAGES` | ✅ |
+| Sondas de linguagem (10 famílias de sondas, 17 extensões: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift, Elixir/ExUnit) | `judge.py` `_LANGUAGES` | ✅ |
+| Caminhos de teste declarados fora das convenções de nome (`verify.test_files`) | `config.py`, `judge.py` | ✅ |
+| VERIFY → JUDGE com Node.js, Go e Rust reais no CI (`verify.profile: declared`) | `tests/test_verify_toolchain.py` | ✅ |
 | `approved_commit` limita o diff do JUDGE ao fim da tarefa (R14) | `judge.py`/`cli.py` | ✅ |
 | AUDIT — graduação de fases followed/skipped/faked/degraded | `report.py` `_audit_task` | ✅ |
 | Config por projeto `.kata/config.yaml` (lint/typecheck/test/coverage) | `config.py` | ✅ |
@@ -76,7 +78,7 @@ agente OpenCode + skills Claude Code.
 |---|---|---|
 | Média | **Saída JSON versionada para JUDGE e AUDIT.** | Consumidores recebem veredito, achados e pontos cegos sem extrair texto do terminal. A saída humana e os códigos de saída padrão não mudam. |
 | Média | **Diagnosticar o uso de diretórios em `surgical.files`.** JUDGE compara nomes de arquivos exatos; declarar um diretório não cobre seus descendentes. | O CLI explica a limitação antes do JUDGE e orienta a declarar os arquivos individualmente. Não aprovar subárvores por prefixo de forma implícita. |
-| Baixa | **Sondas de mais linguagens**, conforme demanda; por exemplo, Elixir (`.exs`). | Cada sonda vem com cenários de trabalho honesto, enfraquecimento detectável e limitações explícitas. |
+| Baixa | **Sondas de mais linguagens**, conforme demanda. | Cada sonda vem com cenários de trabalho honesto, enfraquecimento detectável e limitações explícitas. |
 
 Para tarefas antigas, não preencher `approved_commit` em massa por inferência:
 carimbar apenas quando houver evidência do commit que realmente encerrou a

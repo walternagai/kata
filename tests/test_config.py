@@ -56,6 +56,38 @@ class TestDefaults:
         assert DEFAULT_GATE == 70.0
 
 
+@pytest.mark.parametrize("profile", ["declared", "auto", "null"])
+def test_perfil_invalido_ou_sem_comandos(tmp_path, profile: str) -> None:
+    _escreve(tmp_path, f"verify:\n  profile: {profile}\n  gate: 80\n")
+    with pytest.raises(ConfigError, match=r"verify\.profile"):
+        load_verify_config(cwd=tmp_path)
+
+
+def test_perfil_python_explicito_preserva_defaults(tmp_path) -> None:
+    _escreve(tmp_path, "verify:\n  profile: python\n")
+    assert load_verify_config(cwd=tmp_path) == VerifyConfig()
+
+
+def test_test_files_sao_caminhos_exatos_e_nao_comandos(tmp_path) -> None:
+    config = "verify:\n  test_files: ['checks/smoke api.sh', spec/soma.exs]\n"
+    _escreve(tmp_path, config)
+    cfg = load_verify_config(cwd=tmp_path)
+    assert cfg.test_files == ("checks/smoke api.sh", "spec/soma.exs")
+    assert not cfg.customizado
+    _escreve(tmp_path, config + "  profile: declared\n")
+    with pytest.raises(ConfigError, match="exige ao menos um comando"):
+        load_verify_config(cwd=tmp_path)
+
+
+@pytest.mark.parametrize(
+    "valor", ['"check.sh"', "null", "[42]", "['']", "[/abs.sh]", "[../fora.sh]", "[a/../b]", "[a/]"]
+)
+def test_test_files_rejeita_caminhos_invalidos(tmp_path, valor: str) -> None:
+    _escreve(tmp_path, f"verify:\n  test_files: {valor}\n")
+    with pytest.raises(ConfigError, match=r"verify\.test_files"):
+        load_verify_config(cwd=tmp_path)
+
+
 class TestComandos:
     """Cada papel aceita string ou lista, e um papel omitido cai no default."""
 

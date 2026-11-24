@@ -9,7 +9,7 @@ Fase 4 do Karpathy Development Cycle — **GOAL-DRIVEN**.
 
 ## Objetivo
 
-Verificar a qualidade do código com critérios objetivos:
+Rodar os checks aplicáveis ao projeto e confrontar o resultado com o `done`:
 1. **Lint** — limpo
 2. **Typecheck** — quando o projeto declara o comando (não há default: não
    existe verificador de tipos universal)
@@ -24,6 +24,7 @@ comandos declarados ali são os do projeto e devem ser usados verbatim:
 
 ```yaml
 verify:
+  profile: declared
   lint: npx eslint src tests
   typecheck: npx tsc --noEmit
   test: npx vitest run
@@ -32,10 +33,10 @@ verify:
   gate: 80
 ```
 
-Cada papel aceita string ou lista. Papel omitido cai no default Python
-(ruff/pytest/pytest-cov) — exceto `typecheck`, que não tem default: sem
-declaração, não existe gate de tipos. `python -m kata --check-only` já lê
-esse arquivo sozinho — prefira-o a montar os comandos à mão.
+Cada papel aceita string ou lista. Com `profile: declared`, roda só o que
+for declarado (ao menos um comando); não há fallback. No perfil padrão
+`python`, papéis omitidos usam Ruff/pytest/pytest-cov, exceto `typecheck`.
+Uma checagem não configurada não conta como sucesso.
 
 **Sem shell.** O comando é executado sem shell, então `&&`, `||`, `|`, `;`,
 `>` e `<` viram argumento do primeiro processo. `verify.test: "npm run check
@@ -58,11 +59,10 @@ passou.
 
 Para esta fase, use:
 
-- **{{RUN}}**: execute `ruff`, `pytest` e `coverage` (ou `python -m kata --verify-task <tarefa>` quando há tarefa, que roda o mesmo e grava a evidência; `python -m kata --check-only` para CI sem tarefa; no Windows, use `py -m kata` se necessário).
 - **{{ASK}}** (via `kata-question`): pergunte ao usuário se o critério de sucesso foi satisfeito.
-- **{{WRITE}} / {{EDIT}}**: registre o resultado em `.kata/<task>.yaml` e atualize `status` para `approved` ou `rejected`.
+- **{{RUN}}**: execute `kata --verify-task <tarefa>` e repasse essa resposta via `--criterion-met` ou `--no-criterion-met`. O CLI roda os checks do projeto e grava as evidências e o status; não os transcreva à mão. Para CI sem tarefa, use `kata --check-only`.
 
-## Comandos
+## Referência dos checks (defaults apenas para o perfil Python)
 
 ### Ruff
 
@@ -87,8 +87,8 @@ python -m ruff check app/ services/ tests/
 ### Typecheck
 
 Só existe quando o projeto declara `verify.typecheck`. Não há default: sem
-declaração, o passo não roda e `verify.typecheck_clean` fica `null` — que é
-"não há gate de tipos", nunca "passou".
+declaração, o passo não roda e não há resultado em `verify.typecheck_clean`.
+Isso significa "não há gate de tipos", nunca "passou".
 
 ```bash
 npx tsc --noEmit          # TypeScript (o que o `npm run typecheck` faz)
@@ -191,7 +191,7 @@ repetindo o mesmo fix-verify indefinidamente.
 
 ## Resumo final
 
-Após as 4 verificações, reporte ao usuário no formato:
+Reporte apenas os checks aplicáveis: exemplos abaixo para um projeto Python.
 
 ```
 ✅ ruff limpo
@@ -226,7 +226,7 @@ done: "warn no startup + /health degraded quando misconfig (verificado via curl)
 kata_version: "0.8.0"
 verify:
   ruff_clean: true
-  typecheck_clean: true   # null quando o projeto não declara o papel
+  typecheck_clean: true   # ausente quando o projeto não declara o papel
   tests_pass: true
   coverage_pct: 87.0
   coverage_pass: true
@@ -239,20 +239,19 @@ verify:
     typecheck: "npx tsc --noEmit"
     test: "python -m pytest tests/ --tb=short -q"
     coverage: "python -m pytest tests/ --cov=src --cov-fail-under=70 -q"
+  command_argv:         # a lista exata é gravada para cada comando executado
+    lint: ["/venv/bin/python", "-m", "ruff", "check", "src/", "tests/"]
+  coverage_pattern_used: null  # null para o default Python
   ran_at: "2026-10-28T12:34:56+00:00"
 ```
 
-`gate_used`, `commands` e `ran_at` são a evidência de execução: sem eles o
-arquivo diz que passou, mas não diz com que gate, com que comandos nem
-quando — e o relatório do Fable Step 6 pede exatamente isso. O CLI grava os
-três sozinho; preencha à mão só se estiver rodando as verificações fora
-dele.
+O CLI grava a evidência de execução, incluindo o gate, a lista de argumentos
+por papel e o horário. Coverage ausente ou sem medição fica `null`, não `0%`.
 
 ## Modo --check-only (CI)
 
 Quando invocado com `--check-only`, pula THINK/SIMPLIFY/SURGICAL e executa
-só as verificações objetivas (lint + typecheck quando declarado + teste +
-coverage). O critério de
+só as verificações objetivas aplicáveis ao perfil do projeto. O critério de
 sucesso é assumido satisfeito. Útil para CI/CD pipelines — nesse modo, a
 skill nem precisa ser carregada: chame o CLI diretamente via {{RUN}}.
 

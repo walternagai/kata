@@ -8,6 +8,26 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
+## 0.11.0 — 2026-11-24
+
+### Adicionado
+
+- `kata --judge --task TASK --require-verified` permite exigir `VERIFIED` no
+  CI: `VERIFIED WITH CAVEATS` e `UNVERIFIABLE` saem 1 com essa flag, sem
+  alterar o veredito impresso nem a política padrão.
+
+### Corrigido
+
+- `--artifact-task` não pede dados mesmo quando executado em um terminal:
+  calcula `artifact.*` a partir da evidência existente e sinaliza o que falta.
+- `--doctor` recusa outros modos e `--task` em vez de ignorá-los ou ser
+  ignorado pelo instalador.
+- `--report`, `--audit` e `--artifact-task` funcionam mesmo se o config de
+  verificação do projeto estiver inválido. VERIFY e JUDGE continuam a recusá-lo.
+- REPORT, AUDIT e ARTIFACT diagnosticam campos estruturais inválidos da
+  tarefa pelo caminho no YAML (por exemplo, `surgical.files[0]`), sem
+  traceback ou regravação. Seções ausentes continuam opcionais.
+
 ## 0.10.0 — 2026-10-30
 
 ### Adicionado

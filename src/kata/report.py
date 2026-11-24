@@ -187,12 +187,9 @@ def _audit_task(data: dict[str, Any]) -> list[dict[str, str]]:
     """
     achados: list[dict[str, str]] = []
 
-    # Tarefa malformada não pode derrubar a graduação com traceback: YAML
-    # escrito à mão é entrada suportada e o CLI não valida schema antes de
-    # auditar. Uma seção que não é mapa (`surgical: true`) ou uma lista no
-    # topo do arquivo davam AttributeError — e traceback sai com código 1, o
-    # mesmo de "audit sujo", tornando arquivo quebrado indistinguível de fase
-    # fingida (R11-1). Sem seção legível não há o que graduar: lista vazia.
+    # O CLI valida a estrutura antes de auditar. Em chamadas diretas,
+    # preservamos a tolerância a topo ou seção que não seja um mapa: sem
+    # seção legível não há o que graduar.
     if not isinstance(data, dict):
         return achados
 

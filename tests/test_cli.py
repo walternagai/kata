@@ -60,6 +60,11 @@ class TestSerializeDeserialize:
         with pytest.raises(ValueError, match="mapa no topo"):
             cli._deserialize("- a\n- b")
 
+    @pytest.mark.parametrize("texto", ["[]", "false", "0", '""'])
+    def test_topo_invalido_nao_vira_mapa_vazio(self, texto: str) -> None:
+        with pytest.raises(ValueError, match="mapa no topo"):
+            cli._deserialize(texto)
+
     def test_string_no_topo_levanta_value_error(self) -> None:
         with pytest.raises(ValueError, match="mapa no topo"):
             cli._deserialize("apenas uma string")
@@ -1421,19 +1426,25 @@ class TestMainArtifactTask:
         assert exc.value.code == 1
         assert "--init" in capsys.readouterr().out
 
-    def test_acao_sem_auth_falha_e_grava_owed(self, repo_git, monkeypatch) -> None:
-        """O caso do ciclo curto: fez a ação, não escreveu AUTH."""
+    @pytest.mark.parametrize("terminal", [False, True])
+    def test_acao_sem_auth_falha_e_grava_owed(self, repo_git, monkeypatch, terminal) -> None:
+        """O modo avulso nunca pede nem registra autorização ausente."""
         monkeypatch.chdir(repo_git)
-        path = self._cria_tarefa(
-            "agil", auth={"action_taken": True, "authorized": False, "quote": ""}
-        )
+        monkeypatch.setattr("sys.stdin.isatty", lambda: terminal)
+        auth = {"action_taken": True, "authorized": False, "quote": ""}
+        path = self._cria_tarefa("agil", auth=auth)
 
-        with patch("sys.argv", ["kata", "--artifact-task", "agil"]):
-            with pytest.raises(SystemExit) as exc:
-                cli.main()
+        with (
+            patch("sys.argv", ["kata", "--artifact-task", "agil"]),
+            patch("builtins.input", side_effect=AssertionError("prompt inesperado")),
+            pytest.raises(SystemExit) as exc,
+        ):
+            cli.main()
 
         assert exc.value.code == 1
-        artifact = cli._load_task_or_exit(path)["artifact"]
+        data = cli._load_task_or_exit(path)
+        assert data["auth"] == auth
+        artifact = data["artifact"]
         assert artifact["auth_owed"] is True
         assert artifact["auth_present"] is False
 
@@ -1450,6 +1461,21 @@ class TestMainArtifactTask:
         assert artifact["auth_owed"] is False
         assert artifact["intent_owed"] is False
 
+    def test_aceita_alias_file_em_surgical(self, repo_git, monkeypatch) -> None:
+        monkeypatch.chdir(repo_git)
+        path = self._cria_tarefa("agil")
+        data = cli._load_task_or_exit(path)
+        data["surgical"] = {"files": [{"file": "src/app.py", "necessary": True}]}
+        cli._save_task(path, data)
+
+        with (
+            patch("sys.argv", ["kata", "--artifact-task", "agil"]),
+            pytest.raises(SystemExit) as exc,
+        ):
+            cli.main()
+        assert exc.value.code == 1
+        assert cli._load_task_or_exit(path)["artifact"]["intent_owed"] is True
+
     def test_exclusivo_com_verify_task(self) -> None:
         with patch(
             "sys.argv", ["kata", "--artifact-task", "a", "--verify-task", "b", "--criterion-met"]
@@ -1457,6 +1483,106 @@ class TestMainArtifactTask:
             with pytest.raises(SystemExit) as exc:
                 cli.main()
         assert exc.value.code == 2
+
+
+class TestModosSemVerificacao:
+    """REPORT, AUDIT e ARTIFACT leem a tarefa, não o config de VERIFY."""
+
+    @pytest.mark.parametrize(
+        ("modo", "saida"),
+        [
+            (["--report", "--task", "t"], "KATA CYCLE — APROVADO"),
+            (["--audit", "--task", "t"], "AUDIT — Graduação"),
+            (["--artifact-task", "t"], "Resultado salvo"),
+        ],
+    )
+    def test_config_invalido_nao_bloqueia(self, repo_git, monkeypatch, capsys, modo, saida) -> None:
+        monkeypatch.chdir(repo_git)
+        path = cli._task_path("t")
+        cli._save_task(
+            path,
+            {
+                "task": "t",
+                "status": "approved",
+                "done": "gate passa",
+                "verify": {"success_criteria_met": True, "tests_pass": True},
+            },
+        )
+        anterior = path.read_bytes()
+        config = path.with_name("config.yaml")
+        config.write_text("verify: [\n", encoding="utf-8")
+        with patch("sys.argv", ["kata", *modo]), pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 0
+        assert saida in capsys.readouterr().out
+        if modo[0] == "--artifact-task":
+            assert cli._load_task_or_exit(path)["artifact"]["intent_owed"] is False
+        else:
+            assert path.read_bytes() == anterior
+        assert config.read_text(encoding="utf-8") == "verify: [\n"
+
+    @pytest.mark.parametrize(
+        "modo", [["--verify-task", "t", "--criterion-met"], ["--judge", "--task", "t"]]
+    )
+    def test_config_invalido_ainda_bloqueia_verify_e_judge(
+        self, tmp_path, monkeypatch, capsys, modo
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        path = cli._task_path("t")
+        cli._save_task(path, {"task": "t", "status": "approved"})
+        path.with_name("config.yaml").write_text("verify: [\n", encoding="utf-8")
+        with (
+            patch("sys.argv", ["kata", *modo]),
+            patch("kata.cli._step_verify") as verify,
+            patch("kata.cli.judge_task") as judge,
+            pytest.raises(SystemExit) as exc,
+        ):
+            cli.main()
+        assert exc.value.code == 1
+        assert "config.yaml" in capsys.readouterr().out
+        verify.assert_not_called()
+        judge.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("modo", "conteudo", "campo"),
+        [
+            (["--artifact-task", "t"], "surgical: true\n", "surgical:"),
+            (["--artifact-task", "t"], "surgical: {files: null}\n", "surgical.files:"),
+            (["--artifact-task", "t"], "surgical: {files: {}}\n", "surgical.files:"),
+            (["--artifact-task", "t"], "surgical: {files: [x.py]}\n", "surgical.files[0]:"),
+            (
+                ["--artifact-task", "t"],
+                "surgical: {files: [{path: 42}]}\n",
+                "surgical.files[0].path:",
+            ),
+            (["--report", "--task", "t"], "think: []\n", "think:"),
+            (["--report", "--task", "t"], "verify: {coverage_pct: 90%}\n", "verify.coverage_pct:"),
+            (
+                ["--report", "--task", "t"],
+                "surgical: {files: [{file: 42}]}\n",
+                "surgical.files[0].file:",
+            ),
+            (
+                ["--audit", "--task", "t"],
+                "preflight: {skills_missing: [42]}\n",
+                "preflight.skills_missing:",
+            ),
+            (["--audit", "--task", "t"], "surgical: {files: [x.py]}\n", "surgical.files[0]:"),
+        ],
+    )
+    def test_campo_invalido_nao_regrava(
+        self, tmp_path, monkeypatch, capsys, modo, conteudo, campo
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        path = cli._task_path("t")
+        path.parent.mkdir()
+        original = ("task: t\nstatus: approved\n" + conteudo).encode()
+        path.write_bytes(original)
+        with patch("sys.argv", ["kata", *modo]), pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 1
+        assert f"{path.name}: {campo}" in capsys.readouterr().out
+        assert path.read_bytes() == original
 
 
 class TestDetectCovSource:
@@ -2698,6 +2824,36 @@ class TestMainJudge:
         assert exc.value.code == 1
         mock_judge.assert_not_called()
         assert "só tarefa concluída" in capsys.readouterr().out
+
+    @pytest.mark.parametrize(
+        ("veredito", "codigo"),
+        [("VERIFIED", 0), ("VERIFIED WITH CAVEATS", 1), ("UNVERIFIABLE", 1), ("REFUTED", 1)],
+    )
+    def test_require_verified(self, tmp_path, monkeypatch, capsys, veredito, codigo) -> None:
+        from kata.judge import JudgeResult
+
+        monkeypatch.chdir(tmp_path)
+        cli._save_task(cli._task_path("t"), {"task": "t", "status": "approved"})
+        with (
+            patch("sys.argv", ["kata", "--judge", "--task", "t", "--require-verified"]),
+            patch("kata.cli.judge_task", return_value=JudgeResult(verdict=veredito)),
+            pytest.raises(SystemExit) as exc,
+        ):
+            cli.main()
+
+        assert exc.value.code == codigo
+        out = capsys.readouterr().out
+        assert f"KATA JUDGE — {veredito}" in out
+        assert ("--require-verified exige VERIFIED" in out) is (codigo == 1)
+
+    def test_require_verified_sem_judge_e_erro_de_argumento(self, capsys) -> None:
+        with (
+            patch("sys.argv", ["kata", "--check-only", "--require-verified"]),
+            pytest.raises(SystemExit) as exc,
+        ):
+            cli.main()
+        assert exc.value.code == 2
+        assert "--require-verified só vale com --judge" in capsys.readouterr().err
 
     def test_resolve_trusted_base_exige_merge_base_com_o_head(self, repo_git, monkeypatch) -> None:
         """A ref resolver não basta: quem define o piso é o merge-base. Num
@@ -4037,6 +4193,37 @@ class TestConfigDoProjeto:
 
 class TestDoctor:
     """`--doctor` é o preflight: instalação parcial reprova, ausente não."""
+
+    @pytest.mark.parametrize(
+        "modo",
+        [
+            ["--task", "t"],
+            ["--init", "t"],
+            ["--plan"],
+            ["--check-only"],
+            ["--verify-task", "t"],
+            ["--artifact-task", "t"],
+            ["--judge"],
+            ["--report"],
+            ["--audit"],
+            ["--stamp", "t"],
+            ["--install", "all"],
+            ["--uninstall", "all"],
+        ],
+    )
+    def test_recusa_outros_modos(self, tmp_path, monkeypatch, capsys, modo) -> None:
+        monkeypatch.chdir(tmp_path)
+        with (
+            patch("sys.argv", ["kata", "--doctor", *modo]),
+            patch("kata.cli.doctor") as doctor,
+            pytest.raises(SystemExit) as exc,
+        ):
+            cli.main()
+
+        assert exc.value.code == 2
+        assert "--doctor é mutuamente exclusivo" in capsys.readouterr().err
+        doctor.assert_not_called()
+        assert not (tmp_path / ".kata").exists()
 
     def _instala(self, config_dir, nomes):
         skills = config_dir / "skills"

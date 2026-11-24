@@ -265,11 +265,12 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--plan` | `False` | Modo planejamento: FIT + THINK, não modifica código |
 | `--verify-task` | (nenhum) | Roda lint/teste/coverage de uma tarefa e grava `verify.*` + `status` nela. É o gate do ciclo curto: `--check-only` não grava nada e não combina com `--task` |
 | `--criterion-met` | (pergunta) | Só com `--verify-task`: afirma que o `done` do THINK foi satisfeito (`--no-criterion-met` nega). Sem terminal e sem a flag, recusa em vez de assumir |
-| `--artifact-task` | (nenhum) | Calcula as linhas devidas (INTENT/AUTH/PENDING/TWINS) e grava `artifact.*` na tarefa. É a fase ARTIFACT avulsa, para quem não percorre o ciclo interativo. Exit 1 quando falta linha devida |
+| `--artifact-task` | (nenhum) | Calcula as linhas devidas (INTENT/AUTH/PENDING/TWINS) e grava `artifact.*` sem perguntas, mesmo em um terminal. Sai 1 quando falta linha devida |
 | `--judge` | `False` | Verificação adversarial (re-executa checks, caça fraudes); exige tarefa com `status: approved` |
+| `--require-verified` | `False` | Só com `--judge`: exige o veredito exato `VERIFIED` para sair 0. Sem a flag, ressalvas e falta de evidência verificável não reprovam |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
-| `--doctor` | `False` | Confere as skills de fase por frontend (e mostra o modo: link, cópia ou misto); domain adapters e o subagente `kata-advisor` ausentes só avisam |
+| `--doctor` | `False` | Confere as skills de fase por frontend (link, cópia ou misto); adapters e advisor ausentes só avisam. Não combina com outros modos nem com `--task` |
 | `--install` | (nenhum) | Copia as skills empacotadas, o agente orquestrador e o subagente advisor: `opencode`, `claude-code` ou `all` (sem clone do repo) |
 | `--uninstall` | (nenhum) | Remove as skills do `--install` (só o que o Kata criou) |
 | `--force` | `False` | Só com `--install`: guarda personalização existente em `.bak` e substitui |

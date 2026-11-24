@@ -32,7 +32,7 @@ import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from kata import __version__
 from kata.config import (
@@ -181,7 +181,9 @@ def _deserialize(text: str) -> dict[str, Any]:
     """
     try:
         if _HAS_YAML:
-            dados = yaml.safe_load(text) or {}
+            dados = yaml.safe_load(text)
+            if dados is None:
+                dados = {}
         else:
             dados = json.loads(text)
     except (*_YAML_ERRORS, json.JSONDecodeError) as exc:
@@ -209,15 +211,64 @@ def _deserialize(text: str) -> dict[str, Any]:
     return dados
 
 
-def _load_task_or_exit(path: Path) -> dict[str, Any]:
-    """Lê e desserializa a tarefa, saindo com mensagem clara se ilegível.
+_TaskView = Literal["artifact", "audit", "report"]
 
-    R11-1: arquivo malformado não pode virar traceback (exit 1 = mesmo de
-    REFUTED). Mensagem nomeada + exit 1, sem stack trace.
-    """
+
+def _validate_task_view(data: dict[str, Any], view: _TaskView) -> None:
+    """Valida os campos estruturais lidos pelo modo, sem exigir seções ausentes."""
+    sections = {
+        "artifact": ("surgical", "intent", "auth", "pending", "twins"),
+        "audit": ("fit", "think", "simplify", "intent", "surgical", "verify", "twins", "preflight"),
+        "report": (
+            "fit",
+            "think",
+            "simplify",
+            "intent",
+            "surgical",
+            "verify",
+            "artifact",
+            "auth",
+            "pending",
+            "twins",
+        ),
+    }
+    for section in sections[view]:
+        if section in data and not isinstance(data[section], dict):
+            raise ValueError(f"{section}: esperava um mapa")
+
+    files = data.get("surgical", {}).get("files", [])
+    if not isinstance(files, list):
+        raise ValueError("surgical.files: esperava uma lista de mapas")
+    for index, entry in enumerate(files):
+        field = f"surgical.files[{index}]"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{field}: esperava um mapa")
+        for key in ("path", "file"):
+            if key in entry and not isinstance(entry[key], str):
+                raise ValueError(f"{field}.{key}: esperava texto")
+
+    if view == "report":
+        coverage_pct = data.get("verify", {}).get("coverage_pct")
+        if coverage_pct is not None and (
+            isinstance(coverage_pct, bool) or not isinstance(coverage_pct, (int, float))
+        ):
+            raise ValueError("verify.coverage_pct: esperava um número ou nulo")
+    elif view == "audit":
+        missing = data.get("preflight", {}).get("skills_missing")
+        if missing is not None and (
+            not isinstance(missing, list) or not all(isinstance(skill, str) for skill in missing)
+        ):
+            raise ValueError("preflight.skills_missing: esperava uma lista de nomes ou nulo")
+
+
+def _load_task_or_exit(path: Path, *, view: _TaskView | None = None) -> dict[str, Any]:
+    """Lê a tarefa e, se solicitado pelo modo, valida seus campos estruturais."""
     try:
-        return _deserialize(path.read_text(encoding="utf-8"))
-    except ValueError as exc:
+        data = _deserialize(path.read_text(encoding="utf-8"))
+        if view is not None:
+            _validate_task_view(data, view)
+        return data
+    except (ValueError, OSError) as exc:
         print(f"⚠  {path.name}: {exc}")
         sys.exit(1)
 
@@ -1281,7 +1332,7 @@ def _detect_intent_owed(data: dict[str, Any]) -> bool:
     justamente onde não há ninguém para notar a ausência. Sem declaração,
     cai para o git.
     """
-    declared = [f.get("path", "") for f in _secao(data, "surgical").get("files", [])]
+    declared = [f.get("path") or f.get("file") for f in _secao(data, "surgical").get("files", [])]
     paths = [p for p in declared if p] or _changed_paths()
     return any(Path(p).suffix.lower() not in _DOC_SUFFIXES for p in paths)
 
@@ -1329,7 +1380,7 @@ def _detect_twins_owed(data: dict[str, Any]) -> bool:
     return bool(twins.get("defect_fixed") or twins.get("pattern"))
 
 
-def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
+def _step_artifact(task: str, data: dict[str, Any], *, prompt: bool = True) -> dict[str, Any]:
     """Fase 4.5: ARTIFACT — verificar linhas devidas no relatório.
 
     Inspirado no artifact gate do fable-method: antes de finalizar, verificar
@@ -1380,7 +1431,7 @@ def _step_artifact(task: str, data: dict[str, Any]) -> dict[str, Any]:
         print("  ⚠  Linhas devidas ausentes:")
         for msg in missing:
             print(f"     • {msg}")
-        if sys.stdin.isatty():
+        if prompt and sys.stdin.isatty():
             print()
             for msg in missing:
                 if msg.startswith("AUTH"):
@@ -1780,8 +1831,7 @@ def main() -> None:
         default=None,
         help=(
             "Calcula as linhas devidas (INTENT/AUTH/PENDING/TWINS) da tarefa NAME e "
-            "grava em artifact.*. É a fase ARTIFACT sem o ciclo interativo — sem ela, "
-            "um orquestrador curto teria de calcular auth_owed à mão"
+            "grava em artifact.*, sem perguntar mesmo em um terminal"
         ),
     )
     parser.add_argument(
@@ -1892,6 +1942,11 @@ def main() -> None:
         help="Com --stamp: commit a carimbar (default: HEAD)",
     )
     parser.add_argument(
+        "--require-verified",
+        action="store_true",
+        help="Com --judge: só sai 0 com o veredito VERIFIED",
+    )
+    parser.add_argument(
         "--report",
         action="store_true",
         help="Gera relatório outcome-first de tarefa concluída",
@@ -1909,6 +1964,23 @@ def main() -> None:
         parser.error("--plan e --check-only são mutuamente exclusivos")
     if args.trusted_base and not args.judge:
         parser.error("--trusted-base só vale com --judge")
+    if args.require_verified and not args.judge:
+        parser.error("--require-verified só vale com --judge")
+    if args.doctor and (
+        args.task
+        or args.init
+        or args.plan
+        or args.check_only
+        or args.verify_task
+        or args.artifact_task
+        or args.judge
+        or args.report
+        or args.audit
+        or args.stamp
+        or args.install
+        or args.uninstall
+    ):
+        parser.error("--doctor é mutuamente exclusivo com --task e os outros modos")
     if args.judge and (args.plan or args.check_only):
         parser.error("--judge é mutuamente exclusivo com --plan e --check-only")
     if args.report and args.judge:
@@ -2036,6 +2108,40 @@ def main() -> None:
         _print_header("DOCTOR — Instalação das skills de fase")
         sys.exit(_print_doctor(doctor()))
 
+    # Estes modos usam evidência já gravada, não a configuração de verificação.
+    if args.report or args.audit:
+        task = args.task or _pick_task()
+        path = _resolve_task_or_suggest(task)
+        if path is None:
+            sys.exit(1)
+        data = _load_task_or_exit(path, view="report" if args.report else "audit")
+        if args.report:
+            _step_report(task, data)
+            # Tarefa em andamento não é falha; rejeição ou contradição, sim.
+            sys.exit(1 if data.get("status") == "rejected" or consistency_failures(data) else 0)
+        _print_header(f"AUDIT — Graduação das fases de '{task}'")
+        achados = _audit_task(data)
+        _print_audit(achados)
+        sys.exit(1 if any(a["status"] != "followed" for a in achados) else 0)
+
+    if args.artifact_task:
+        task = args.artifact_task
+        path = _task_path(task)
+        if not path.exists():
+            print(f"⚠  tarefa '{task}' não existe: {path}")
+            print(f"   Crie com `kata --init {task}` antes de calcular as linhas devidas.")
+            sys.exit(1)
+        data = _load_task_or_exit(path, view="artifact")
+        data = _step_artifact(task, data, prompt=False)
+        _save_task(path, data)
+        checks = _secao(data, "artifact")
+        faltando = any(
+            checks[f"{linha}_owed"] and not checks[f"{linha}_present"]
+            for linha in ("intent", "auth", "pending", "twins")
+        )
+        print(f"\n📝  Resultado salvo em {path}")
+        sys.exit(1 if faltando else 0)
+
     _kata_dir().mkdir(parents=True, exist_ok=True)
 
     # --stamp não verifica nada: só fecha a janela do juiz com o commit que
@@ -2101,22 +2207,6 @@ def main() -> None:
         print(f"\n📝  FIT + THINK salvos em {path}")
         return
 
-    # Modo --report (outcome-first)
-    if args.report:
-        task = args.task or _pick_task()
-        path = _resolve_task_or_suggest(task)
-        if path is None:
-            sys.exit(1)
-        data = _load_task_or_exit(path)
-        _step_report(task, data)
-        # Só `rejected` é falha. Uma tarefa em andamento (draft,
-        # think-complete — o estado normal de `--plan`) está funcionando como
-        # esperado; sair 1 ao consultar seu relatório equipara planejar a
-        # falhar.
-        if data.get("status") == "rejected" or consistency_failures(data):
-            sys.exit(1)
-        sys.exit(0)
-
     # Modo --judge (adversarial verification)
     if args.judge:
         task = args.task or _pick_task()
@@ -2154,31 +2244,14 @@ def main() -> None:
             trusted_base=args.trusted_base,
         )
         _print_judge_verdict(result)
-        # Só REFUTED é falha. "VERIFIED WITH CAVEATS" significa que o juiz
-        # verificou e aprovou com ressalvas de severidade baixa/média;
-        # tratá-lo como falha equipara ressalva a fraude grave e leva o CI
-        # a ignorar o exit code por inútil.
-        #
-        # UNVERIFIABLE também sai 0, e a escolha é deliberada: o juiz não
-        # encontrou nada errado, apenas não teve como olhar. Reprovar por
-        # isso quebraria o `--judge` de todo projeto não-Python — que é
-        # justamente quem mais o recebe — antes que houvesse alternativa a
-        # oferecer. O veredito e a seção de pontos cegos dizem em voz alta
-        # o que não foi observado; quem quiser barrar no CI lê o veredito.
+        # A política estrita muda só o exit code, não os achados ou o veredito.
+        if args.require_verified:
+            if result.verdict != "VERIFIED":
+                print(f"❌ --require-verified exige VERIFIED; veredito: {result.verdict}.")
+                sys.exit(1)
+            sys.exit(0)
+        # Por compatibilidade, ressalvas e pontos cegos não reprovam por padrão.
         sys.exit(1 if result.verdict == "REFUTED" else 0)
-
-    # Modo --audit (graduação followed/skipped/faked)
-    if args.audit:
-        task = args.task or _pick_task()
-        path = _resolve_task_or_suggest(task)
-        if path is None:
-            sys.exit(1)
-        data = _load_task_or_exit(path)
-        _print_header(f"AUDIT — Graduação das fases de '{task}'")
-        achados = _audit_task(data)
-        _print_audit(achados)
-        # 0 = audit limpo (nenhum fake/skip); 1 = há fakes/skips.
-        sys.exit(1 if any(a["status"] != "followed" for a in achados) else 0)
 
     # Modo --check-only (CI)
     if args.check_only:
@@ -2227,38 +2300,6 @@ def main() -> None:
         _save_task(path, data)
         print(f"\n📝  Resultado salvo em {path}")
         sys.exit(0 if data.get("status") == "approved" else 1)
-
-    # Modo --artifact-task: a fase ARTIFACT sem o ciclo interativo.
-    #
-    # `artifact.auth_owed` é o que arma o `unauthorized_action` no juiz (desde o
-    # B2 ele também lê `auth.action_taken` direto, mas o relatório continua
-    # precisando das linhas devidas). No ciclo completo esse cálculo acontece
-    # depois do VERIFY, dentro da sequência; um ciclo curto não tem essa
-    # sequência, e calcular à mão é a mesma transcrição que o `--verify-task`
-    # existe para eliminar.
-    if args.artifact_task:
-        task = args.artifact_task
-        path = _task_path(task)
-        if not path.exists():
-            print(f"⚠  tarefa '{task}' não existe: {path}")
-            print(f"   Crie com `kata --init {task}` antes de calcular as linhas devidas.")
-            sys.exit(1)
-        data = _load_task_or_exit(path)
-        data = _step_artifact(task, data)
-        _save_task(path, data)
-        checks = _secao(data, "artifact")
-        faltando = [
-            nome
-            for nome, devido, presente in (
-                ("INTENT", checks.get("intent_owed"), checks.get("intent_present")),
-                ("AUTH", checks.get("auth_owed"), checks.get("auth_present")),
-                ("PENDING", checks.get("pending_owed"), checks.get("pending_present")),
-                ("TWINS", checks.get("twins_owed"), checks.get("twins_present")),
-            )
-            if devido and not presente
-        ]
-        print(f"\n📝  Resultado salvo em {path}")
-        sys.exit(1 if faltando else 0)
 
     # Modo interativo: escolher ou criar tarefa
     if args.task:

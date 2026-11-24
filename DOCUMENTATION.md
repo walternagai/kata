@@ -389,7 +389,7 @@ the sdist by its required root files.
 | `kata --task TASK` | Resume a specific task |
 | `kata --plan [--task TASK]` | Run FIT and THINK, save the plan, and stop |
 | `kata --check-only` | Run Ruff, pytest, and coverage without task interaction |
-| `kata --artifact-task TASK` | Compute the due artifact lines (INTENT, AUTH, PENDING, TWINS) and write `artifact.*` into the task, without walking the interactive cycle. This is ARTIFACT as a standalone mode, for orchestrators that do not run the full sequence. Exits `1` when a due line is missing |
+| `kata --artifact-task TASK` | Compute the due artifact lines (INTENT, AUTH, PENDING, TWINS) and write `artifact.*` into the task. Never prompts, even in a terminal, and exits `1` when a due line is missing |
 | `kata --verify-task TASK [--criterion-met\|--no-criterion-met]` | Run the same checks for **one task** and write the evidence into it (`verify.*`, `status`, `kata_version`). This is the gate of the short cycle: `--check-only` saves nothing, and the alternative — transcribing the result by hand — is exactly the `false_completion` the judge hunts |
 | `kata --report --task TASK` | Regenerate the outcome-first report |
 | `kata --stamp TASK [--commit SHA]` | Record the commit that ends the task in `approved_commit`, closing the judge's diff window. Run it right after the commit; without `--commit` it uses `HEAD`. Validates that the commit resolves, descends from `base_commit` and is an ancestor of `HEAD` |
@@ -407,7 +407,8 @@ and `--check-only` cannot be used together, `--judge` cannot be combined with
 either one, `--audit` is mutually exclusive with `--init`, `--plan`,
 `--check-only`, `--judge`, and `--report`, `--verify-task` and `--artifact-task`
 name their own task and exclude every other mode, and `--stamp` excludes every other mode
-(`--commit` only exists with it).
+(`--commit` only exists with it). `--doctor` is a standalone installation check:
+it cannot be combined with another mode or `--task`.
 
 `--criterion-met` exists only with `--verify-task`, and it is what keeps that
 mode honest: the flag asserts that the `done` criterion declared in THINK was
@@ -425,6 +426,7 @@ it. `--no-criterion-met` records the refusal, and the task ends `rejected`.
 | `--cov-source VALUE` | auto-detected | Coverage source passed to pytest-cov: read from `[tool.coverage.run] source` in `pyproject.toml`, falling back to `src` |
 | `--gate PERCENT` | `verify.gate`, else `70` | Minimum coverage percentage |
 | `--trusted-base REF` | none | With `--judge` only: a ref the agent does not control (e.g. `origin/main` in CI). The diff floor becomes `merge-base(REF, HEAD)` and the YAML ceiling is ignored; a REF without a merge base with `HEAD` (it does not resolve, or the clone is shallow — use `fetch-depth: 0`) exits 1 without judging |
+| `--require-verified` | off | With `--judge` only: exit `0` only for the exact `VERIFIED` verdict, without changing the findings or verdict |
 
 These flags configure the **built-in Python defaults**. A role declared in
 `.kata/config.yaml` is run verbatim, so the path flags for that role no
@@ -445,7 +447,11 @@ kata --check-only \
 Kata does not assume the project it verifies is a Python project. Whoever knows
 how to check a repository is the repository, so the commands live in
 `.kata/config.yaml` (or `.kata/config.json` where PyYAML is unavailable), next
-to the task files:
+to the task files. `--report`, `--audit`, and `--artifact-task` use only the
+recorded task data and do not load this configuration. They still validate the
+structure they read: for example, when present, `surgical.files` must be a list
+of mappings. Invalid fields are reported by path, with exit `1` and without
+rewriting the task.
 
 ```yaml
 verify:
@@ -508,10 +514,11 @@ reserved for this file and cannot be used as a task name.
   or `--doctor` found a partial install;
 - `2`: invalid CLI arguments, as produced by `argparse`.
 
-`VERIFIED WITH CAVEATS` and `UNVERIFIABLE` both exit `0`. The judge did verify the task and approved
-it with low- or medium-severity notes; treating that as a failure would equate
-a caveat with a high-severity fraud and push callers to ignore the exit code.
-Read the printed caveats to decide whether they matter for your workflow.
+By default, `VERIFIED WITH CAVEATS` (findings of low or medium severity) and
+`UNVERIFIABLE` (insufficient observable evidence) both exit `0`. To make a CI
+gate accept only `VERIFIED`, run `kata --judge --task TASK --require-verified`.
+This changes the exit status, not the verdict or its explanation. A `VERIFIED`
+report may still include informational notes, such as the use of `--trusted-base`.
 
 ## Development cycle
 

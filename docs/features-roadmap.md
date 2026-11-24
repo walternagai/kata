@@ -1,6 +1,7 @@
 # Features do Kata — inventário e roadmap
 
-> Inventário revisado sobre a **v0.7.4** (2026-10). As contagens de cenários e
+> Inventário revisado sobre a **v0.11.0**.
+> As contagens de cenários e
 > de extensões de linguagem são conferidas por `tests/test_docs_eval.py`; o
 > commit exato de cada afirmação fica no histórico do Git.
 > Fontes: `src/kata/*.py`, `phases/`, `eval/scenarios/`, `domains/`, `scripts/`.
@@ -20,29 +21,33 @@ agente OpenCode + skills Claude Code.
 | Feature | Onde | Estado |
 |---|---|---|
 | Ciclo completo 9 fases (interativo e headless) | `cli.py` `_step_*` | ✅ |
-| `--init`, `--plan`, `--check-only`, `--task`, `--judge`, `--report`, `--audit`, `--doctor` | `cli.py` `main()` | ✅ |
+| `--init`, `--plan`, `--check-only`, `--task`, `--judge`, `--report`, `--audit`, `--doctor`, `--stamp` | `cli.py` `main()` | ✅ |
+| VERIFY e ARTIFACT avulsos: `--verify-task`, `--artifact-task` | `cli.py` `main()` | ✅ |
+| Gate de CI por veredito exato: `--judge --require-verified` | `cli.py` `main()` | ✅ |
+| REPORT, AUDIT e ARTIFACT independem do config de VERIFY e diagnosticam campos estruturais inválidos da tarefa | `cli.py` `_validate_task_view` e `main()` | ✅ |
 | FIT gate + triviality gate | `fit.py` (lógica), `cli.py` (fluxo) | ✅ |
 | Verificação ruff/pytest/coverage com gate (default 70%) e `--cov-fail-under` | `verify.py` | ✅ |
 | Múltiplos sources de coverage via `--cov-source` | `verify.py`/`cli.py` (R12-02) | ✅ |
 | JUDGE adversarial: 7 fraudes, pontos cegos, vereditos VERIFIED/CAVEATS/UNVERIFIABLE/REFUTED | `judge.py` | ✅ |
 | Sondas de linguagem (9 famílias de sondas, 15 extensões: Python, JS/TS, Go, Ruby, Rust, Java/Kotlin, C#, PHP, Swift) | `judge.py` `_LANGUAGES` | ✅ |
 | `approved_commit` limita o diff do JUDGE ao fim da tarefa (R14) | `judge.py`/`cli.py` | ✅ |
-| AUDIT — graduação de fases followed/skipped/faked | `cli.py` `_audit_task` | ✅ |
-| Config por projeto `.kata/config.yaml` (lint/test/coverage verbatim) | `config.py` | ✅ |
+| AUDIT — graduação de fases followed/skipped/faked/degraded | `report.py` `_audit_task` | ✅ |
+| Config por projeto `.kata/config.yaml` (lint/typecheck/test/coverage) | `config.py` | ✅ |
 | Config do advisor em `.kata/config.yaml` (`model`, `effort`, `skip_trivial`) | `config.py` `load_advisor_config` | ✅ |
 | Verificação adversarial em 2 estágios (mecânica + semântica) | `judge.py` / `phases/kata-judge.md` | ✅ |
 | Schema versionado da task (`schema_version: 1`) | `cli.py` `SCHEMA_VERSION` | ✅ |
-| Detecção de domínio + adapter `kata-devops` | `domains.py`/`domains/kata-devops.md` | ✅ |
+| Quatro adapters opcionais: devops, data-analysis, research e docs | `domains/` e `skills.py` | ✅ |
 | Doctor: checa instalação das skills de fase | `skills.py` | ✅ |
 
 ### 2.2 Frontends
 
 | Frontend | Onde | Estado |
 |---|---|---|
-| Agente `@kata` OpenCode | `opencode/agent/kata.md` + 11 skills `opencode/skills/` | ✅ |
+| Agente `@kata` OpenCode | `opencode/agent/kata.md` + 15 skills em `opencode/skills/` | ✅ |
 | Subagente `kata-advisor` OpenCode (Hostile Reviewer) | `opencode/agents/kata-advisor.md` | ✅ |
-| Skill `kata` Claude Code | `claude-code/skills/` (12 skills) | ✅ |
-| Fonte única das fases | `phases/kata-*.md` (11 arquivos) | ✅ |
+| Orquestrador `kata` Claude Code | `claude-code/skills/` (16 skills, incluindo o orquestrador) | ✅ |
+| Ciclo curto opcional `kata-agile` | `phases/kata-agile.md` | ✅ |
+| Fonte única das fases | `phases/` (12 arquivos) | ✅ |
 | Build de skills (`build-skills`/`check-skills`) | `scripts/build_skills.py` | ✅ |
 | Instaladores symlink (sh/ps1, OpenCode + Claude Code) | `scripts/install*.sh/.ps1` | ✅ |
 
@@ -60,21 +65,21 @@ agente OpenCode + skills Claude Code.
 |---|---|---|
 | `pip install -e '.[dev]'` | README/DOCUMENTATION | ✅ |
 | `pipx run --spec .` / `uv tool run --from .` (uso pontual) | README/DOCUMENTATION (R12 docs) | ✅ |
-| `pipx install .` / `uv tool install .` (permanente) | README/DOCUMENTATION | ✅ |
+| `pipx install kata-dev` / `uv tool install kata-dev` (PyPI) | README/DOCUMENTATION | ✅ |
 | `kata --install` empacota skills + agente + subagente `kata-advisor` | `install.py` / `src/kata/assets/` | ✅ |
 
-## 3. Pendências registradas (roadmap)
+## 3. Próximas melhorias propostas
 
-| # | Item | Origem | Status |
-|---|---|---|---|
-| 1 | **Fix falso positivo estrutural do JUDGE**: `surgical.files` com paths de diretório não é expandido (s4-testes-divida, s5-docs-build REFUTED mesmo com `approved_commit`) | Auditoria S8 (`judge-batch-2026.md`) | aberto → fix-round-13 |
-| 2 | **Backfill `approved_commit`** em tasks antigas pré-R14 (26 tasks colhem REFUTED por diff até HEAD) | Auditoria S8 | aberto → fix-round-13 |
-| 3 | **Refactor do cli.py** (2047 linhas → módulos coesos) | plano 2026-08-10 (não-objetivo) | task `s7-refactor-cli` |
-| 4 | **Domain adapters** `kata-data-analysis`, `kata-research`, `kata-docs` | AGENTS.md "futuros" | task `s9-domain-adapters` |
-| 5 | **Publish PyPI** (viabiliza `pipx run kata` sem repo) | task `npx-install` (Alt D) | task `s9-publish-pypi` (plan-first, AUTH pendente) |
-| 6 | **Sondas de mais linguagens** (ex.: Elixir `.exs` hoje é ponto cego) | s12-unreadable-language | ideia registrada; requer demanda |
-| 7 | **`fix-m3-m4` arquivada** (M3/M4 fechados por e9f4b35) | auditoria S8 | arquivado (nada a fazer) |
-| 8 | **Política triviality × scope_creep** documentada (S2/CR-002) — YAMLs antigos (backlog, fix-round-11) reconciliados | task `s7-politica` | task `s7-politica` |
+| Prioridade | Item | Critério de aceite |
+|---|---|---|
+| Média | **Saída JSON versionada para JUDGE e AUDIT.** | Consumidores recebem veredito, achados e pontos cegos sem extrair texto do terminal. A saída humana e os códigos de saída padrão não mudam. |
+| Média | **Diagnosticar o uso de diretórios em `surgical.files`.** JUDGE compara nomes de arquivos exatos; declarar um diretório não cobre seus descendentes. | O CLI explica a limitação antes do JUDGE e orienta a declarar os arquivos individualmente. Não aprovar subárvores por prefixo de forma implícita. |
+| Baixa | **Sondas de mais linguagens**, conforme demanda; por exemplo, Elixir (`.exs`). | Cada sonda vem com cenários de trabalho honesto, enfraquecimento detectável e limitações explícitas. |
+
+Para tarefas antigas, não preencher `approved_commit` em massa por inferência:
+carimbar apenas quando houver evidência do commit que realmente encerrou a
+tarefa. As entregas anteriores (extração de `report.py`, quatro adapters e
+publicação no PyPI) já constam no inventário, não no backlog.
 
 ## 4. Não-objetivos (fora de escopo até decisão)
 
@@ -85,4 +90,6 @@ agente OpenCode + skills Claude Code.
 
 ## 5. Critério de uso
 
-`done` de cada sprint: `make lint && make format-check && make check-skills && make test` verdes, traps 19/19, e — quando o item toca o judge — re-auditoria das tasks de `.kata/` (batch `--judge`) sem novas regressões.
+`done` de cada sprint: `make check` verde, incluindo todos os cenários de trap.
+Quando o item muda a lógica do JUDGE, reauditar também as tarefas de `.kata/`
+em lote para descobrir regressões fora dos cenários.

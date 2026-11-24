@@ -8,7 +8,7 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
-## Não publicado
+## 0.13.0 — 2026-11-24
 
 ### Adicionado
 

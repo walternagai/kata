@@ -161,10 +161,18 @@ class TestSubagenteOpcional:
 
 class TestDoctor:
     def test_cobre_todos_os_frontends(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
         monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
+        monkeypatch.delenv("CODEX_HOME", raising=False)
         estados = doctor()
-        assert [e.frontend for e in estados] == ["opencode", "claude-code"]
+        assert [e.frontend for e in estados] == ["opencode", "claude-code", "pi", "tau", "codex"]
+        assert [e.config_dir for e in estados[2:]] == [
+            tmp_path / ".pi/agent",
+            tmp_path / ".tau",
+            tmp_path / ".codex",
+        ]
         assert all(e.ausente for e in estados)
 
     def test_doctor_domain_avisa_quando_frontend_instalado_sem_domain_adapter(

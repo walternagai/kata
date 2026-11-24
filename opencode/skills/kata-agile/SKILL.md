@@ -1,20 +1,20 @@
 ---
 name: kata-agile
-description: "Orquestrador alternativo de ciclo curto — FIT → THINK → DECLARE → VERIFY → REPORT (5 fases, 4 interações). Selecione APENAS quando o usuário pedir `kata-agile` pelo nome. Para 'tarefa pequena', 'antes de commitar' ou qualquer pedido genérico de qualidade, use o @kata: a escolha entre ciclo curto e completo é dele, medida no FIT, não desta descrição. Triggers: kata-agile (somente por nome explícito)."
+description: "Orquestrador alternativo de ciclo curto — FIT → THINK → DECLARE → VERIFY → REPORT (5 fases, 4 interações). Selecione APENAS quando o usuário pedir `kata-agile` pelo nome. Para 'tarefa pequena', 'antes de commitar' ou qualquer pedido genérico de qualidade, use o ciclo completo `kata`: a escolha entre ciclo curto e completo é dele, medida no FIT, não desta descrição. Triggers: kata-agile (somente por nome explícito)."
 ---
 <!-- Gerado por scripts/build_skills.py a partir de phases/kata-agile.md. Não edite aqui. -->
 
 # Skill: kata-agile — o ciclo curto
 
 Este é um **orquestrador alternativo** ao `kata`. Ele percorre cinco fases e
-quatro interações com o usuário. O `@kata` completo continua existindo, e a
+quatro interações com o usuário. O ciclo completo `kata` continua existindo, e a
 tarefa escala para ele quando um dos gatilhos da seção **Quando não usar**
 dispara.
 
 **Ele não se escolhe sozinho.** A descrição acima não anuncia "tarefa
 pequena": quem decide abrir uma tarefa em ciclo curto é o usuário, pedindo
 `kata-agile` pelo nome. A alternativa — deixar a descrição disputar o gatilho
-do `@kata` ("antes de commitar", "garantir qualidade") — fazia o modelo
+do ciclo completo `kata` ("antes de commitar", "garantir qualidade") — fazia o modelo
 desviar tarefa grande para o ciclo curto sem ninguém escolher, e o gatilho de
 escalonamento só roda **depois** de a skill já ter sido escolhida.
 
@@ -48,28 +48,28 @@ do juiz.
 Antes de começar, confirme a instalação com `bash`:
 
 ```bash
-python -m kata --doctor
+kata --doctor opencode
 ```
 
 Exit 1 é instalação **parcial** de skill obrigatória — pare e peça ao usuário
-`kata --install all`. O `kata-agile` em si é **opcional** no doctor: se a
+`kata --install opencode`. O `kata-agile` em si é **opcional** no doctor: se a
 mensagem for só `ℹ️ skill de fase opcional faltando`, a instalação está sadia
 e você está lendo esta skill, então ela existe.
 
 Se a skill de uma fase não carregar com `skill`, **não improvise** o
-conteúdo dela: aplique o piso descrito em `phases/kata.md` §"Contrato mínimo de
-cada fase", acrescente o nome a `preflight.skills_missing` e diga no relatório.
+conteúdo dela: consulte o orquestrador `kata`, seção "Contrato mínimo de cada
+fase", acrescente o nome a `preflight.skills_missing` e diga no relatório.
 
 ## Quando não usar — gatilho de escalonamento
 
 Avalie no FIT e **reavalie no DECLARE** (o diff só existe depois do código).
-Qualquer item abaixo manda a tarefa para o `@kata` completo:
+Qualquer item abaixo manda a tarefa para o ciclo completo `kata`:
 
 1. diff acima de **5 arquivos** ou **200 linhas** adicionadas;
 2. `domain != coding` (devops, research, data-analysis, docs);
 3. **ação irreversível** — push, deploy, publish, migração de dados: AUTH
    vive no ciclo completo;
-4. **VERIFY reprovou uma vez** — a segunda tentativa roda no `@kata`;
+4. **VERIFY reprovou uma vez** — a segunda tentativa roda no ciclo completo;
 5. `fit.trivial: true` com diff acima do limite do juiz: escalar evita um
    `REFUTED` previsível.
 
@@ -153,7 +153,7 @@ Regras que não mudam:
   ordem de autoridade — usuário > spec > testes > código. `all_agree: false`
   sem `intent.conflict_resolution` é `spec_betrayal` no juiz.
 - Se o diff estourou o gatilho de escalonamento, **pare aqui** e entregue ao
-  `@kata` com o que já está gravado.
+  ciclo completo com o que já está gravado.
 
 ## Fase 4: VERIFY
 
@@ -176,7 +176,7 @@ python -m kata --verify-task <task> --criterion-met
 - Sem a flag e sem terminal, o comando recusa: ninguém afirmou o critério.
 - Exit 1 = não aprovado. Leia o output, corrija e repita. Ao chegar a **3
   falhas** (`verify.hand_back: true`), devolva a tarefa ao usuário com o que
-  foi tentado, o output real e a hipótese atual — e escale para o `@kata`.
+  foi tentado, o output real e a hipótese atual — e escale para o ciclo completo.
 
 ## Fase 5: REPORT
 
@@ -232,15 +232,15 @@ O ciclo curto **não muda o schema**. Ele grava as mesmas chaves, e por isso:
 
 - **Não roda o `--judge` por padrão.** Verificação adversarial é para ação
   irreversível, tarefa de risco ou pedido explícito — nesses casos, escale
-  para o `@kata` completo.
+  para o ciclo completo `kata`.
 - **Não carrega domain adapter.** `domain != coding` é gatilho de
   escalonamento.
-- **Não substitui o `@kata`.** Ele é o caminho para o que não é pequeno.
+- **Não substitui o ciclo completo.** Ele é o caminho para o que não é pequeno.
 
 ## Persistência
 
 Grave o YAML **depois de cada fase** (`write`/`edit`). É o mesmo arquivo do
-ciclo completo: uma tarefa pode começar em `kata-agile` e terminar no `@kata`
+ciclo completo: uma tarefa pode começar em `kata-agile` e terminar no ciclo completo
 sem perder `base_commit`, `done` nem o que já foi declarado.
 
 ## Princípios
@@ -248,5 +248,5 @@ sem perder `base_commit`, `done` nem o que já foi declarado.
 - **Encurte a conversa, nunca a verificação.**
 - **Uma pergunta por fase**, com a resposta padrão proposta.
 - **Declare, não interrogue**: no DECLARE você afirma e o usuário corrige.
-- **Escalone cedo**: tarefa que estourou o gatilho no meio é do `@kata`.
+- **Escalone cedo**: tarefa que estourou o gatilho no meio é do ciclo completo.
 - **Português BR** em todas as interações com o usuário.

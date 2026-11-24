@@ -95,13 +95,13 @@ nada por trás — a "fase fingida" que o `--audit` existe para caçar, só que
 produzida pelo ferramental em vez do agente. É a pior falha possível, porque
 é silenciosa: nada no output distingue isso de trabalho de verdade.
 
-Antes de começar o ciclo, rode `python -m kata --doctor` via `Bash` (ou
-`py -m kata` no Windows). Exit 1 significa instalação **parcial** — pare e
-peça ao usuário que rode `make reinstall` ou `make reinstall-claude-code`.
-Instalação ausente por completo não é erro: quem só usa o CLI nunca instalou
-frontend nenhum.
+Antes de começar o ciclo, rode `kata --doctor claude-code` via `Bash`
+(ou `python -m kata --doctor claude-code` se necessário). Exit 1 significa
+instalação **parcial** — pare e peça ao usuário que reinstale as skills (por
+exemplo, `kata --install claude-code`). Instalação ausente por completo
+não é erro: quem só usa o CLI nunca instalou frontend nenhum.
 
-**Se uma chamada de `Skill` falhar durante o ciclo:**
+**Se não conseguir carregar uma skill durante o ciclo:**
 
 1. **Não improvise.** Não escreva a seção da fase como se a tivesse seguido.
 2. Use o contrato mínimo abaixo — o suficiente para não pular a fase em
@@ -264,9 +264,9 @@ seção "Compatibilidade operacional" acima):
 Esta etapa é obrigatória em todos os modos (`--init`, `--check-only`,
 `--judge`, `--report`, `--audit`, `--plan`, `--task`, e modo padrão).
 
-Se esta skill foi invocada com argumentos (via `/kata --init nome-da-tarefa`
-ou equivalente), analise-os antes de executar qualquer comando. Se foi
-invocada sem argumentos, trate como o modo padrão. Mapeamento:
+Se esta skill foi invocada com argumentos, analise-os antes de executar
+qualquer comando. Se foi invocada sem argumentos, trate como o modo padrão.
+Mapeamento:
 
 | Input | Modo | Ação |
 |-------|------|------|

@@ -1,6 +1,6 @@
 ---
 name: kata-intent
-description: Fase INTENT do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 2.5 — verificar intenção entre código, teste e especificação antes de mudar comportamento. Triggers: INTENT, intent gate, intenção, código vs teste, spec, conflito, fable-method.
+description: "Fase INTENT do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 2.5 — verificar intenção entre código, teste e especificação antes de mudar comportamento. Triggers: INTENT, intent gate, intenção, código vs teste, spec, conflito, fable-method."
 ---
 
 # Skill: kata-intent

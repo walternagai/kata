@@ -1,6 +1,6 @@
 ---
 name: kata-surgical
-description: Fase SURGICAL do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 3 — validar arquivo por arquivo que cada mudança rastreia direto ao pedido, sem efeitos colaterais. Triggers: SURGICAL, cada linha, arquivo, import, diff, rastrear, efeito colateral.
+description: "Fase SURGICAL do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 3 — validar arquivo por arquivo que cada mudança rastreia direto ao pedido, sem efeitos colaterais. Triggers: SURGICAL, cada linha, arquivo, import, diff, rastrear, efeito colateral."
 ---
 
 # Skill: kata-surgical
@@ -54,12 +54,12 @@ tests/unit/test_orchestrator.py
 ### 1.1 Arquivos gerados contam — gere antes de listar
 
 Se você editou `phases/`, rode `make build-skills` **antes** de listar: cada
-fase editada produz quatro arquivos derivados, e eles são parte da mudança.
+fase editada produz derivados que fazem parte da mudança.
 
 | Fonte | Derivados |
 |---|---|
-| `phases/kata-<fase>.md` | `opencode/skills/kata-<fase>/SKILL.md`, `claude-code/skills/kata-<fase>/SKILL.md` e os dois espelhos em `src/kata/assets/` |
-| `phases/kata.md` | `opencode/agent/kata.md`, `claude-code/skills/kata/SKILL.md` e os dois espelhos em `src/kata/assets/` |
+| `phases/kata-<fase>.md` | `opencode/skills/`, `claude-code/skills/`, `pi/skills/`, `tau/skills/`, `codex/skills/` e os espelhos em `src/kata/assets/` |
+| `phases/kata.md` | `opencode/agent/kata.md`, a skill `kata` nos demais frontends e os espelhos em `src/kata/assets/` |
 
 `make check-skills` reprova se fonte e gerado divergirem, então os derivados vão
 no mesmo commit — e precisam estar em `surgical.files` com `necessary: true`.

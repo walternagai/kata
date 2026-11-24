@@ -1887,8 +1887,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--doctor",
-        action="store_true",
-        help="Confere se as skills de fase estão instaladas em cada frontend",
+        nargs="?",
+        const="all",
+        metavar="FRONTEND",
+        choices=[*FRONTENDS_VALIDOS, "all"],
+        help="Confere as skills de fase de um frontend (sem argumento, todos)",
     )
     parser.add_argument(
         "--install",
@@ -1897,7 +1900,8 @@ def main() -> None:
         choices=[*FRONTENDS_VALIDOS, "all"],
         help=(
             "Instala as skills empacotadas, o agente e o subagente advisor "
-            "(copia, sem exigir clone do repo). FRONTEND: opencode, claude-code ou all"
+            f"(copia, sem exigir clone do repo). FRONTEND: {', '.join(FRONTENDS_VALIDOS)} "
+            "ou all. Pi, Tau e Codex precisam estar no PATH"
         ),
     )
     parser.add_argument(
@@ -2106,7 +2110,7 @@ def main() -> None:
     # instalação das skills, e tem de funcionar de qualquer diretório.
     if args.doctor:
         _print_header("DOCTOR — Instalação das skills de fase")
-        sys.exit(_print_doctor(doctor()))
+        sys.exit(_print_doctor(doctor(None if args.doctor == "all" else args.doctor)))
 
     # Estes modos usam evidência já gravada, não a configuração de verificação.
     if args.report or args.audit:

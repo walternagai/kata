@@ -75,18 +75,20 @@ class Frontend:
     """Onde um frontend procura suas skills."""
 
     nome: str
-    env_var: str
+    env_var: str | None
     default: str
-    # O orquestrador do Claude Code é uma skill como as outras; o do OpenCode
-    # é um agente, e mora em outro diretório.
+    # Só o orquestrador do OpenCode é um agente em outro diretório.
     orquestrador_e_skill: bool
     # Subagentes opcionais instalados ao lado das skills, por nome de arquivo
     # em `agents/`. Vazio no Claude Code, onde o revisor adversarial é o
     # `/advisor` nativo — não há arquivo nosso para instalar.
     subagentes: tuple[str, ...] = ()
+    # Frontends opcionais: o instalador só os seleciona com o binário no PATH.
+    executable: str | None = None
 
     def config_dir(self) -> Path:
-        return Path(os.environ.get(self.env_var) or Path.home() / self.default)
+        override = os.environ.get(self.env_var) if self.env_var else None
+        return Path(override).expanduser() if override else Path.home() / self.default
 
     def esperadas(self) -> tuple[str, ...]:
         if self.orquestrador_e_skill:
@@ -106,6 +108,9 @@ FRONTENDS: tuple[Frontend, ...] = (
         subagentes=("kata-advisor.md",),
     ),
     Frontend("claude-code", "CLAUDE_CONFIG_DIR", ".claude", True),
+    Frontend("pi", "PI_CODING_AGENT_DIR", ".pi/agent", True, executable="pi"),
+    Frontend("tau", None, ".tau", True, executable="tau"),
+    Frontend("codex", "CODEX_HOME", ".codex", True, executable="codex"),
 )
 
 
@@ -304,9 +309,9 @@ def check_domain_skills(frontend: Frontend) -> list[str]:
     return [nome for nome in frontend.domain_skills_esperadas() if not (raiz / nome).exists()]
 
 
-def doctor() -> list[InstallStatus]:
-    """Estado de instalação de todos os frontends conhecidos."""
-    return [check_frontend(f) for f in FRONTENDS]
+def doctor(frontend: str | None = None) -> list[InstallStatus]:
+    """Verifica a instalação de skills de um frontend ou de todos."""
+    return [check_frontend(f) for f in FRONTENDS if frontend is None or f.nome == frontend]
 
 
 def check_optional_phases(frontend: Frontend) -> list[str]:
@@ -322,11 +327,19 @@ def check_optional_phases(frontend: Frontend) -> list[str]:
     return [nome for nome in OPTIONAL_PHASES if not (raiz / nome).exists()]
 
 
-def doctor_optional_phases() -> dict[str, list[str]]:
-    """Skills de fase opcionais faltando em cada frontend."""
-    return {f.nome: check_optional_phases(f) for f in FRONTENDS}
+def doctor_optional_phases(frontends: set[str] | None = None) -> dict[str, list[str]]:
+    """Skills de fase opcionais faltando nos frontends selecionados."""
+    return {
+        f.nome: check_optional_phases(f)
+        for f in FRONTENDS
+        if frontends is None or f.nome in frontends
+    }
 
 
-def doctor_domain() -> dict[str, list[str]]:
-    """Domain skills opcionais faltando em cada frontend."""
-    return {f.nome: check_domain_skills(f) for f in FRONTENDS}
+def doctor_domain(frontends: set[str] | None = None) -> dict[str, list[str]]:
+    """Domain skills opcionais faltando nos frontends selecionados."""
+    return {
+        f.nome: check_domain_skills(f)
+        for f in FRONTENDS
+        if frontends is None or f.nome in frontends
+    }

@@ -4194,6 +4194,34 @@ class TestConfigDoProjeto:
 class TestDoctor:
     """`--doctor` é o preflight: instalação parcial reprova, ausente não."""
 
+    @pytest.fixture(autouse=True)
+    def _isola_frontends_opcionais(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+        monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
+        monkeypatch.delenv("CODEX_HOME", raising=False)
+
+    def test_doctor_de_um_frontend_ignora_instalacao_parcial_em_outro(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        from kata.skills import ORCHESTRATOR_SKILL, PHASE_SKILLS
+
+        monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+        self._instala(tmp_path / ".pi/agent", [ORCHESTRATOR_SKILL, *PHASE_SKILLS])
+        self._instala(tmp_path / ".tau", [ORCHESTRATOR_SKILL])
+
+        with patch("sys.argv", ["kata", "--doctor", "pi"]), pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 0
+        saida = capsys.readouterr().out
+        assert "pi:" in saida
+        assert "tau:" not in saida
+
+        with patch("sys.argv", ["kata", "--doctor", "tau"]), pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 1
+        assert "tau: instalação PARCIAL" in capsys.readouterr().out
+
     @pytest.mark.parametrize(
         "modo",
         [

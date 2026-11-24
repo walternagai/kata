@@ -2,8 +2,8 @@
 
 Os scripts `scripts/install*.sh` criam symlinks apontando para o checkout —
 que não existe para quem instalou via `pipx install kata-dev`. Este módulo
-copia o gerado embarcado em `src/kata/assets/` para `~/.config/opencode` ou
-`~/.claude`, com as mesmas travas dos instaladores shell: nada que o Kata
+copia o conteúdo de `src/kata/assets/` para o diretório nativo do frontend,
+com as mesmas travas dos instaladores shell: nada que o Kata
 não criou é sobrescrito sem `--force`, e o uninstall remove só o que criou.
 
 A prova de "criado pelo Kata" é um marcador `.kata-managed` dentro de cada
@@ -99,7 +99,11 @@ def _origens(frontend: Frontend) -> tuple[Path, Path | None, Path | None]:
             raiz / "opencode" / AGENT_DIR,
             raiz / "opencode" / ADVISOR_DIR,
         )
-    return raiz / "claude-code" / "skills", None, None
+    return raiz / frontend.nome / "skills", None, None
+
+
+def _harness_disponivel(frontend: Frontend) -> bool:
+    return frontend.executable is None or shutil.which(frontend.executable) is not None
 
 
 def _sha256(path: Path) -> str:
@@ -295,6 +299,9 @@ def install_frontend(nome: str, force: bool = False) -> InstallReport:
     """Copia skills + agente (+ subagentes, no OpenCode) para o config dir."""
     frontend = _frontend(nome)
     report = InstallReport(frontend=nome)
+    if not _harness_disponivel(frontend):
+        report.erros.append(f"executável '{frontend.executable}' não encontrado no PATH")
+        return report
     skills_src, agent_src, agents_src = _origens(frontend)
     if not skills_src.is_dir():
         report.erros.append(f"assets não encontrados em {skills_src}")
@@ -402,7 +409,7 @@ def uninstall_frontend(nome: str) -> InstallReport:
 
 
 def config_dir_de(nome: str) -> Path:
-    """Diretório de destino de um frontend (respeita *_CONFIG_DIR)."""
+    """Diretório de destino do frontend, incluindo seu override nativo."""
     return _frontend(nome).config_dir()
 
 
@@ -413,8 +420,11 @@ def _resolver_nomes(selecao: str | None) -> list[str]:
 
 
 def run_install(selecao: str | None, force: bool = False) -> tuple[list[InstallReport], int]:
-    """Executa o install para a seleção; retorna (reports, exit_code)."""
-    reports = [install_frontend(nome, force=force) for nome in _resolver_nomes(selecao)]
+    """Instala a seleção; em `all`, pula harnesses opcionais ausentes."""
+    nomes = _resolver_nomes(selecao)
+    if selecao in (None, "all"):
+        nomes = [nome for nome in nomes if _harness_disponivel(_frontend(nome))]
+    reports = [install_frontend(nome, force=force) for nome in nomes]
     code = 0 if all(r.ok for r in reports) else 1
     return reports, code
 

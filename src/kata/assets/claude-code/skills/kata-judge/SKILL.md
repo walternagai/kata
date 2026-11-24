@@ -1,6 +1,6 @@
 ---
 name: kata-judge
-description: Fase JUDGE do ciclo Karpathy (kata). Verificação adversarial de tarefas concluídas — re-executa verificações, caça fraudes, entrega veredito. Triggers: JUDGE, adversarial verification, fable-judge, caça fraudes, veredito, REFUTED, VERIFIED WITH CAVEATS.
+description: "Fase JUDGE do ciclo Karpathy (kata). Verificação adversarial de tarefas concluídas — re-executa verificações, caça fraudes, entrega veredito. Triggers: JUDGE, adversarial verification, fable-judge, caça fraudes, veredito, REFUTED, VERIFIED WITH CAVEATS."
 ---
 <!-- Gerado por scripts/build_skills.py a partir de phases/kata-judge.md. Não edite aqui. -->
 

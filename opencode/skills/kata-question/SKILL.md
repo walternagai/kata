@@ -1,16 +1,16 @@
 ---
 name: kata-question
-description: Uso da ferramenta `question` e da rota `question` no ciclo Karpathy (kata). Use quando o agente @kata precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question.
+description: "Uso da ferramenta `question` e da rota `question` no ciclo Karpathy (kata). Use quando o agente @kata precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question."
 ---
 <!-- Gerado por scripts/build_skills.py a partir de phases/kata-question.md. Não edite aqui. -->
 
 # Skill: kata-question
 
-Guia para o uso da ferramenta `question` e da rota `question` no Karpathy Development Cycle.
+Guia para perguntar ao usuário e usar a rota `question` no Karpathy Development Cycle.
 
 **A rota `question` e a ferramenta de perguntar são coisas diferentes.** A
 rota é um valor de `fit.route` no YAML da tarefa e se escreve `question` em
-qualquer frontend; a ferramenta muda de nome conforme o host.
+qualquer frontend; a forma de perguntar depende do host.
 
 ## Objetivo
 
@@ -22,7 +22,7 @@ qualquer frontend; a ferramenta muda de nome conforme o host.
 
 Para esta skill, use:
 
-- **`question`**: faça uma pergunta por chamada. Não agrupe múltiplas perguntas em uma única chamada.
+- **`question`**: faça uma pergunta por vez; aguarde a resposta antes de enviar outra.
 - **`bash`**: `git diff`, `grep`, `pytest` etc., para coletar evidências antes de perguntar.
 - **`read` / `grep`**: investigue o código para embasar a pergunta.
 - **`write` / `edit`**: registre a resposta ou os achados em `.kata/<task>.yaml`.
@@ -68,7 +68,7 @@ think:
 
 ### Regras
 
-- **Uma pergunta por chamada** — nunca jogue 4 perguntas de uma vez.
+- **Uma pergunta por vez** — nunca jogue 4 perguntas de uma vez.
 - **Contexto primeiro** — mostre ao usuário o que você já sabe antes de perguntar.
 - **Proponha, não interrogue** — ofereça uma resposta padrão; pergunte se confirma.
 - **Seja específico** — perguntas vagas geram respostas vagas.

@@ -1,6 +1,6 @@
 ---
 name: kata-<domínio>
-description: Domain adapter do kata para <domínio>. Use quando a tarefa declarar `domain: <domínio>` e for necessário adaptar o ciclo Karpathy às evidências, autoridades e verificações deste domínio.
+description: "Domain adapter do kata para <domínio>. Use quando a tarefa declarar `domain: <domínio>` e for necessário adaptar o ciclo Karpathy às evidências, autoridades e verificações deste domínio."
 ---
 
 # Skill: kata-<domínio>

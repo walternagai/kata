@@ -1,6 +1,6 @@
 ---
 name: kata-think
-description: Fase THINK do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 1 — declarar problema, assumptions, alternativas e unknowns antes de codar. Triggers: THINK, assumptions, problema, unknowns, antes de codificar, declarar contexto.
+description: "Fase THINK do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 1 — declarar problema, assumptions, alternativas e unknowns antes de codar. Triggers: THINK, assumptions, problema, unknowns, antes de codificar, declarar contexto."
 ---
 
 # Skill: kata-think

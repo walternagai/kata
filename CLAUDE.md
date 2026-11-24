@@ -10,8 +10,8 @@ Kata (型) is the tool itself, not a project where kata is applied. It implement
 combining the Karpathy Development Cycle with fit-gate/verification-gate ideas from
 [The Fable Method](https://github.com/Sahir619/fable-method).
 
-Two frontends share one Python backend, and both are **generated from a single source in
-`phases/`** (11 files: 10 phases + the orchestrator), plus optional domain adapters from `domains/`
+Five frontends share one Python backend, all **generated from a single source in
+`phases/`** (12 files: 10 phase skills, the orchestrator and `kata-agile`), plus adapters from `domains/`
 (four shipped: `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs`):
 - **OpenCode**: `@kata` agent (`opencode/agent/kata.md`) backed by 10 phase skills + the
   4 domain adapters (`opencode/skills/kata-*/`), plus the `kata-advisor` subagent
@@ -21,6 +21,10 @@ Two frontends share one Python backend, and both are **generated from a single s
   checklist in the main conversation — no subagent, no model requirement. No orchestrator
   subagent — the cycle is interactive (asks a question at nearly every phase), so it runs in the
   main conversation.
+- **Pi and Tau**: `pi/skills/` and `tau/skills/`, with `/skill:kata` and
+  `/skill:kata-agile`. Both load phases using `read` and ask users in chat.
+- **Codex**: `codex/skills/`, with `$kata` and `$kata-agile`. Uses the Codex
+  terminal and patch tools and asks users in chat.
 
 Only the orchestration layer differs between frontends; Ruff/pytest/coverage/judge logic always runs
 through the `kata` Python package (`src/kata/`).
@@ -147,7 +151,7 @@ src/kata/
   an absent one does not. A phase run without its skill is recorded in `preflight.skills_missing` and
   graded `degraded` by `--audit`. `OPTIONAL_PHASES` (today only `kata-agile`, the short cycle
   orchestrator) is warned about, never required: running the full cycle loses nothing without it.
-- `install.py`: `kata --install opencode|claude-code|all` copies the generated tree bundled in
+- `install.py`: `kata --install opencode|claude-code|pi|tau|codex|all` copies the generated tree bundled in
   `src/kata/assets/` into the frontend config dir — the route for `pipx install kata-dev`, which has no
   checkout to symlink to. On OpenCode it also copies the orchestrator (`agent/kata.md`) and the
   `kata-advisor` subagent (`agents/kata-advisor.md`); an advisor refusal is reported but does not

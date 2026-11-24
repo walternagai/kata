@@ -1,6 +1,6 @@
 ---
 name: kata-devops
-description: Domain adapter do kata para devops/infraestrutura. Use quando a tarefa declarar `domain: devops`. Adapta o ciclo Karpathy para Docker, Docker Compose, Terraform, Nginx, GitHub Actions, deploys, healthchecks e configuração de ambientes.
+description: "Domain adapter do kata para devops/infraestrutura. Use quando a tarefa declarar `domain: devops`. Adapta o ciclo Karpathy para Docker, Docker Compose, Terraform, Nginx, GitHub Actions, deploys, healthchecks e configuração de ambientes."
 ---
 
 # Skill: kata-devops

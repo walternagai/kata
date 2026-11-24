@@ -1,6 +1,6 @@
 ---
 name: kata-docs
-description: Domain adapter do kata para documentação. Use quando a tarefa declarar `domain: docs`. Adapta o ciclo Karpathy para README, guides, changelogs, docstrings, especificações e documentos técnicos.
+description: "Domain adapter do kata para documentação. Use quando a tarefa declarar `domain: docs`. Adapta o ciclo Karpathy para README, guides, changelogs, docstrings, especificações e documentos técnicos."
 ---
 <!-- Gerado por scripts/build_skills.py a partir de domains/kata-docs.md. Não edite aqui. -->
 

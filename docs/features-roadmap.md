@@ -1,6 +1,6 @@
 # Features do Kata — inventário e roadmap
 
-> Inventário revisado sobre a **v0.11.0**.
+> Inventário revisado sobre a **v0.12.0**.
 > As contagens de cenários e
 > de extensões de linguagem são conferidas por `tests/test_docs_eval.py`; o
 > commit exato de cada afirmação fica no histórico do Git.
@@ -46,6 +46,8 @@ agente OpenCode + skills Claude Code.
 | Agente `@kata` OpenCode | `opencode/agent/kata.md` + 15 skills em `opencode/skills/` | ✅ |
 | Subagente `kata-advisor` OpenCode (Hostile Reviewer) | `opencode/agents/kata-advisor.md` | ✅ |
 | Orquestrador `kata` Claude Code | `claude-code/skills/` (16 skills, incluindo o orquestrador) | ✅ |
+| Frontends Pi e Tau (`/skill:kata`, `/skill:kata-agile`) | `pi/skills/` e `tau/skills/` | ✅ |
+| Frontend Codex (`$kata`, `$kata-agile`) | `codex/skills/` | ✅ |
 | Ciclo curto opcional `kata-agile` | `phases/kata-agile.md` | ✅ |
 | Fonte única das fases | `phases/` (12 arquivos) | ✅ |
 | Build de skills (`build-skills`/`check-skills`) | `scripts/build_skills.py` | ✅ |

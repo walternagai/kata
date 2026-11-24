@@ -4,10 +4,10 @@
 [![PyPI](https://img.shields.io/pypi/v/kata-dev?label=PyPI)](https://pypi.org/project/kata-dev/)
 [![Python](https://img.shields.io/pypi/pyversions/kata-dev)](https://pypi.org/project/kata-dev/)
 
-> Python 3.11+ | CLI + OpenCode Agent + Claude Code Skills | Karpathy Development Cycle + Fable Method
+> Python 3.11+ | CLI + OpenCode, Claude Code, Pi, Tau e Codex | Karpathy Development Cycle + Fable Method
 
-Kata (型, "forma/padrão") é um agente OpenCode, um conjunto de skills para
-Claude Code e um CLI Python que implementam o ciclo
+Kata (型, "forma/padrão") é um CLI Python, um agente OpenCode e um conjunto
+de skills para Claude Code, Pi, Tau e Codex que implementam o ciclo
 FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT,
 com AUDIT e JUDGE adversarial, inspirado em:
 
@@ -106,13 +106,42 @@ Diferente do agente `@kata` do OpenCode, a versão Claude Code é só skills
 fase — e isso se encaixa melhor rodando na conversa principal do que em um
 subagente isolado que só reporta um resumo ao final.
 
+### Skills Pi e Tau
+
+Com uma versão do CLI Kata que liste `pi` e `tau` em `kata --help`, e com o
+harness desejado no `PATH`, instale as skills:
+
+```bash
+kata --install pi   # ~/.pi/agent/skills (ou $PI_CODING_AGENT_DIR/skills)
+kata --install tau  # ~/.tau/skills
+kata --doctor pi    # ou: kata --doctor tau
+```
+
+Em uma sessão já aberta, execute `/reload`. Use `/skill:kata` para o ciclo
+completo (ex.: `/skill:kata --plan minha-tarefa`) ou `/skill:kata-agile` para
+o ciclo curto. As confirmações acontecem no chat. Não é necessário instalar
+extensões do Pi ou do Tau. Para remover as skills, use `kata --uninstall pi`
+ou `kata --uninstall tau`.
+
+### Skills Codex
+
+```bash
+kata --install codex   # ~/.codex/skills (ou $CODEX_HOME/skills)
+kata --doctor codex
+```
+
+No Codex, selecione a skill em `/skills` ou mencione `$kata` (ex.:
+`$kata --plan minha-tarefa`) para o ciclo completo e `$kata-agile` para o
+ciclo curto. Se a instalação não aparecer na sessão atual, abra uma nova.
+Para remover as skills gerenciadas, use `kata --uninstall codex`.
+
 ### CLI Python (via PyPI ou checkout)
 
 Via PyPI (distribuição `kata-dev`; o comando continua `kata` — sem clonar nada):
 
 ```bash
 pipx install kata-dev
-kata --install all       # opencode + claude-code (copia as skills empacotadas)
+kata --install all       # OpenCode + Claude Code; inclui Pi, Tau e Codex se estiverem no PATH
 kata --doctor            # confere a instalação
 kata --uninstall all     # remove só o que o Kata criou
 ```
@@ -179,7 +208,7 @@ com `src/` e `tests/` — se o seu projeto não é assim, declare o config.
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) — o que mudou em cada versão |
 
 O wheel leva o código e os **assets** (`src/kata/assets/`: agentes, subagente
-e as skills dos dois frontends). Por isso `kata --install` funciona sem
+e as skills dos cinco frontends). Por isso `kata --install` funciona sem
 checkout, e o PyPI é a rota de quem só quer o CLI e as skills:
 
 ```bash
@@ -191,7 +220,7 @@ pipx uninstall kata-dev          # remover o pacote (as skills ficam: use
 ```
 
 **Só o CLI não instala skill nenhuma.** As skills entram com
-`kata --install opencode|claude-code|all`, que copia os assets para o config
+`kata --install opencode|claude-code|pi|tau|codex|all`, que copia os assets para o config
 dir do frontend; `kata --doctor` mostra o que está instalado, o modo (link,
 cópia ou misto) e se a versão das skills bate com a do pacote em execução.
 
@@ -270,8 +299,8 @@ kata --task minha-tarefa --judge   # Verificação adversarial (caça fraudes)
 | `--require-verified` | `False` | Só com `--judge`: exige o veredito exato `VERIFIED` para sair 0. Sem a flag, ressalvas e falta de evidência verificável não reprovam |
 | `--report` | `False` | Gera relatório outcome-first de tarefa concluída |
 | `--audit` | `False` | Gradua as fases da tarefa: followed / skipped / faked / degraded |
-| `--doctor` | `False` | Confere as skills de fase por frontend (link, cópia ou misto); adapters e advisor ausentes só avisam. Não combina com outros modos nem com `--task` |
-| `--install` | (nenhum) | Copia as skills empacotadas, o agente orquestrador e o subagente advisor: `opencode`, `claude-code` ou `all` (sem clone do repo) |
+| `--doctor [FRONTEND]` | todos | Confere as skills de fase de todos os frontends ou só do selecionado. Não combina com outros modos nem com `--task` |
+| `--install FRONTEND` | (nenhum) | Copia as skills empacotadas para `opencode`, `claude-code`, `pi`, `tau`, `codex` ou `all`. Pi, Tau e Codex só são instalados se o executável estiver no `PATH` |
 | `--uninstall` | (nenhum) | Remove as skills do `--install` (só o que o Kata criou) |
 | `--force` | `False` | Só com `--install`: guarda personalização existente em `.bak` e substitui |
 | `--ruff-paths` | `src/ tests/` | Caminhos para ruff check |
@@ -437,7 +466,7 @@ ln -s .karpathy .kata   # symlink preserva acesso ao legado
 Tarefas podem declarar um domínio (`coding`, `devops`, `data-analysis`,
 `research`, `docs`). O domínio padrão é
 `coding`; os demais carregam um adapter de `domains/` (fonte única, gerado
-para OpenCode e Claude Code). Domínio sem adapter conhecido roda com aviso,
+para todos os frontends). Domínio sem adapter conhecido roda com aviso,
 sem o adapter — ver `domains/TEMPLATE.md` para criar um novo.
 
 ## Estrutura
@@ -460,6 +489,7 @@ kata/
 ├── claude-code/                       ← GERADO (make build-skills)
 │   └── skills/kata-*/SKILL.md         ← 16 skills (orquestrador kata + as 15
 │                                         acima)
+├── pi/, tau/ e codex/                ← GERADO: 16 skills por harness
 ├── domains/                           ← FONTE ÚNICA dos domain adapters
 │   ├── TEMPLATE.md                    ← schema de um adapter (não gera skill)
 │   ├── kata-devops.md                 ← adapters (um .md por skill kata-*)

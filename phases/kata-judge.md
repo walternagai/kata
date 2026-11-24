@@ -1,6 +1,6 @@
 ---
 name: kata-judge
-description: Fase JUDGE do ciclo Karpathy (kata). Verificação adversarial de tarefas concluídas — re-executa verificações, caça fraudes, entrega veredito. Triggers: JUDGE, adversarial verification, fable-judge, caça fraudes, veredito, REFUTED, VERIFIED WITH CAVEATS.
+description: "Fase JUDGE do ciclo Karpathy (kata). Verificação adversarial de tarefas concluídas — re-executa verificações, caça fraudes, entrega veredito. Triggers: JUDGE, adversarial verification, fable-judge, caça fraudes, veredito, REFUTED, VERIFIED WITH CAVEATS."
 ---
 
 # Skill: kata-judge
@@ -233,8 +233,8 @@ da ferramenta `subagent`. O subagente opera em modo *read-only* (`edit: deny`,
 seguindo o checklist acima. Se o subagente não estiver instalado, execute o
 checklist na conversa principal.
 <!--/only-->
-<!--only:claude-code-->
-**No Claude Code:**
+<!--only:claude-code, pi, tau, codex-->
+**No {{FRONTEND_NOME}}:**
 Não há subagente embarcado — o Estágio 2 é executado na conversa principal.
 Aplique o checklist acima ao diff e à especificação. Se o host oferecer um
 comando de revisão ou de esforço elevado, ele é opcional; o checklist é o que

@@ -11,7 +11,7 @@ permission:
   write: allow
 ---
 <!--/only-->
-<!--only:claude-code-->
+<!--only:claude-code, pi, tau, codex-->
 ---
 name: kata
 description: "Kata (型) — Karpathy Development Cycle: orquestra FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → ARTIFACT → REPORT (+ JUDGE opcional). Use quando precisar garantir qualidade antes de commitar: classificar tarefa, declarar assumptions, validar minimalismo, verificar intenção, mudanças cirúrgicas, relatório outcome-first, verificação adversarial, e rodar lint+test+coverage. Triggers: kata, karpathy cycle, fable method, antes de commitar, ciclo de qualidade."
@@ -23,7 +23,7 @@ description: "Kata (型) — Karpathy Development Cycle: orquestra FIT → THINK
 
 Você é o agente **kata** (型, "forma/padrão"), responsável por orquestrar o
 <!--/only-->
-<!--only:claude-code-->
+<!--only:claude-code, pi, tau, codex-->
 # Skill: kata — Karpathy Development Cycle
 
 Você está executando o **kata** (型, "forma/padrão"), que orquestra o
@@ -86,7 +86,7 @@ Mapeamento de ferramentas do {{FRONTEND_NOME}} para cada tarefa do kata:
 | Carregar instruções da fase | {{LOAD_PHASE}} | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
 | Carregar adapter de domínio | {{LOAD_DOMAIN}} | `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs` |
 <!--ifnot:closed_choice_ask-->
-| Perguntar ao usuário | {{ASK}} + `kata-question` | Uma pergunta por chamada; consulte a skill para a rota `question` e as regras |
+| Perguntar ao usuário | {{ASK}} + `kata-question` | Uma pergunta por vez; consulte a skill para a rota `question` e as regras |
 <!--/ifnot-->
 <!--if:closed_choice_ask-->
 | Perguntar ao usuário | Texto livre (aberta) ou {{ASK}} (fechada) + `kata-question` | Uma pergunta por vez; consulte a skill `kata-question` para a regra de qual ferramenta usar |
@@ -103,6 +103,21 @@ Mapeamento de ferramentas do {{FRONTEND_NOME}} para cada tarefa do kata:
 **Regra**: em cada fase, carregue primeiro a skill correspondente com {{LOAD_PHASE}}
 e siga suas instruções. {{ESTE_ORQUESTRADOR}} é a orquestração; as demais
 skills `kata-*` contêm o detalhe de cada fase.
+<!--only:pi, tau-->
+
+O usuário inicia o ciclo com `/skill:kata` ou `/skill:kata-agile`.
+<!--/only-->
+<!--only:codex-->
+
+O usuário inicia o ciclo mencionando `$kata` ou `$kata-agile` no chat (ou
+selecionando a skill em `/skills`).
+<!--/only-->
+<!--if:chat_ask-->
+Para carregar fases e adapters, abra o `SKILL.md` indicado no índice de
+skills. Comandos de skill são da interface do usuário, não do shell.
+Quando precisar de uma decisão, pergunte no chat e encerre o turno. Aguarde
+uma resposta explícita antes de registrar a decisão ou avançar.
+<!--/if-->
 
 ### Compatibilidade operacional
 
@@ -125,13 +140,13 @@ nada por trás — a "fase fingida" que o `--audit` existe para caçar, só que
 produzida pelo ferramental em vez do agente. É a pior falha possível, porque
 é silenciosa: nada no output distingue isso de trabalho de verdade.
 
-Antes de começar o ciclo, rode `python -m kata --doctor` via {{RUN}} (ou
-`py -m kata` no Windows). Exit 1 significa instalação **parcial** — pare e
-peça ao usuário que rode `make reinstall` ou `make reinstall-claude-code`.
-Instalação ausente por completo não é erro: quem só usa o CLI nunca instalou
-frontend nenhum.
+Antes de começar o ciclo, rode `kata --doctor {{FRONTEND_ID}}` via {{RUN}}
+(ou `python -m kata --doctor {{FRONTEND_ID}}` se necessário). Exit 1 significa
+instalação **parcial** — pare e peça ao usuário que reinstale as skills (por
+exemplo, `kata --install {{FRONTEND_ID}}`). Instalação ausente por completo
+não é erro: quem só usa o CLI nunca instalou frontend nenhum.
 
-**Se uma chamada de {{LOAD_PHASE}} falhar durante o ciclo:**
+**Se não conseguir carregar uma skill durante o ciclo:**
 
 1. **Não improvise.** Não escreva a seção da fase como se a tivesse seguido.
 2. Use o contrato mínimo abaixo — o suficiente para não pular a fase em
@@ -298,10 +313,10 @@ Esta etapa é obrigatória em todos os modos (`--init`, `--check-only`,
 Analise a primeira mensagem do usuário após `@kata` e extraia as flags. Não
 execute comandos antes de identificar o modo. Mapeamento:
 <!--/only-->
-<!--only:claude-code-->
-Se esta skill foi invocada com argumentos (via `/kata --init nome-da-tarefa`
-ou equivalente), analise-os antes de executar qualquer comando. Se foi
-invocada sem argumentos, trate como o modo padrão. Mapeamento:
+<!--only:claude-code, pi, tau, codex-->
+Se esta skill foi invocada com argumentos, analise-os antes de executar
+qualquer comando. Se foi invocada sem argumentos, trate como o modo padrão.
+Mapeamento:
 <!--/only-->
 
 | Input | Modo | Ação |

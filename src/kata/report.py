@@ -341,7 +341,8 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
     print()
 
     # Domain skills são opcionais: avisar, mas não reprovar.
-    domain_missing = doctor_domain()
+    frontends = {e.frontend for e in estados}
+    domain_missing = doctor_domain(frontends)
     domain_warnings = 0
     for frontend, faltando in domain_missing.items():
         if faltando:
@@ -358,7 +359,7 @@ def _print_doctor(estados: list[InstallStatus]) -> int:
     # Ao contrário do domain adapter, ela não é carregada por nenhuma fase:
     # quem não abre uma tarefa em ciclo curto nunca sente a falta.
     optional_warnings = 0
-    for frontend, faltando in doctor_optional_phases().items():
+    for frontend, faltando in doctor_optional_phases(frontends).items():
         if faltando:
             optional_warnings += 1
             print(f"  ℹ️  {frontend}: skill de fase opcional faltando: {', '.join(faltando)}")

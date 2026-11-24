@@ -1,6 +1,6 @@
 ---
 name: kata-data-analysis
-description: Domain adapter do kata para análise de dados. Use quando a tarefa declarar `domain: data-analysis`. Adapta o ciclo Karpathy para pandas, notebooks, SQL, dashboards, pipelines de dados e relatórios analíticos.
+description: "Domain adapter do kata para análise de dados. Use quando a tarefa declarar `domain: data-analysis`. Adapta o ciclo Karpathy para pandas, notebooks, SQL, dashboards, pipelines de dados e relatórios analíticos."
 ---
 
 # Skill: kata-data-analysis

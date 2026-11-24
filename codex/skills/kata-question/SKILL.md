@@ -1,0 +1,118 @@
+---
+name: kata-question
+description: "Como perguntar ao usuário e a rota `question` no ciclo Karpathy (kata) para Codex. Use quando o kata precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question."
+---
+<!-- Gerado por scripts/build_skills.py a partir de phases/kata-question.md. Não edite aqui. -->
+
+# Skill: kata-question
+
+Guia para perguntar ao usuário e usar a rota `question` no Karpathy Development Cycle.
+
+**A rota `question` e a ferramenta de perguntar são coisas diferentes.** A
+rota é um valor de `fit.route` no YAML da tarefa e se escreve `question` em
+qualquer frontend; a forma de perguntar depende do host.
+
+No Codex, faça perguntas abertas e fechadas no chat, não em uma
+ferramenta. Apresente uma pergunta por turno, encerre a resposta e aguarde
+uma nova mensagem do usuário antes de avançar. Em modo não interativo, não
+presuma confirmação: informe onde o ciclo parou.
+
+## Objetivo
+
+1. Fazer perguntas ao usuário de forma disciplinada, uma por vez, sem interrogar.
+2. Diagnosticar e entregar achados quando a tarefa for classificada como rota `question` no FIT.
+3. Evitar decisões unilaterais quando a resposta depende de preferência, contexto de negócio ou intenção do usuário.
+
+## Ferramentas
+
+Para esta skill, use:
+
+- **mensagem no chat**: faça uma pergunta por vez; aguarde a resposta antes de enviar outra.
+- **`exec_command`**: `git diff`, `grep`, `pytest` etc., para coletar evidências antes de perguntar.
+- **`exec_command` (leitura de arquivos) / `exec_command` (ex.: `rg`)**: investigue o código para embasar a pergunta.
+- **`apply_patch` / `apply_patch`**: registre a resposta ou os achados em `.kata/<task>.yaml`.
+
+## Rota `question` no FIT
+
+A rota `question` é escolhida quando o usuário quer entender algo antes de decidir.
+
+| Quando usar | Exemplo | O que fazer |
+|-------------|---------|-------------|
+| Diagnóstico | "Por que X está lento?" | Investigue, meça, mostre achados. Não mude código. |
+| Opinião / recomendação | "O que você acha de usar Y?" | Liste prós e contras, recomende, aguarde decisão. |
+| Esclarecimento | "Como Z funciona hoje?" | Explique baseado no código/doc, confirme se é isso. |
+| Conflito de intenção | Código/teste/spec discordam | Pergunte qual autoridade prevalece. |
+
+### Procedimento da rota `question`
+
+1. **Entenda a pergunta** — reformule para o usuário confirmar.
+2. **Colete evidências** — use `exec_command`, `exec_command` (leitura de arquivos) e `exec_command` (ex.: `rg`) para obter dados.
+3. **Não altere código** — a menos que o usuário autorize explicitamente.
+4. **Entregue achados** — organize em: contexto, evidências, recomendação.
+5. **Registre** em `.kata/<task>.yaml` (via `apply_patch`/`apply_patch`) e finalize o ciclo.
+
+> A rota `question` NÃO tem seção própria no schema: o audit, o relatório e o
+> judge não leem `question:` no YAML (K-19). Registre os achados nas chaves
+> existentes — `think.problem`/`think.unknowns` para contexto e `fit.reason`
+> para a recomendação — e deixe `status` como `think-complete`: o CLI para
+> após o THINK nesta rota e não aprova a tarefa.
+
+```yaml
+status: think-complete
+fit:
+  trivial: false
+  route: question
+  reason: "Diagnóstico: cobertura caiu no módulo X — achados: 120 linhas sem teste em X.py, função Y sem chamada; recomendação: testar Y e extrair lógica testável. Usuário não autorizou alteração."
+think:
+  problem: "Por que a cobertura caiu no módulo X?"
+  unknowns: "RESOLVIDO: X.py ganhou 120 linhas sem testes; Y não é chamada por teste nenhum."
+  answered: true
+```
+
+## Uso geral de perguntas
+
+### Regras
+
+- **Uma pergunta por vez** — nunca jogue 4 perguntas de uma vez.
+- **Contexto primeiro** — mostre ao usuário o que você já sabe antes de perguntar.
+- **Proponha, não interrogue** — ofereça uma resposta padrão; pergunte se confirma.
+- **Seja específico** — perguntas vagas geram respostas vagas.
+- **Não use pergunta para substituir investigação** — primeiro pesquise com `exec_command`/`exec_command` (leitura de arquivos)/`exec_command` (ex.: `rg`), depois pergunte.
+
+### Exemplos
+
+❌ Bad:
+> "Qual o problema? Quais assumptions? Quais alternativas? O que você não sabe?"
+
+✅ Good:
+> "Qual o problema exato que estou resolvendo? (ex: 'parse_date falha quando a entrada tem timezone')"
+
+### Quando perguntar
+
+- FIT: para classificar rota e trivialidade.
+- THINK: para preencher problem/assumptions/alternatives/unknowns.
+- SIMPLIFY: para validar se código é mínimo.
+- INTENT: para resolver conflitos entre código/teste/spec.
+- SURGICAL: para confirmar se arquivo/import é necessário.
+- VERIFY: para confirmar se critério de sucesso foi satisfeito.
+
+## Output no YAML
+
+Registre quando a resposta influencia o ciclo:
+
+```yaml
+question:
+  asked: "O critério de sucesso da tarefa está satisfeito?"
+  answer: "Sim"
+  context: "Testes passam e cobertura está acima de 70%"
+```
+
+Para rota `question`, use o formato com `findings` e `recommendation` mostrado acima.
+
+## Princípios
+
+- **Uma pergunta por vez**: respeite o tempo de resposta do usuário.
+- **Contexto antes de pergunta**: mostre dados, não peça para adivinhar.
+- **Propose, don't interrogate**: ofereça uma resposta, não uma inquisição.
+- **Diagnóstico não é ação**: na rota `question`, o output é conhecimento, não diff.
+- **Documente a resposta**: registre no YAML para rastreabilidade.

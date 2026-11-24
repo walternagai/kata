@@ -18,8 +18,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 
 def _skills_embarcadas(frontend: str) -> list[str]:
-    sub = "opencode/skills" if frontend == "opencode" else "claude-code/skills"
-    raiz = bundled.bundled_root() / sub
+    raiz = bundled.bundled_root() / frontend / "skills"
     return sorted(p.name for p in raiz.iterdir() if p.is_dir())
 
 
@@ -31,6 +30,9 @@ def test_assets_embarcados_espelham_o_repo() -> None:
         "opencode/agent/kata.md",
         "opencode/agents/kata-advisor.md",
         "claude-code/skills/kata/SKILL.md",
+        "pi/skills/kata/SKILL.md",
+        "tau/skills/kata/SKILL.md",
+        "codex/skills/kata/SKILL.md",
     ):
         assert (bundled.bundled_root() / rel).is_file(), f"asset ausente: {rel}"
         assert (bundled.bundled_root() / rel).read_bytes() == (REPO / rel).read_bytes()
@@ -131,18 +133,48 @@ def test_uninstall_em_frontend_nunca_instalado_nao_quebra(tmp_path, monkeypatch)
     assert report.removidas == []
 
 
-def test_run_install_all_e_uninstall(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("disponiveis", [(), ("pi",), ("tau",), ("codex",), ("pi", "tau", "codex")])
+def test_run_install_all_e_uninstall(tmp_path, monkeypatch, disponiveis) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
     monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(tmp_path / "oc"))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "cc"))
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path / "pi-config"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-config"))
+    monkeypatch.setattr(
+        shutil, "which", lambda comando: comando if comando in disponiveis else None
+    )
 
     reports, code = bundled.run_install("all")
     assert code == 0
-    assert [r.frontend for r in reports] == ["opencode", "claude-code"]
+    assert [r.frontend for r in reports] == ["opencode", "claude-code", *disponiveis]
+    for nome, pasta in (("pi", "pi-config"), ("tau", ".tau"), ("codex", "codex-config")):
+        skills = tmp_path / pasta / "skills"
+        if nome in disponiveis:
+            assert sorted(p.name for p in skills.iterdir()) == _skills_embarcadas(nome)
+            assert (skills / "kata" / bundled.MARKER).is_file()
+            assert not (skills.parent / "agents").exists()
+        else:
+            assert not skills.parent.exists()
 
+    # Mesmo se desinstalou o harness primeiro, pode limpar os arquivos do Kata.
+    monkeypatch.setattr(shutil, "which", lambda comando: None)
     reports, code = bundled.run_uninstall("all")
     assert code == 0
-    assert not (tmp_path / "oc" / "skills" / "kata-fit").exists()
-    assert not (tmp_path / "cc" / "skills" / "kata-fit").exists()
+    assert [r.frontend for r in reports] == ["opencode", "claude-code", "pi", "tau", "codex"]
+    for pasta in ("oc", "cc", "pi-config", ".tau", "codex-config"):
+        assert not (tmp_path / pasta / "skills" / "kata-fit").exists()
+
+
+@pytest.mark.parametrize("nome", ["pi", "tau", "codex"])
+def test_install_explicito_sem_harness_nao_cria_destino(tmp_path, monkeypatch, nome) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda comando: None)
+    reports, code = bundled.run_install(nome)
+    assert code == 1
+    assert reports[0].erros == [f"executável '{nome}' não encontrado no PATH"]
+    assert not list(tmp_path.iterdir())
 
 
 def test_frontend_desconhecido_e_erro() -> None:

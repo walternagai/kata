@@ -64,7 +64,7 @@ Mapeamento de ferramentas do OpenCode para cada tarefa do kata:
 |--------|------------|-----|
 | Carregar instruções da fase | `skill` | `kata-fit`, `kata-question`, `kata-think`, `kata-simplify`, `kata-intent`, `kata-surgical`, `kata-verify`, `kata-artifact`, `kata-report`, `kata-judge` |
 | Carregar adapter de domínio | `skill` | `kata-devops`, `kata-data-analysis`, `kata-research`, `kata-docs` |
-| Perguntar ao usuário | `question` + `kata-question` | Uma pergunta por chamada; consulte a skill para a rota `question` e as regras |
+| Perguntar ao usuário | `question` + `kata-question` | Uma pergunta por vez; consulte a skill para a rota `question` e as regras |
 | Executar comandos | `bash` | `git diff`, `ruff`, `pytest`, `python -m kata --check-only` etc. |
 | Ler arquivos | `read` | Inspecionar diff/código de arquivos específicos |
 | Buscar no código | `grep` / `glob` | Encontrar callers, imports, patterns, arquivos |
@@ -96,13 +96,13 @@ nada por trás — a "fase fingida" que o `--audit` existe para caçar, só que
 produzida pelo ferramental em vez do agente. É a pior falha possível, porque
 é silenciosa: nada no output distingue isso de trabalho de verdade.
 
-Antes de começar o ciclo, rode `python -m kata --doctor` via `bash` (ou
-`py -m kata` no Windows). Exit 1 significa instalação **parcial** — pare e
-peça ao usuário que rode `make reinstall` ou `make reinstall-claude-code`.
-Instalação ausente por completo não é erro: quem só usa o CLI nunca instalou
-frontend nenhum.
+Antes de começar o ciclo, rode `kata --doctor opencode` via `bash`
+(ou `python -m kata --doctor opencode` se necessário). Exit 1 significa
+instalação **parcial** — pare e peça ao usuário que reinstale as skills (por
+exemplo, `kata --install opencode`). Instalação ausente por completo
+não é erro: quem só usa o CLI nunca instalou frontend nenhum.
 
-**Se uma chamada de `skill` falhar durante o ciclo:**
+**Se não conseguir carregar uma skill durante o ciclo:**
 
 1. **Não improvise.** Não escreva a seção da fase como se a tivesse seguido.
 2. Use o contrato mínimo abaixo — o suficiente para não pular a fase em

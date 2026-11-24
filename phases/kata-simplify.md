@@ -1,6 +1,6 @@
 ---
 name: kata-simplify
-description: Fase SIMPLIFY do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 2 — verificar se o código é mínimo, sem abstrações especulativas ou configurabilidade não solicitada. Triggers: SIMPLIFY, código mínimo, abstração, diff, overengineering, YAGNI.
+description: "Fase SIMPLIFY do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 2 — verificar se o código é mínimo, sem abstrações especulativas ou configurabilidade não solicitada. Triggers: SIMPLIFY, código mínimo, abstração, diff, overengineering, YAGNI."
 ---
 
 # Skill: kata-simplify

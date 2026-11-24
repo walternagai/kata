@@ -87,8 +87,53 @@ CAPABILITIES: frozenset[str] = frozenset(
         "closed_choice_ask",
         # Existe uma lista de tarefas na UI para espelhar as fases.
         "task_tracker",
+        # Não há uma ferramenta de perguntas: a resposta vem no próximo turno.
+        "chat_ask",
     }
 )
+
+_CHAT_ROLES = {
+    "LOAD_PHASE": "`read` (caminho do `SKILL.md` no índice de skills)",
+    "LOAD_DOMAIN": "`read` (caminho do `SKILL.md` no índice de skills)",
+    "ASK": "mensagem no chat",
+    "RUN": "`bash`",
+    "READ": "`read`",
+    "WRITE": "`write`",
+    "EDIT": "`edit`",
+    "SEARCH": "`bash` (ex.: `rg`)",
+    "LIST_FILES": "`bash` (ex.: `rg --files`)",
+}
+
+_CODEX_ROLES = {
+    **_CHAT_ROLES,
+    "LOAD_PHASE": "`exec_command` (leia o `SKILL.md` indicado no índice de skills)",
+    "LOAD_DOMAIN": "`exec_command` (leia o `SKILL.md` indicado no índice de skills)",
+    "RUN": "`exec_command`",
+    "READ": "`exec_command` (leitura de arquivos)",
+    "WRITE": "`apply_patch`",
+    "EDIT": "`apply_patch`",
+    "SEARCH": "`exec_command` (ex.: `rg`)",
+    "LIST_FILES": "`exec_command` (ex.: `rg --files`)",
+}
+
+
+def _chat_frontend(slug: str, name: str, roles: dict[str, str], invocation: str) -> dict:
+    """Define um host que carrega skills pelo índice e pergunta no chat."""
+    return {
+        "roles": roles,
+        "identity": {
+            "AGENTE": "o kata",
+            "AGENTE_CAP_MIN": "a skill",
+            "FRONTEND_NOME": name,
+            "ESTE_ORQUESTRADOR": "Esta skill",
+            "INVOC": f"{invocation} ",
+            "INVOC_SEM_ARGS": f"`{invocation}` (sem args)",
+        },
+        "capabilities": {"chat_ask"},
+        "orquestrador": f"{slug}/skills/kata/SKILL.md",
+        "fase": f"{slug}/skills/{{slug}}/SKILL.md",
+    }
+
 
 FRONTENDS: dict[str, dict] = {
     "opencode": {
@@ -142,6 +187,9 @@ FRONTENDS: dict[str, dict] = {
         "orquestrador": "claude-code/skills/kata/SKILL.md",
         "fase": "claude-code/skills/{slug}/SKILL.md",
     },
+    "pi": _chat_frontend("pi", "Pi", _CHAT_ROLES, "/skill:kata"),
+    "tau": _chat_frontend("tau", "Tau", _CHAT_ROLES, "/skill:kata"),
+    "codex": _chat_frontend("codex", "Codex", _CODEX_ROLES, "$kata"),
 }
 
 
@@ -169,7 +217,7 @@ def validate_frontends() -> None:
 
 def _vars(frontend: str) -> dict[str, str]:
     spec = FRONTENDS[frontend]
-    return {**spec["roles"], **spec["identity"]}
+    return {**spec["roles"], **spec["identity"], "FRONTEND_ID": frontend}
 
 
 def _bloco(marcador: str) -> re.Pattern[str]:
@@ -471,20 +519,13 @@ def build(check: bool = False) -> int:
 
 
 def shared_stats() -> tuple[int, int]:
-    """Mede a fração compartilhada entre os frontends, linha a linha.
+    """Compara OpenCode e Claude Code, a dupla histórica do artigo JSERD.
 
-    Para cada fonte (`phases/` e `domains/`), renderiza para cada frontend e
-    conta as linhas que não casam entre os dois renders — o que vem de
-    `only:`, de capacidade (`if:`/`ifnot:`) ou de variável de identidade.
-    Devolve `(linhas_específicas, linhas_totais)`, com o total somando os
-    dois renders; a fração compartilhada é `1 - específicas / total`.
-
-    É a medida que o artigo JSERD cita como "93% compartilhado" (92,6% com
-    uma casa). A métrica pressupõe dois frontends; com um terceiro, revisar.
+    Devolve `(linhas_específicas, linhas_totais)` somando os dois renders;
+    a fração compartilhada é `1 - específicas / total`. Não muda o
+    denominador histórico quando um novo frontend é adicionado.
     """
-    if len(FRONTENDS) != 2:
-        raise SystemExit("shared_stats pressupõe exatamente 2 frontends")
-    nomes = list(FRONTENDS)
+    nomes = ("opencode", "claude-code")
     especificas = total = 0
     for caminho in _fontes():
         fonte = caminho.read_text(encoding="utf-8")
@@ -511,7 +552,7 @@ def main() -> None:
     parser.add_argument(
         "--stats",
         action="store_true",
-        help="Mede a fração compartilhada entre os frontends e sai (não gera)",
+        help="Mede a fração compartilhada entre OpenCode e Claude Code (não gera)",
     )
     args = parser.parse_args()
 

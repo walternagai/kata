@@ -8,6 +8,20 @@ está no `git log`; aqui ficam os marcos que afetam quem usa o CLI, o agente
 `@kata` ou as skills instaladas. O histórico anterior à 0.6.0 (mushin e o
 `scripts/karpathy_cycle.py` original) não pertence a este pacote.
 
+## 0.12.0 — 2026-11-24
+
+### Adicionado
+
+- Frontends **Pi** e **Tau**: ciclo completo e `kata-agile` por `/skill:kata`
+  e `/skill:kata-agile`, com perguntas no chat e as mesmas fases, adapters e
+  verificações do CLI. Instale com `kata --install pi` ou `kata --install tau`;
+  `--install all` inclui cada um apenas se seu executável estiver no `PATH`.
+- Frontend **Codex**: `$kata` e `$kata-agile` em `$CODEX_HOME/skills`
+  (`~/.codex/skills` por padrão). Instale com `kata --install codex`; em
+  `--install all`, o Codex é incluído somente se estiver no `PATH`.
+- `kata --doctor FRONTEND` inspeciona só o frontend escolhido. Sem argumento,
+  o doctor continua verificando todos.
+
 ## 0.11.0 — 2026-11-24
 
 ### Adicionado

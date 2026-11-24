@@ -1,8 +1,8 @@
 # Kata Documentation
 
-Technical reference for Kata (型): a Python CLI, an OpenCode agent, and a set
-of Claude Code skills that all guide software changes through the same
-disciplined development cycle.
+Technical reference for Kata (型): a Python CLI, an OpenCode agent, and skills
+for Claude Code, Pi, Tau, and Codex that all guide software changes through the same
+development cycle.
 
 ## Contents
 
@@ -18,6 +18,7 @@ disciplined development cycle.
 - [Python API](#python-api)
 - [OpenCode integration](#opencode-integration)
 - [Claude Code integration](#claude-code-integration)
+- [Pi, Tau, and Codex integration](#pi-tau-and-codex-integration)
 - [Testing and evaluation](#testing-and-evaluation)
 - [Editing the prompts](#editing-the-prompts)
 - [Compatibility and limitations](#compatibility-and-limitations)
@@ -131,13 +132,13 @@ opencode/                         GENERATED from phases/ — do not edit by hand
 │                                 it into src/kata/assets/ so the wheel ships it
 └── skills/kata-*/SKILL.md        The 10 phase skills + the 4 domain adapters
 
-claude-code/                      GENERATED — do not edit by hand
-└── skills/kata-*/SKILL.md        kata orchestrator skill + the same 10
-                                   phase-specific skills + the 4 domain adapters
+claude-code/, pi/, tau/, codex/    GENERATED — do not edit by hand
+└── skills/kata-*/SKILL.md        kata orchestrator, 10 phase-specific skills,
+                                   4 domain adapters and kata-agile per frontend
 
 tests/                            Unit tests for the Python implementation
 eval/                             Adversarial trap scenarios
-scripts/build_skills.py           Renders phases/ and domains/ into both frontends
+scripts/build_skills.py           Renders phases/ and domains/ into all frontends
 scripts/install.sh                OpenCode symlink installer
 scripts/install-claude-code.sh    Claude Code symlink installer
 paper/jserd/compile-paper.sh      Builds paper/jserd/paper.pdf (xelatex + bibtex)
@@ -342,6 +343,30 @@ only — no subagent. The cycle asks a question at nearly every phase, which
 fits the main conversation better than an isolated subagent that only
 reports a summary at the end.
 
+### Pi, Tau, and Codex integration
+
+| Harness | Install / diagnose | Skills directory |
+|---|---|---|
+| Pi | `kata --install pi` / `kata --doctor pi` | `${PI_CODING_AGENT_DIR}/skills` if set; otherwise `~/.pi/agent/skills` |
+| Tau | `kata --install tau` / `kata --doctor tau` | `~/.tau/skills` |
+| Codex | `kata --install codex` / `kata --doctor codex` | `$CODEX_HOME/skills` (default `~/.codex/skills`) |
+
+An explicit install requires the corresponding executable on `PATH`.
+`kata --install all` skips Pi, Tau, or Codex when its executable is absent, without
+changing the existing behavior for OpenCode and Claude Code. Uninstalling
+the skills does not require the harness executable. The doctor checks the Kata
+installation directory, not skill name overrides from project settings or
+other discovery locations.
+
+In Pi and Tau, run `/reload` in an open session and invoke `/skill:kata`
+(e.g. `/skill:kata --plan example`) or `/skill:kata-agile`. In Codex, select
+from `/skills` or mention `$kata` or `$kata-agile`; start a new session if the
+skills do not appear. Codex uses its own directory rather than the shared
+`~/.agents/skills` so Pi and Tau do not load Codex-specific prompts.
+All three use the harness's skill index to load phases and pause in chat for
+answers. No extensions or subagents are required; the optional semantic review
+uses the JUDGE checklist in the current conversation.
+
 ## Distribution and versions
 
 | | |
@@ -353,11 +378,11 @@ reports a summary at the end.
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 
 The wheel carries the code **and** `src/kata/assets/` — the orchestrator
-agent, the `kata-advisor` subagent and the skills of both frontends. That is
+agent, the `kata-advisor` subagent and the skills of all five frontends. That is
 what makes `kata --install` work with no checkout (`install.py` reads the
 assets through `importlib.resources`). Installing the distribution therefore
 gives you the CLI only; the skills enter the frontend's config dir through
-`kata --install opencode|claude-code|all`, and `kata --doctor` reports what is
+`kata --install opencode|claude-code|pi|tau|codex|all`, and `kata --doctor` reports what is
 installed, in which mode (link, copy or mixed) and whether the installed
 skills version matches the running package.
 
@@ -395,8 +420,8 @@ the sdist by its required root files.
 | `kata --stamp TASK [--commit SHA]` | Record the commit that ends the task in `approved_commit`, closing the judge's diff window. Run it right after the commit; without `--commit` it uses `HEAD`. Validates that the commit resolves, descends from `base_commit` and is an ancestor of `HEAD` |
 | `kata --judge --task TASK` | Run adversarial verification (requires `status: approved`) |
 | `kata --audit [--task TASK]` | Grade the task phases as followed / skipped / faked / degraded, with the concrete risk of each (fable-method audit) |
-| `kata --doctor` | Check whether the phase skills are installed in each frontend, and how (link, copy or mixed); missing domain adapters, the optional `kata-agile` phase skill and the optional `kata-advisor` subagent are warnings, not failures |
-| `kata --install FRONTEND` | Copy the bundled skills, the orchestrator agent and the `kata-advisor` subagent (`opencode`, `claude-code` or `all`) without a checkout of this repository |
+| `kata --doctor [FRONTEND]` | Check phase skills for all frontends or just one, and report whether they are installed as links, copies, or both; missing optional skills and advisors only warn |
+| `kata --install FRONTEND` | Copy bundled resources without a checkout: `opencode`, `claude-code`, `pi`, `tau`, `codex` or `all`. Pi, Tau, and Codex are installed only when their executable is on `PATH` |
 | `kata --uninstall FRONTEND` | Remove what `--install` created (only what Kata itself wrote) |
 | `kata --force` | With `--install`: back up existing customization to `.bak` and replace it |
 | `kata --version` | Print the package version |
@@ -995,7 +1020,7 @@ adapter. When a domain adapter is missing for a non-coding task, the
 orchestrator records the skill name in `preflight.skills_missing` and falls
 back to the adapter's minimal contract.
 
-New adapters follow `domains/TEMPLATE.md` and are generated to both frontends
+New adapters follow `domains/TEMPLATE.md` and are generated for all frontends
 by `make build-skills`. Each adapter defines:
 
 - **Domain scope**: what the adapter covers and explicitly does not cover
@@ -1224,7 +1249,8 @@ the copies accumulated 395 divergent lines, and part of that was an improvement
 applied to one frontend and forgotten in the other — the ARTIFACT phase had a
 "Ferramentas" section only in Claude Code, and the OpenCode orchestrator never
 received the corrected step numbering or the `base_commit` instruction. Today
-92.8% of the rendered lines are shared (93% at whole-number precision;
+In the OpenCode/Claude Code comparison, 93.1% of the rendered lines are shared
+(93% at whole-number precision;
 measure it with `python3 scripts/build_skills.py --stats`) and the remainder
 is declared difference.
 

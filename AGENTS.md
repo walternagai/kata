@@ -1,12 +1,12 @@
 # Kata (型) — Agent Instructions
 
-> Python 3.11+ | CLI + OpenCode Agent + Claude Code Skills | Karpathy Development Cycle + Fable Method
+> Python 3.11+ | CLI + OpenCode, Claude Code, Pi, Tau e Codex | Karpathy Development Cycle + Fable Method
 
 ## O que é este repo
 
 Kata é a ferramenta que implementa o ciclo FIT → THINK → SIMPLIFY → INTENT → SURGICAL → VERIFY → TWIN CHECK → ARTIFACT → REPORT, com AUDIT e JUDGE adversarial.
-Este repositório contém o **código da ferramenta** (CLI + agente OpenCode +
-skills do Claude Code), não um projeto onde o kata é aplicado.
+Este repositório contém o **código da ferramenta** (CLI, agente OpenCode e
+skills para Claude Code, Pi, Tau e Codex), não um projeto onde o kata é aplicado.
 
 A referência técnica detalhada está em [`DOCUMENTATION.md`](DOCUMENTATION.md).
 
@@ -44,6 +44,8 @@ claude-code/    skills para o Claude Code
   skills/kata/SKILL.md   orquestrador (papel equivalente ao agente @kata)
   skills/kata-*/SKILL.md as mesmas 15 skills (mesmo procedimento,
                          nomes de ferramenta do host — não são texto idêntico)
+pi/ e tau/      orquestrador e skills para Pi e Tau (`/skill:kata`)
+codex/          orquestrador e skills para Codex (`$kata`)
 domains/        adapters de domínio opcionais, fonte única como phases/
                 (TEMPLATE.md documenta o schema; kata-devops.md,
                 kata-data-analysis.md, kata-research.md e kata-docs.md são os
@@ -56,18 +58,18 @@ CHANGELOG.md      marcos de uso de cada versão publicada (o README é a página
 DOCUMENTATION.md  referência técnica; RELEASING.md é o processo de publicação
 ```
 
-Os dois frontends compartilham o mesmo backend Python: só a camada de
+Os cinco frontends compartilham o mesmo backend Python: só a camada de
 orquestração/interação muda. Lint, teste, coverage e o judge sempre rodam
 pelo pacote `kata` — e os comandos de cada papel saem de `.kata/config.yaml`
 do projeto alvo, com os defaults Python (ruff/pytest/pytest-cov) valendo
 para o que não for declarado.
 
-Diferente do OpenCode, a versão Claude Code é só skills (sem subagente): o
-ciclo pergunta a cada fase, e isso funciona melhor na conversa principal do
-que num subagente isolado que só reporta um resumo no fim.
+Claude Code, Pi, Tau e Codex são integrações por skills (sem subagente).
+Pi, Tau e Codex carregam as fases pelo índice de skills e aguardam no chat.
 
 **A fonte de uma fase é uma só: `phases/kata-<fase>.md`.** Os arquivos em
-`opencode/` e `claude-code/` são **gerados** por `scripts/build_skills.py` —
+`opencode/`, `claude-code/`, `pi/`, `tau/` e `codex/` são **gerados** por
+`scripts/build_skills.py` —
 não os edite à mão; `make build-skills` os regrava e
 `tests/test_skills_build.py` reprova se ficarem desatualizados.
 
@@ -79,8 +81,8 @@ traz. Editar a fonte é correto; editar o espelho em `assets/`, não.
 
 Antes disto a fase vivia em duplicata mantida por disciplina manual, e a
 disciplina falhou: 395 linhas divergentes, parte delas melhoria aplicada num
-frontend e esquecida no outro. Hoje 92,8% das linhas renderizadas são
-compartilhadas (93% arredondado; `python3 scripts/build_skills.py --stats`);
+frontend e esquecida no outro. Na comparação histórica OpenCode/Claude Code,
+93,1% das linhas são compartilhadas (`python3 scripts/build_skills.py --stats`);
 o restante é diferença declarada, não acidental.
 
 Na fonte, o que muda por frontend se escreve de três formas:
@@ -104,7 +106,7 @@ adjetivo seguinte tem de concordar com os dois. Quando não der, escreva a
 frase sem a variável — "o orquestrador" descreve ambos e não flexiona.
 
 Cuidado com `question`: a **rota** `question` é valor de `fit.route` e se
-escreve igual nos dois frontends; só a **ferramenta** de perguntar vira
+escreve igual em todos os frontends; só a **forma** de perguntar vira
 `{{ASK}}`. Trocar uma pela outra faz o frontend instruir `route:
 AskUserQuestion`, que o CLI não reconhece.
 
@@ -196,7 +198,7 @@ imediatamente na instalação, sem reinstalar. Use `make reinstall` /
 `make reinstall-claude-code` só se criar **novos** arquivos de skill/agent.
 
 Para quem **não** tem o checkout (instalado via `pipx install kata-dev`), o
-mesmo efeito vem de `kata --install opencode|claude-code|all`, que **copia** o
+mesmo efeito vem de `kata --install opencode|claude-code|pi|tau|codex|all`, que **copia** o
 gerado embarcado em `src/kata/assets/` — sem symlink e sem repo. O `--doctor`
 diagnostica os dois casos (e nomeia o modo: link, cópia ou misto); `--uninstall`
 remove só o que o `--install` criou.

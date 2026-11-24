@@ -19,6 +19,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
+
+from kata.skills import DOMAIN_SKILLS, OPTIONAL_PHASES, ORCHESTRATOR_SKILL, PHASE_SKILLS
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
@@ -228,10 +231,38 @@ def test_kata_agile_nao_disputa_o_gatilho_do_orquestrador() -> None:
     fonte = (REPO / "phases" / "kata-agile.md").read_text(encoding="utf-8")
     frontmatter = fonte.split("---")[1]
     assert "pelo nome" in frontmatter, "a seleção tem de ser explícita"
-    assert "@kata" in frontmatter, "a descrição tem de apontar o @kata como padrão"
+    assert "ciclo completo `kata`" in frontmatter, "a descrição deve indicar o ciclo padrão"
     assert "Use quando a tarefa é pequena" not in frontmatter, (
         "a descrição voltou a anunciar gatilho genérico — é o @kata que decide a rota"
     )
+
+
+@pytest.mark.parametrize(
+    ("frontend", "invocacao"), [("pi", "/skill:kata"), ("tau", "/skill:kata"), ("codex", "$kata")]
+)
+def test_frontend_chat_distribui_skills_com_frontmatter_portavel(
+    frontend: str, invocacao: str
+) -> None:
+    raiz = REPO / frontend / "skills"
+    nomes = {ORCHESTRATOR_SKILL, *PHASE_SKILLS, *DOMAIN_SKILLS, *OPTIONAL_PHASES}
+    assert {path.name for path in raiz.iterdir()} == nomes
+    for nome in nomes:
+        texto = (raiz / nome / "SKILL.md").read_text(encoding="utf-8")
+        assert texto.startswith("---\n")
+        metadata = yaml.safe_load(texto.split("---\n", 2)[1])
+        assert metadata["name"] == nome
+        assert 0 < len(metadata["description"]) <= 1024
+        assert "AskUserQuestion" not in texto
+    kata = (raiz / "kata" / "SKILL.md").read_text(encoding="utf-8")
+    assert f"kata --doctor {frontend}" in kata
+    assert f"{invocacao} --check-only" in kata
+    if frontend == "codex":
+        assert "$kata-agile" in kata
+        assert "/skill:kata" not in kata
+        assert "`exec_command`" in kata
+        assert "`apply_patch`" in kata
+    assert "índice de skills" in kata
+    assert "encerre o turno" in kata
 
 
 class TestFontes:
@@ -390,7 +421,7 @@ def test_um_frontend_novo_e_so_uma_entrada_na_tabela() -> None:
 
 
 def test_surgical_manda_gerar_antes_de_listar() -> None:
-    """A18: editar `phases/` produz quatro derivados por fase.
+    """A18: editar `phases/` produz derivados para cada frontend e o wheel.
 
     Declarar só a fonte custa `scope_creep [high]` e um REFUTED sobre trabalho
     correto — aconteceu na task A17. A skill que lista arquivos precisa dizer
@@ -400,6 +431,6 @@ def test_surgical_manda_gerar_antes_de_listar() -> None:
 
     assert "make build-skills" in fonte, "a skill não manda gerar antes de listar"
     assert "git diff --name-only" in fonte
-    for destino in ("opencode/skills/", "claude-code/skills/", "src/kata/assets/"):
+    for destino in (*[f"{frontend}/skills/" for frontend in FRONTENDS], "src/kata/assets/"):
         assert destino in fonte, f"a skill não nomeia o derivado {destino}"
     assert "scope_creep" in fonte, "a skill não diz o que acontece se faltar"

@@ -1,20 +1,20 @@
 <!--only:opencode-->
 ---
 name: kata-question
-description: Uso da ferramenta `question` e da rota `question` no ciclo Karpathy (kata). Use quando {{AGENTE}} precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question.
+description: "Uso da ferramenta `question` e da rota `question` no ciclo Karpathy (kata). Use quando {{AGENTE}} precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question."
 ---
 <!--/only-->
-<!--only:claude-code-->
+<!--only:claude-code, pi, tau, codex-->
 ---
 name: kata-question
-description: Como perguntar ao usuário e a rota `question` no ciclo Karpathy (kata) para Claude Code. Use quando {{AGENTE}} precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question, AskUserQuestion.
+description: "Como perguntar ao usuário e a rota `question` no ciclo Karpathy (kata) para {{FRONTEND_NOME}}. Use quando {{AGENTE}} precisar perguntar algo ao usuário, diagnosticar sem alterar código, ou conduzir questionários no FIT, THINK, SIMPLIFY, INTENT, SURGICAL ou VERIFY. Triggers: question, perguntar, questionário, diagnosticar, rota question."
 ---
 <!--/only-->
 
 # Skill: kata-question
 
 <!--ifnot:closed_choice_ask-->
-Guia para o uso da ferramenta {{ASK}} e da rota `question` no Karpathy Development Cycle.
+Guia para perguntar ao usuário e usar a rota `question` no Karpathy Development Cycle.
 <!--/ifnot-->
 <!--if:closed_choice_ask-->
 Guia para perguntar ao usuário e para a rota `question` no Karpathy
@@ -24,7 +24,14 @@ escolha fechada.
 
 **A rota `question` e a ferramenta de perguntar são coisas diferentes.** A
 rota é um valor de `fit.route` no YAML da tarefa e se escreve `question` em
-qualquer frontend; a ferramenta muda de nome conforme o host.
+qualquer frontend; a forma de perguntar depende do host.
+<!--if:chat_ask-->
+
+No {{FRONTEND_NOME}}, faça perguntas abertas e fechadas no chat, não em uma
+ferramenta. Apresente uma pergunta por turno, encerre a resposta e aguarde
+uma nova mensagem do usuário antes de avançar. Em modo não interativo, não
+presuma confirmação: informe onde o ciclo parou.
+<!--/if-->
 
 ## Objetivo
 
@@ -37,7 +44,7 @@ qualquer frontend; a ferramenta muda de nome conforme o host.
 
 Para esta skill, use:
 
-- **{{ASK}}**: faça uma pergunta por chamada. Não agrupe múltiplas perguntas em uma única chamada.
+- **{{ASK}}**: faça uma pergunta por vez; aguarde a resposta antes de enviar outra.
 - **{{RUN}}**: `git diff`, `grep`, `pytest` etc., para coletar evidências antes de perguntar.
 - **{{READ}} / {{SEARCH}}**: investigue o código para embasar a pergunta.
 - **{{WRITE}} / {{EDIT}}**: registre a resposta ou os achados em `.kata/<task>.yaml`.
@@ -107,7 +114,7 @@ think:
 ### Regras
 
 <!--ifnot:closed_choice_ask-->
-- **Uma pergunta por chamada** — nunca jogue 4 perguntas de uma vez.
+- **Uma pergunta por vez** — nunca jogue 4 perguntas de uma vez.
 - **Contexto primeiro** — mostre ao usuário o que você já sabe antes de perguntar.
 - **Proponha, não interrogue** — ofereça uma resposta padrão; pergunte se confirma.
 <!--/ifnot-->

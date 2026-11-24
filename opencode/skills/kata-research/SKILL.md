@@ -1,6 +1,6 @@
 ---
 name: kata-research
-description: Domain adapter do kata para pesquisa. Use quando a tarefa declarar `domain: research`. Adapta o ciclo Karpathy para investigação bibliográfica, análise de fontes, experimentos, revisão de literatura e produção de conhecimento.
+description: "Domain adapter do kata para pesquisa. Use quando a tarefa declarar `domain: research`. Adapta o ciclo Karpathy para investigação bibliográfica, análise de fontes, experimentos, revisão de literatura e produção de conhecimento."
 ---
 <!-- Gerado por scripts/build_skills.py a partir de domains/kata-research.md. Não edite aqui. -->
 

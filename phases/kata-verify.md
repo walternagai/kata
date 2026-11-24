@@ -1,6 +1,6 @@
 ---
 name: kata-verify
-description: Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 4 — executar lint, teste e coverage do projeto (declarados em .kata/config.yaml ou os defaults Python), interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, eslint, vitest, go test, gate, CI, verificação de qualidade.
+description: "Fase VERIFY (GOAL-DRIVEN) do ciclo Karpathy (kata). Use quando {{AGENTE}} estiver na fase 4 — executar lint, teste e coverage do projeto (declarados em .kata/config.yaml ou os defaults Python), interpretar resultados e verificar o critério de sucesso. Triggers: VERIFY, GOAL-DRIVEN, ruff, pytest, coverage, eslint, vitest, go test, gate, CI, verificação de qualidade."
 ---
 
 # Skill: kata-verify

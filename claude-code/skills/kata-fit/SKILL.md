@@ -1,6 +1,6 @@
 ---
 name: kata-fit
-description: Fase FIT do ciclo Karpathy (kata). Use quando o kata estiver na fase 0 — classificar a tarefa, aplicar triviality gate e definir a rota antes do THINK. Triggers: FIT, triviality gate, fit gate, classificar tarefa, rotear, plan-first, question, research, inference.
+description: "Fase FIT do ciclo Karpathy (kata). Use quando o kata estiver na fase 0 — classificar a tarefa, aplicar triviality gate e definir a rota antes do THINK. Triggers: FIT, triviality gate, fit gate, classificar tarefa, rotear, plan-first, question, research, inference."
 ---
 <!-- Gerado por scripts/build_skills.py a partir de phases/kata-fit.md. Não edite aqui. -->
 
@@ -103,7 +103,7 @@ do fable-method (Steps 0-3). A diferença principal:
 
 - **fable-method**: o fit gate é implícito no fluxo do agente, sem CLI
 - **kata**: o fit gate é explícito tanto no CLI (`--plan`, `--check-only`)
-  quanto nos frontends (agente OpenCode e skills do Claude Code)
+  quanto em todos os frontends do kata
 
 Para tarefas que o kata não cobre (marketing, research, data analysis, devops),
 consulte os domain adapters do [The Fable Method](https://github.com/Sahir619/fable-method).
